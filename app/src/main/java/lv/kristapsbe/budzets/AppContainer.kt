@@ -17,7 +17,7 @@ import java.util.UUID
 /** App-wide dependencies, created once by [BudzetsApplication]. Everything is lazy. */
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
-    private val clock: Clock = SystemZoneClock()
+    val clock: Clock = SystemZoneClock()
     private val newId: () -> String = { UUID.randomUUID().toString() }
 
     val database: BudzetsDatabase by lazy { BudzetsDatabase.build(appContext) }

@@ -171,6 +171,48 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   migration tests exist yet, because there is only schema v1.
 - Tests: 21 persistence tests (`app/src/test/.../data/`), plus the 51 domain tests.
 
+## Phase 3 — app shell and overview (done)
+
+- **Dependencies added:**
+  - Navigation Compose 2.9.8 with type-safe `@Serializable` routes
+  - the Kotlin serialization plugin, pinned to the project Kotlin 2.2.10
+  - kotlinx-serialization-core 1.9.0, the Kotlin 2.2 line (Navigation itself asks for
+    1.7.3; it resolves to 1.9.0)
+  - lifecycle-viewmodel-compose and lifecycle-runtime-compose 2.11.0
+  - material-icons-core, version from the BOM (1.7.8)
+  - Test-only: Compose ui-test-junit4, plus Espresso 3.7.0. ui-test-junit4 pulls 3.5.0,
+    whose input injection fails on API 37 under Robolectric.
+- **Navigation:** a bottom bar with Overview, Spending, Budgets, Surplus and Settings. Tabs
+  keep and restore their state. The expense editor and the non-overview tabs are
+  placeholders until their phases. Tapping a category opens `TransactionsRoute(categoryId)`.
+- **Insets:** the outer Scaffold applies and consumes only the bottom bar's padding; each
+  screen's own Scaffold/TopAppBar handles the top. Verified edge-to-edge on an API 37 emulator.
+- **Overview:**
+  - Content: month selector (plus "Go to current month"), remaining/spent card, base
+    budget and surplus boosts on separate lines, pace status (icon + text, never colour
+    alone) with the pace guide and days left, saved-surplus shortcut, category rows.
+  - Categories active in the month are listed even without a budget. Archived categories
+    with spending in the month are shown and flagged.
+  - Banners: closed month, changed since closing, category plans above overall.
+  - Empty states: no categories (offers starter categories), no budget (links to
+    Budgets), no spending.
+  - Loading and error-with-retry states.
+- **Starter categories:** Groceries, Eating out, Transport, Home, Fun, Other. They come from
+  string resources, so they're localisable, and are created only when no categories exist.
+- **FAB:** uses the content-slot `ExtendedFloatingActionButton` overload. The animated
+  `expanded` overload left the label out of the semantics tree, so TalkBack would have read
+  only "Button". The FAB is hidden until a category exists.
+- **Formatting:** `util/MoneyFormatter` is the single currency formatter (locale-aware,
+  currency precision). Month names use the standalone form ("LLLL").
+- **Robolectric UI tests** use `@GraphicsMode(NATIVE)`; legacy graphics mis-measures text.
+- **Known gap:** the selected month survives tab switches and configuration changes, but
+  not process death (no `SavedStateHandle` yet).
+- Tests: 14 new (ViewModel 6, Compose UI 5, formatter 3); 87 unit tests total.
+- **Manual check on emulator** (API 37), with budgets/expenses seeded via sqlite:
+  - first launch, starter categories, populated overview (totals checked by hand)
+  - over-budget row, month navigation, tab switch, dark theme
+  - no crashes in the crash log
+
 ## Open questions
 
 None currently.

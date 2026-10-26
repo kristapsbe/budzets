@@ -38,6 +38,16 @@ class CategoryRepository(
         category
     }
 
+    /**
+     * Creates editable starter categories, but only while no category exists.
+     * @return false if categories already existed.
+     */
+    suspend fun createStarterCategories(names: List<String>): Boolean = db.withTransaction {
+        if (dao.maxSortOrder() >= 0) return@withTransaction false
+        names.forEach { create(it) }
+        true
+    }
+
     suspend fun rename(id: CategoryId, name: String) = modify(id) { it.copy(name = validName(name)) }
 
     /** Rewrites sortOrder to match [order]. Categories not listed keep their position after the listed ones. */
