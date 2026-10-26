@@ -9,6 +9,9 @@ value class LedgerEntryId(val value: String)
 @JvmInline
 value class BoostId(val value: String)
 
+@JvmInline
+value class ExpenseId(val value: String)
+
 /** Where a surplus balance lives: a category, or the overall amount not assigned to any category. */
 sealed interface SurplusPocket {
     data class Category(val id: CategoryId) : SurplusPocket

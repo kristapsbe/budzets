@@ -44,7 +44,7 @@ AVD `Medium_Phone_API_37.0` is available for instrumented tests.
   The same code path covers local export. No OAuth, no Cloud Console, and no
   Play Services dependency. A Drive REST API (`drive.file`) upgrade path is
   documented below if it is ever needed.
-- **Android Auto Backup:** exclude DB and DataStore (Q6, Phase 2).
+- **Android Auto Backup:** DB and DataStore excluded (Q6, Phase 2).
 
 ### Dependencies to add (in the phase that first needs them)
 
@@ -98,7 +98,7 @@ AGP built-in Kotlin.
   destination category's remaining, so it becomes that category's surplus at close.
 - **Q5 — Currency:** default **EUR**, not the device locale. Once data exists, switching
   is only allowed between currencies with equal fraction digits; amounts are never converted.
-- **Q6 — Auto Backup:** exclude the database and DataStore. Done in Phase 2, when the files exist.
+- **Q6 — Auto Backup:** exclude the database and DataStore (done in Phase 2).
 
 ## Phase 1 — domain layer (done)
 
@@ -127,6 +127,49 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
 - Spec deviation: a boost's funding is linked to a source **pocket**, not to a specific
   credit entry (`sourceSurplusEntryId` in spec §10). Surplus within a pocket is fungible.
 - Tests: 51 domain unit tests (`app/src/test/.../domain/`).
+
+## Phase 2 — local persistence (done)
+
+- **Dependencies added:** Room 2.8.5 (KSP 2.3.12, Room Gradle plugin) and DataStore
+  Preferences 1.2.1. 1.3.0 was skipped because it was released only days earlier.
+  Test-only: Robolectric 4.17, room-testing, kotlinx-coroutines-test 1.10.2, and
+  androidx.test core-ktx 1.7.0.
+- **Robolectric** runs Room tests on the JVM (`./gradlew testDebugUnitTest`). Its API 36+
+  runtime needs `--add-opens=java.base/jdk.internal.access=ALL-UNNAMED`, which is set in
+  `app/build.gradle.kts`.
+- **Schema:** version 1, exported to `app/schemas/`; commit it. There is deliberately **no
+  destructive-migration fallback**. Future schema changes need an explicit `Migration`
+  plus a `MigrationTestHelper` test against the exported JSON.
+- **Storage conventions:**
+  - money is `Long` minor units
+  - months are `YYYY-MM`, dates are ISO `YYYY-MM-DD` (local), instants are epoch millis
+  - a null category on surplus rows = the Unallocated pocket
+  - Month queries use the half-open ISO date range `[YYYY-MM-01, next-01)`.
+- **Budget versions:** unique on `(scopeKey, effectiveFrom)`. `scopeKey` = `@overall` or
+  the category id, so the overall budget is covered too (SQLite treats NULLs as distinct).
+  Saving the same month updates that version in place.
+- **Categories:**
+  - Archived via `archivedFrom` month, not a boolean.
+  - Every reference is FK `RESTRICT`, except budget configs (`CASCADE`).
+  - `deleteIfUnused` deletes only categories with no expenses, ledger, boosts or snapshots.
+  - Names are trimmed, 1–40 chars, and not required to be unique.
+- **Atomicity:** every surplus operation reads the ledger, plans in the domain layer, and
+  writes in one `withTransaction`. Tests cover a forced mid-transfer failure (no partial
+  rows) and 5 concurrent closes of the same month (exactly one succeeds).
+- **Closures:** one row per (month, revision) plus a normalized per-category snapshot
+  table. Only `reopenedAt` is ever updated.
+- **Settings (DataStore):** `currency_code` (default EUR) and `last_backup_at`.
+  `setCurrency` enforces the Q5 rule. "Has data" = any expense, budget config or
+  ledger row.
+- **Clock:** `AppContainer` uses a clock that reads the device's *current* zone on every
+  call, so "today" stays correct after travel. Tests use a fixed Europe/Riga clock.
+- **Auto Backup (Q6):** `data_extraction_rules.xml` (API 31+) and `backup_rules.xml`
+  (API 28–30) exclude the `database` domain and `datastore/`. The exclusion also covers
+  **device-to-device transfer**, for consistency with "explicit backup only". The
+  explicit backup (Phase 8) is the migration path.
+- **Not done here:** no starter categories are seeded; the Phase 3 setup flow decides. No
+  migration tests exist yet, because there is only schema v1.
+- Tests: 21 persistence tests (`app/src/test/.../data/`), plus the 51 domain tests.
 
 ## Open questions
 

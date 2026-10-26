@@ -1,0 +1,109 @@
+package lv.kristapsbe.budzets.data.repository
+
+import androidx.room.withTransaction
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import lv.kristapsbe.budzets.data.local.BudzetsDatabase
+import lv.kristapsbe.budzets.data.local.categoryColumn
+import lv.kristapsbe.budzets.data.local.dao.CategorySpendRow
+import lv.kristapsbe.budzets.data.local.dateRange
+import lv.kristapsbe.budzets.data.local.entity.BoostEntity
+import lv.kristapsbe.budzets.data.local.entity.BudgetConfigEntity
+import lv.kristapsbe.budzets.data.local.entity.CategoryEntity
+import lv.kristapsbe.budzets.data.local.scopeKey
+import lv.kristapsbe.budzets.data.local.toDb
+import lv.kristapsbe.budzets.data.local.toDomain
+import lv.kristapsbe.budzets.domain.calculation.BudgetResolver
+import lv.kristapsbe.budzets.domain.calculation.MonthSummary
+import lv.kristapsbe.budzets.domain.calculation.MonthSummaryCalculator
+import lv.kristapsbe.budzets.domain.model.BudgetConfig
+import lv.kristapsbe.budzets.domain.model.BudgetScope
+import lv.kristapsbe.budzets.domain.model.BudgetTarget
+import lv.kristapsbe.budzets.domain.model.CategoryId
+import lv.kristapsbe.budzets.domain.model.Money
+import java.time.Clock
+import java.time.YearMonth
+
+class BudgetRepository(
+    private val db: BudzetsDatabase,
+    private val clock: Clock,
+    private val newId: () -> String,
+) {
+    private val configDao = db.budgetConfigDao()
+    private val categoryDao = db.categoryDao()
+    private val expenseDao = db.expenseDao()
+    private val surplusDao = db.surplusDao()
+
+    val configs: Flow<List<BudgetConfig>> = configDao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * Sets [scope]'s targets from [effectiveFrom] on, until a later version. Re-saving the same
+     * month updates that version in place. Earlier months keep their own versions.
+     */
+    suspend fun setTarget(scope: BudgetScope, target: BudgetTarget, effectiveFrom: YearMonth = YearMonth.now(clock)) =
+        db.withTransaction {
+            val now = clock.instant().toDb()
+            val existing = configDao.find(scope.scopeKey(), effectiveFrom.toDb())
+            if (existing != null) {
+                configDao.update(
+                    existing.copy(dailyTargetMinor = target.dailyMinor, weeklyTargetMinor = target.weeklyMinor, updatedAt = now)
+                )
+            } else {
+                configDao.insert(
+                    BudgetConfigEntity(
+                        id = newId(),
+                        scopeKey = scope.scopeKey(),
+                        categoryId = scope.categoryColumn(),
+                        dailyTargetMinor = target.dailyMinor,
+                        weeklyTargetMinor = target.weeklyMinor,
+                        effectiveFrom = effectiveFrom.toDb(),
+                        createdAt = now,
+                        updatedAt = now,
+                    )
+                )
+            }
+        }
+
+    /** Live summary of [month]; re-emits when categories, budgets, boosts or expenses change. */
+    fun observeMonthSummary(month: YearMonth): Flow<MonthSummary> {
+        val (from, to) = month.dateRange()
+        return combine(
+            categoryDao.observeAll(),
+            configDao.observeAll(),
+            surplusDao.observeBoostsFor(month.toDb()),
+            expenseDao.observeSpending(from, to),
+        ) { categories, configs, boosts, spending -> summarize(month, categories, configs, boosts, spending) }
+    }
+
+    /** One-shot summary read in a single transaction (consistent snapshot). */
+    suspend fun loadMonthSummary(month: YearMonth): MonthSummary = db.withTransaction {
+        val (from, to) = month.dateRange()
+        summarize(
+            month,
+            categoryDao.getAll(),
+            configDao.getAll(),
+            surplusDao.getBoostsFor(month.toDb()),
+            expenseDao.getSpending(from, to),
+        )
+    }
+
+    private fun summarize(
+        month: YearMonth,
+        categories: List<CategoryEntity>,
+        configs: List<BudgetConfigEntity>,
+        boosts: List<BoostEntity>,
+        spending: List<CategorySpendRow>,
+    ): MonthSummary {
+        val resolved = BudgetResolver.resolve(
+            month,
+            configs.map { it.toDomain() },
+            categories.map { it.toDomain().toRef() },
+        )
+        return MonthSummaryCalculator.summarize(
+            resolved,
+            boosts.map { it.toDomain() },
+            spending.associate { CategoryId(it.categoryId) to Money(it.totalMinor) },
+        )
+    }
+}
