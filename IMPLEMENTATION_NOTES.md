@@ -359,6 +359,76 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   - Dark theme; no crashes
 - **Phase 8 note:** the backup must include `monthlyTargetMinor`.
 
+## Decisions from Phase 6 review (approved 2026-10-27)
+
+- **Q14 — Which months can close:** any past month, plus the current month early. Expenses
+  added after closing mark it "changed since closing", and closing again posts only the
+  difference (Q3). Future months can't be closed.
+- **Q15 — Reminder:** Overview (on the current month) shows a card for the most recent
+  past month that had a budget and isn't closed, with a count of earlier ones. Months with no
+  budget are skipped, since closing them would only turn spending into debits.
+
+## Phase 6 — surplus ledger and month close (done)
+
+- **No new dependencies, no schema change.** The Phase 1–2 domain and repository did the
+  accounting; this phase adds the screens plus a few pure helpers.
+- **Domain:**
+  - `CloseReview` (via `MonthFinalizer.review`): per pocket, what closing should leave
+    (`target`), what is already recorded (`recorded`), and the difference (`pending`).
+    `MonthFinalizer` now uses the same `closureChanges`, so the review and the actual close
+    can't disagree.
+  - `SurplusLedger.breakdown`: per pocket, from closing / moved / reserved for boosts, summing
+    to the available balance (spec §7.5's "available vs transferred vs allocated").
+  - `ClosingSchedule.unclosedBudgetedPastMonths` drives the Q15 reminder.
+  - `MonthFinalizer.REOPEN_NOTE` marks reopen entries so history can tell them from re-closes.
+- **Repository:** `SurplusRepository.observeCloseState(month)` gives the live review plus the
+  latest closure record.
+- **Month review** (`MonthCloseRoute`):
+  - One line per pocket with budget, boost and spent. Spending in a category without a budget
+    is stated as "recorded as a debit", the point promised for this phase.
+  - Unallocated line, net total, and a "not a bank balance" note.
+  - Open → "Close month". Changed → shows only the differences and "Close again". Closed →
+    "Reopen month" after a confirmation.
+  - A refused reopen names each pocket and the negative balance it would be left with.
+  - Notes for an early close of the current month and for a month with no budget.
+- **Overview:** the Q15 reminder. Closed and changed banners now carry an action (View,
+  Review & close); a past open month gets a "not closed yet" prompt; the current open month
+  has a quiet "Review & close this month" link.
+- **Surplus tab:**
+  - Total, then pockets in category order with Unallocated last. Each shows its breakdown;
+    a negative pocket shows "−€x debit" plus how it's repaid.
+  - Active boosts with Release (not for closed months).
+  - History newest first, filterable by pocket. Closing entries name their source month,
+    transfers the other pocket, boosts the boosted category and month.
+- **Move surplus / Boost a budget:**
+  - Pocket chips showing balances, an "All (€x)" shortcut, live "Only €x is available", and an
+    optional note.
+  - Boost months start at the current month; a closed month is refused with a banner. A
+    preview shows "Budget for X in Month: before + boost = after".
+  - Defaults: the passed-in or only pocket with surplus; for a boost, the destination's own
+    pocket.
+  - Same Compose-state + `SavedStateHandle` pattern as the other editors.
+- **Shared:** `ui/components/FormParts` (`FormSection`, `amountErrorText`), replacing three
+  copies; `Banner` gained an optional action.
+- **Found on the emulator and fixed:**
+  - The reopen-refused message lost its line breaks: literal newlines in a string resource
+    collapse to spaces, so it now uses `\n`.
+  - Negative amounts used a hyphen.
+  - The boost preview's "Groceries’s budget" was rephrased.
+- **Tests:**
+  - 28 new (201 total): domain 3, repository 1, month review VM 4, surplus VM 4, move/boost
+    VM 6, overview VM 1, review UI 4, surplus/boost/move/reminder UI 4, and `SurplusFlowTest`.
+  - `SurplusFlowTest`: set budgets → close this month early from Overview → move → boost next
+    month → Overview shows the boost → a late expense → close again. It was stable across 3
+    reruns, as were the other two flows.
+- **Manual check on emulator** (API 37):
+  - September budget and expenses set up through the UI → Overview reminder → review (+€50
+    Groceries, −€40 debit for unbudgeted Eating out, +€400 unallocated, net +€410) → close.
+  - Surplus breakdowns; move €40 to repay the debit; boost November €30
+    (preview €200 + €30 = €230).
+  - Reopen refused, listing the pockets; release boost; refused again for Unallocated only.
+  - Move form survives "Don't keep activities"; dark theme; no crashes.
+
 ## Open questions
 
 None currently.

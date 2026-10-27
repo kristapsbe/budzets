@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,6 +59,7 @@ import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
+import lv.kristapsbe.budzets.util.displayName
 import java.time.YearMonth
 
 @Composable
@@ -66,6 +68,7 @@ fun OverviewScreen(
     onOpenBudgets: () -> Unit,
     onOpenSurplus: () -> Unit,
     onOpenCategory: (CategoryId, YearMonth) -> Unit,
+    onReviewClose: (YearMonth) -> Unit,
     viewModel: OverviewViewModel = viewModel(factory = OverviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -82,6 +85,7 @@ fun OverviewScreen(
             onOpenBudgets = onOpenBudgets,
             onOpenSurplus = onOpenSurplus,
             onOpenCategory = onOpenCategory,
+            onReviewClose = onReviewClose,
         ),
     )
 }
@@ -96,6 +100,7 @@ data class OverviewActions(
     val onOpenBudgets: () -> Unit = {},
     val onOpenSurplus: () -> Unit = {},
     val onOpenCategory: (CategoryId, YearMonth) -> Unit = { _, _ -> },
+    val onReviewClose: (YearMonth) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -165,12 +170,49 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
             return@LazyColumn
         }
 
-        when (state.closeStatus) {
-            CloseStatus.CLOSED -> item { Banner(Icons.Filled.Lock, stringResource(R.string.month_closed)) }
-            CloseStatus.CHANGED_SINCE_CLOSING -> item {
-                Banner(Icons.Filled.Warning, stringResource(R.string.month_changed_since_closing), warning = true)
+        // Q15: remind about budgeted past months that still need closing.
+        if (state.isCurrentMonth && state.unclosedPastMonths.isNotEmpty()) {
+            item {
+                val latest = state.unclosedPastMonths.first()
+                val earlier = state.unclosedPastMonths.size - 1
+                Banner(
+                    Icons.Filled.Info,
+                    if (earlier == 0) stringResource(R.string.reminder_unclosed, latest.displayName(locale))
+                    else pluralStringResource(R.plurals.reminder_unclosed_more, earlier, latest.displayName(locale), earlier),
+                    action = stringResource(R.string.review_and_close),
+                    onAction = { actions.onReviewClose(latest) },
+                )
             }
-            CloseStatus.OPEN -> Unit
+        }
+        when (state.closeStatus) {
+            CloseStatus.CLOSED -> item {
+                Banner(
+                    Icons.Filled.Lock,
+                    stringResource(R.string.month_closed),
+                    action = stringResource(R.string.view_closing),
+                    onAction = { actions.onReviewClose(state.month) },
+                )
+            }
+            CloseStatus.CHANGED_SINCE_CLOSING -> item {
+                Banner(
+                    Icons.Filled.Warning,
+                    stringResource(R.string.month_changed_since_closing),
+                    warning = true,
+                    action = stringResource(R.string.review_and_close),
+                    onAction = { actions.onReviewClose(state.month) },
+                )
+            }
+            // A past month left open gets the same prompt; the current one has a quieter link below.
+            CloseStatus.OPEN -> if (state.canClose && !state.isCurrentMonth) {
+                item {
+                    Banner(
+                        Icons.Filled.Info,
+                        stringResource(R.string.month_not_closed),
+                        action = stringResource(R.string.review_and_close),
+                        onAction = { actions.onReviewClose(state.month) },
+                    )
+                }
+            }
         }
         if (state.summary.categoryPlansExceedOverall) {
             item {
@@ -221,6 +263,12 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
         }
         items(state.rows, key = { it.id.value }) { row ->
             CategoryRowItem(row, money, onClick = { actions.onOpenCategory(row.id, state.month) })
+        }
+
+        if (state.isCurrentMonth && state.closeStatus == CloseStatus.OPEN) {
+            item {
+                TextButton(onClick = { actions.onReviewClose(state.month) }) { Text(stringResource(R.string.review_and_close_this_month)) }
+            }
         }
     }
 }

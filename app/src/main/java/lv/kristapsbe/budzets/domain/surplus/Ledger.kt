@@ -67,8 +67,33 @@ data class Boost(
     val releasedAt: Instant? = null,
 )
 
+/**
+ * Where a pocket's balance came from, so "available", "moved" and "reserved for a boost" are
+ * never confused (spec §7.5). All values are signed; [available] is their sum.
+ */
+data class PocketBreakdown(
+    /** Net of month closes: unspent budget minus overspend, including adjustments and reopens. */
+    val fromClosing: Money = Money.ZERO,
+    /** Net of transfers in and out. */
+    val moved: Money = Money.ZERO,
+    /** Net reserved for boosts (reservations minus releases); zero or negative. */
+    val boosts: Money = Money.ZERO,
+) {
+    val available: Money get() = fromClosing + moved + boosts
+}
+
 /** Balances are always derived from the entries and never stored separately. */
 object SurplusLedger {
+
+    fun breakdown(entries: Iterable<LedgerEntry>): Map<SurplusPocket, PocketBreakdown> =
+        entries.groupBy { it.pocket }.mapValues { (_, list) ->
+            fun net(filter: (LedgerEntryType) -> Boolean) = list.filter { filter(it.type) }.fold(Money.ZERO) { acc, e -> acc + e.signedAmount }
+            PocketBreakdown(
+                fromClosing = net { it.isClosure },
+                moved = net { it == LedgerEntryType.TRANSFER_IN || it == LedgerEntryType.TRANSFER_OUT },
+                boosts = net { it == LedgerEntryType.BOOST_RESERVE || it == LedgerEntryType.BOOST_RELEASE },
+            )
+        }
 
     fun balances(entries: Iterable<LedgerEntry>): Map<SurplusPocket, Money> =
         entries.groupBy { it.pocket }

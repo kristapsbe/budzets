@@ -129,6 +129,8 @@ Keep the assumptions easy to change.
     finalize surplus" action, and explain that it snapshots the unused
     budget into the surplus ledger. Allow correction/reversal through a
     transparent adjustment, rather than silently rewriting history.
+    (Phase 6 review: past months and the current month can be closed;
+    the overview reminds about unclosed past months that had a budget.)
 -   **Drive backup:** use a user-initiated Google Drive file
     picker/authorization flow where possible. The backup file is app
     data, not a sync protocol. Never upload automatically without a

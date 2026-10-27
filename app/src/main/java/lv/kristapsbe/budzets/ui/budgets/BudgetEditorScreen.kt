@@ -53,6 +53,7 @@ import lv.kristapsbe.budzets.domain.calculation.AmountError
 import lv.kristapsbe.budzets.domain.calculation.TargetKind
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.amountErrorText
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
 
@@ -190,7 +191,7 @@ private fun TargetField(
         suffix = suffix.takeIf { it.isNotEmpty() }?.let { { Text(it) } },
         singleLine = true,
         isError = error != null,
-        supportingText = error?.let { { Text(targetErrorText(it, fractionDigits)) } },
+        supportingText = error?.let { { Text(amountErrorText(it, fractionDigits)) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = imeAction),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
         modifier = Modifier.fillMaxWidth().testTag(tag),
@@ -265,17 +266,6 @@ private fun EquivalentLine(text: String, wins: Boolean) {
             Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.sets_the_plan), modifier = Modifier.size(18.dp))
         }
     }
-}
-
-@Composable
-private fun targetErrorText(error: AmountError, fractionDigits: Int): String = when (error) {
-    AmountError.TOO_MANY_DECIMALS ->
-        if (fractionDigits == 0) stringResource(R.string.error_amount_whole)
-        else pluralStringResource(R.plurals.error_amount_decimals, fractionDigits, fractionDigits)
-    AmountError.TOO_LARGE -> stringResource(R.string.error_amount_too_large)
-    AmountError.NOT_A_NUMBER -> stringResource(R.string.error_amount_not_number)
-    // Empty means "not set" and zero is allowed, so these can't occur; kept for exhaustiveness.
-    AmountError.EMPTY, AmountError.NOT_POSITIVE -> stringResource(R.string.error_amount_not_number)
 }
 
 const val DAILY_FIELD_TAG = "budget_daily"

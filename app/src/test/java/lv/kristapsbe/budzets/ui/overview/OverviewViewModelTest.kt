@@ -125,4 +125,19 @@ class OverviewViewModelTest : ViewModelTest() {
         restored.goToCurrentMonth()
         assertTrue((restored.uiState.awaitFirst { it is OverviewUiState.Ready && it.isCurrentMonth } as OverviewUiState.Ready).isCurrentMonth)
     }
+
+    @Test
+    fun `reminds about budgeted past months that aren't closed, and only past and current months can close`() = runTest {
+        val food = categories.create("Food")
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(dailyMinor = 100), ym("2026-02"))
+        val april = awaitReady { it.unclosedPastMonths.isNotEmpty() }
+        assertEquals(listOf(ym("2026-03"), ym("2026-02")), april.unclosedPastMonths)
+        assertTrue(april.canClose)
+
+        surplus.closeMonth(ym("2026-03")).ok()
+        assertEquals(listOf(ym("2026-02")), awaitReady { it.unclosedPastMonths.size == 1 }.unclosedPastMonths)
+
+        vm.nextMonth()
+        assertFalse(awaitReady { it.month == ym("2026-05") }.canClose)
+    }
 }

@@ -9,6 +9,7 @@ import lv.kristapsbe.budzets.data.local.toCategoryRows
 import lv.kristapsbe.budzets.data.local.toDb
 import lv.kristapsbe.budzets.data.local.toDomain
 import lv.kristapsbe.budzets.data.local.toEntity
+import lv.kristapsbe.budzets.data.local.toInstant
 import lv.kristapsbe.budzets.data.local.toYearMonth
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.model.BoostId
@@ -17,6 +18,7 @@ import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.surplus.Boost
+import lv.kristapsbe.budzets.domain.surplus.CloseReview
 import lv.kristapsbe.budzets.domain.surplus.ClosureError
 import lv.kristapsbe.budzets.domain.surplus.LedgerEntry
 import lv.kristapsbe.budzets.domain.surplus.MonthClosure
@@ -25,7 +27,16 @@ import lv.kristapsbe.budzets.domain.surplus.SurplusError
 import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import lv.kristapsbe.budzets.domain.surplus.SurplusOperations
 import java.time.Clock
+import java.time.Instant
 import java.time.YearMonth
+
+/** The latest closure record of a month. [isClosed] is false once it has been reopened. */
+data class ClosureStatus(val revision: Int, val closedAt: Instant, val reopenedAt: Instant?) {
+    val isClosed: Boolean get() = reopenedAt == null
+}
+
+/** Everything the month-close review shows; re-emitted whenever any input changes. */
+data class MonthCloseState(val review: CloseReview, val latest: ClosureStatus?)
 
 /**
  * Persists surplus operations. Each one reads the current ledger, asks the domain layer to plan
@@ -103,6 +114,15 @@ class SurplusRepository(
         latestClosure(month)?.isClosed == true &&
             finalizer.hasChangesSinceClosing(loadLedger(), budgets.loadMonthSummary(month))
     }
+
+    fun observeCloseState(month: YearMonth): Flow<MonthCloseState> =
+        combine(ledger, budgets.observeMonthSummary(month), dao.observeClosures()) { entries, summary, closures ->
+            val latest = closures.filter { it.month == month.toDb() }.maxByOrNull { it.revision }
+            MonthCloseState(
+                review = finalizer.review(entries, summary),
+                latest = latest?.let { ClosureStatus(it.revision, it.closedAt.toInstant(), it.reopenedAt?.toInstant()) },
+            )
+        }
 
     /** Re-emits when the ledger or the month's inputs change. */
     fun observeHasChangesSinceClosing(month: YearMonth): Flow<Boolean> =

@@ -168,6 +168,88 @@
     <string name="preview_fix_errors">Fix the highlighted amount to see the plan.</string>
     <string name="categories_would_exceed_overall">Category budgets would add up to %1$s, more than the overall budget of %2$s.</string>
 
+    <!-- Month close -->
+    <string name="close_month_title">Close %1$s</string>
+    <string name="close_explanation">Closing saves each category’s unspent budget as surplus in that category. Overspending is recorded as a debit against the category’s surplus, which later surplus or a transfer repays. That includes all spending in categories without a budget.</string>
+    <string name="close_early_note">%1$s isn’t over yet. You can close it now; expenses added later are recorded by closing it again.</string>
+    <string name="close_no_budget_warning">This month has no budget, so closing it records all its spending as debits.</string>
+    <string name="month_was_reopened">This month was reopened. Closing it records its surplus again.</string>
+    <string name="month_closed_on">Closed on %1$s. Its surplus is recorded below.</string>
+    <string name="month_changed_review">Expenses or budgets changed since this month was closed. Closing it again records only the differences shown.</string>
+    <string name="close_line_budget">Budget %1$s · spent %2$s</string>
+    <string name="close_line_budget_boost">Budget %1$s + %2$s boost · spent %3$s</string>
+    <string name="close_line_no_budget">No budget, so its %1$s spending is recorded as a debit</string>
+    <string name="close_line_unallocated">Overall budget not assigned to any category</string>
+    <string name="close_line_total_after">Total for this month after closing: %1$s</string>
+    <string name="amount_saved">+%1$s saved</string>
+    <string name="amount_debit">−%1$s debit</string>
+    <string name="close_net">Net surplus from this month</string>
+    <string name="close_net_change">Net change</string>
+    <string name="surplus_not_bank_balance">Surplus is a budgeting figure, not a bank balance.</string>
+    <string name="close_month_button">Close month</string>
+    <string name="close_again">Close again</string>
+    <string name="close_future_month">Future months can’t be closed.</string>
+    <string name="reopen_month">Reopen month</string>
+    <string name="reopen_confirm_title">Reopen %1$s?</string>
+    <string name="reopen_confirm_body">Its surplus entries are reversed, so the saved amounts go back down. You can close it again later.</string>
+    <string name="month_reopened">Month reopened</string>
+    <string name="reopen_refused_title">Can’t reopen this month</string>
+    <string name="reopen_refused_body">Some of its surplus has already been moved or used for a boost. Reopening would leave:\n%1$s\nMove surplus back first, or release the boost.</string>
+    <string name="pocket_would_be">%1$s at −%2$s</string>
+
+    <!-- Overview: closing -->
+    <string name="reminder_unclosed">%1$s isn’t closed yet.</string>
+    <plurals name="reminder_unclosed_more">
+        <item quantity="one">%1$s and %2$d earlier month aren’t closed yet.</item>
+        <item quantity="other">%1$s and %2$d earlier months aren’t closed yet.</item>
+    </plurals>
+    <string name="month_not_closed">This month isn’t closed yet.</string>
+    <string name="review_and_close">Review &amp; close</string>
+    <string name="review_and_close_this_month">Review &amp; close this month</string>
+    <string name="view_closing">View</string>
+
+    <!-- Surplus -->
+    <string name="pocket_unallocated">Unallocated</string>
+    <string name="move_surplus">Move surplus</string>
+    <string name="boost_a_budget">Boost a budget</string>
+    <string name="surplus_empty">No surplus yet. When you close a month, its unspent budget is saved here.</string>
+    <string name="surplus_by_category">By category</string>
+    <string name="breakdown_closing">Closed months %1$s</string>
+    <string name="breakdown_moved">Moved %1$s</string>
+    <string name="breakdown_boosts">Boosts %1$s</string>
+    <string name="pocket_negative_hint">Overspent. Later surplus or a transfer in repays it.</string>
+    <string name="active_boosts">Active boosts</string>
+    <string name="boost_row">+%1$s for %2$s, %3$s</string>
+    <string name="boost_from">From %1$s</string>
+    <string name="release_boost">Release</string>
+    <string name="boost_released">Boost released. Its surplus is available again.</string>
+    <string name="surplus_history">History</string>
+    <string name="history_close_credit">Unspent in %1$s</string>
+    <string name="history_close_debit">Overspent in %1$s</string>
+    <string name="history_reclose">%1$s closed again</string>
+    <string name="history_reopen">%1$s reopened</string>
+    <string name="history_moved_out">Moved to %1$s</string>
+    <string name="history_moved_in">Moved from %1$s</string>
+    <string name="history_boost">Boost for %1$s, %2$s</string>
+    <string name="history_boost_released">Boost for %1$s, %2$s released</string>
+
+    <!-- Move surplus / boost -->
+    <string name="move">Move</string>
+    <string name="move_explanation">Move all or part of a category’s saved surplus to another category. Moving doesn’t change any month’s budget or spending.</string>
+    <string name="move_from">From</string>
+    <string name="move_to">To</string>
+    <string name="pocket_with_balance">%1$s · %2$s</string>
+    <string name="use_all">All (%1$s)</string>
+    <string name="error_more_than_available">Only %1$s is available</string>
+    <string name="error_choose_pocket">Choose one</string>
+    <string name="no_surplus_to_use">No category has surplus to use yet.</string>
+    <string name="boost">Boost</string>
+    <string name="boost_explanation">Use saved surplus to raise one category’s budget for one month. The amount is set aside, so it can’t be used twice; release the boost to get it back.</string>
+    <string name="boost_for">Category</string>
+    <string name="boost_from_pocket">Use surplus from</string>
+    <string name="boost_month_closed">%1$s is closed, so its budget can’t be boosted.</string>
+    <string name="boost_preview">Budget for %1$s in %2$s: %3$s + %4$s = %5$s</string>
+
     <string-array name="starter_categories">
         <item>Groceries</item>
         <item>Eating out</item>

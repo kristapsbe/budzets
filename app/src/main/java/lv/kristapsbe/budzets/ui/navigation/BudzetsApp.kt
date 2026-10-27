@@ -39,9 +39,14 @@ import kotlinx.serialization.Serializable
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.ui.budgets.BudgetEditorScreen
 import lv.kristapsbe.budzets.ui.budgets.BudgetsScreen
+import lv.kristapsbe.budzets.ui.close.MonthCloseScreen
 import lv.kristapsbe.budzets.ui.expenses.ExpenseEditorScreen
 import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
+import lv.kristapsbe.budzets.ui.surplus.BoostScreen
+import lv.kristapsbe.budzets.ui.surplus.MoveSurplusScreen
+import lv.kristapsbe.budzets.ui.surplus.SurplusScreen
+import lv.kristapsbe.budzets.ui.surplus.key
 import kotlin.reflect.KClass
 
 @Serializable data object OverviewRoute
@@ -59,6 +64,15 @@ import kotlin.reflect.KClass
 
 /** Edits a budget from [month] ("YYYY-MM") on: a category's, or the overall one when [categoryId] is null. */
 @Serializable data class BudgetEditorRoute(val categoryId: String? = null, val month: String)
+
+/** Month-end review of [month] ("YYYY-MM"): close, close again, or reopen. */
+@Serializable data class MonthCloseRoute(val month: String)
+
+/** Moves surplus, optionally starting from the pocket keyed [from] (see `SurplusPocket.key`). */
+@Serializable data class MoveSurplusRoute(val from: String? = null)
+
+/** Boosts a category's budget for a month with saved surplus. */
+@Serializable data class BoostRoute(val categoryId: String? = null, val month: String? = null)
 
 /** Edits [expenseId], or adds a new expense with [categoryId] preselected. */
 @Serializable data class ExpenseEditorRoute(val expenseId: String? = null, val categoryId: String? = null)
@@ -114,6 +128,7 @@ fun BudzetsApp(navController: NavHostController = rememberNavController()) {
                     onOpenBudgets = { navController.navigateTopLevel(BudgetsRoute) },
                     onOpenSurplus = { navController.navigateTopLevel(SurplusRoute) },
                     onOpenCategory = { id, month -> navController.navigate(CategorySpendingRoute(id.value, month.toString())) },
+                    onReviewClose = { navController.navigate(MonthCloseRoute(it.toString())) },
                 )
             }
             composable<TransactionsRoute> {
@@ -136,7 +151,21 @@ fun BudzetsApp(navController: NavHostController = rememberNavController()) {
             composable<BudgetEditorRoute> {
                 BudgetEditorScreen(onClose = { navController.popBackStack<BudgetEditorRoute>(inclusive = true) })
             }
-            composable<SurplusRoute> { PlaceholderScreen(R.string.nav_surplus) }
+            composable<SurplusRoute> {
+                SurplusScreen(
+                    onMove = { navController.navigate(MoveSurplusRoute(it?.key())) },
+                    onBoost = { navController.navigate(BoostRoute()) },
+                )
+            }
+            composable<MonthCloseRoute> {
+                MonthCloseScreen(onClose = { navController.popBackStack<MonthCloseRoute>(inclusive = true) })
+            }
+            composable<MoveSurplusRoute> {
+                MoveSurplusScreen(onClose = { navController.popBackStack<MoveSurplusRoute>(inclusive = true) })
+            }
+            composable<BoostRoute> {
+                BoostScreen(onClose = { navController.popBackStack<BoostRoute>(inclusive = true) })
+            }
             composable<SettingsRoute> { PlaceholderScreen(R.string.nav_settings) }
             composable<ExpenseEditorRoute> {
                 ExpenseEditorScreen(onClose = { navController.popBackStack<ExpenseEditorRoute>(inclusive = true) })

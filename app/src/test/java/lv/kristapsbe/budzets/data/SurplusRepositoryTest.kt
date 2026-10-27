@@ -21,6 +21,7 @@ import lv.kristapsbe.budzets.domain.surplus.SurplusError
 import lv.kristapsbe.budzets.domain.ym
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -152,5 +153,33 @@ class SurplusRepositoryTest : DbTest() {
         surplus.closeMonth(march).ok()
         surplus.closeMonth(april).ok() // current month may be closed early
         assertEquals(SurplusError.MonthClosed, surplus.allocateBoost(SurplusPocket.Category(food.id), travel.id, april, eur(1)).err())
+    }
+
+    @Test
+    fun `close state follows closing, later changes and reopening`() = runTest {
+        val food = categories.create("Food")
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(dailyMinor = 1_000), ym("2026-03")) // 310
+        expenses.add(eur(300), food.id, LocalDate.of(2026, 3, 5))
+        val pocket = SurplusPocket.Category(food.id)
+        val flow = surplus.observeCloseState(ym("2026-03"))
+
+        val open = flow.first()
+        assertNull(open.latest)
+        assertEquals(mapOf(pocket to eur(10)), open.review.pending)
+
+        surplus.closeMonth(ym("2026-03")).ok()
+        val closed = flow.first { it.latest != null }
+        assertTrue(closed.latest!!.isClosed)
+        assertEquals(1, closed.latest!!.revision)
+        assertTrue(closed.review.pending.isEmpty())
+        assertEquals(mapOf(pocket to eur(10)), closed.review.recorded)
+
+        expenses.add(eur(4), food.id, LocalDate.of(2026, 3, 6))
+        assertEquals(mapOf(pocket to eur(-4)), flow.first { it.review.pending.isNotEmpty() }.review.pending)
+
+        surplus.reopenMonth(ym("2026-03")).ok()
+        val reopened = flow.first { it.latest?.isClosed == false }
+        assertTrue(reopened.review.recorded.isEmpty())
+        assertEquals(mapOf(pocket to eur(6)), reopened.review.pending)
     }
 }

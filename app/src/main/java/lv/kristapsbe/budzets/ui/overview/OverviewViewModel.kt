@@ -31,6 +31,7 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.sumMoney
+import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
 import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
@@ -53,7 +54,12 @@ sealed interface OverviewUiState {
         /** Net of all surplus pockets; may be negative after overspending. */
         val totalSurplus: Money,
         val hasCategories: Boolean,
+        /** Budgeted past months not closed yet, newest first (Q15 reminder). */
+        val unclosedPastMonths: List<YearMonth> = emptyList(),
+        /** Past months and the current one can be closed (Q14); future ones can't. */
+        val canClose: Boolean = false,
     ) : OverviewUiState {
+
         val hasBudget: Boolean get() = summary.overallEffective.isPositive
         val hasSpending: Boolean get() = summary.totalSpent.isPositive
     }
@@ -92,12 +98,13 @@ class OverviewViewModel(
                     changed -> CloseStatus.CHANGED_SINCE_CLOSING
                     else -> CloseStatus.CLOSED
                 }
-                summary to status
+                Triple(summary, status, closed)
             },
             categories.categories,
             settings.currency,
             surplus.balances,
-        ) { (summary, status), allCategories, currency, balances ->
+            budgets.configs,
+        ) { (summary, status, closed), allCategories, currency, balances, configs ->
             val today = LocalDate.now(clock)
             OverviewUiState.Ready(
                 month = month,
@@ -109,6 +116,10 @@ class OverviewViewModel(
                 closeStatus = status,
                 totalSurplus = balances.values.sumMoney(),
                 hasCategories = allCategories.isNotEmpty(),
+                unclosedPastMonths = ClosingSchedule.unclosedBudgetedPastMonths(
+                    configs, allCategories.map { it.toRef() }, closed, YearMonth.from(today),
+                ),
+                canClose = month <= YearMonth.from(today),
             ) as OverviewUiState
         }.catch { emit(OverviewUiState.Error(it.message)) }
 

@@ -34,6 +34,27 @@ sealed interface ClosureError {
 data class ClosureResult(val closure: MonthClosure, val entries: List<LedgerEntry>)
 
 /**
+ * What closing [summary]'s month means for the ledger, for the review screen.
+ *
+ * @property target per pocket, the net effect the month's closure entries should have.
+ * @property recorded per pocket, what earlier closes of the month have already posted.
+ */
+data class CloseReview(
+    val summary: MonthSummary,
+    val target: Map<SurplusPocket, Money>,
+    val recorded: Map<SurplusPocket, Money>,
+) {
+    /** What closing now would post: [target] minus [recorded], per pocket. */
+    val pending: Map<SurplusPocket, Money> get() = closureChanges(target, recorded)
+}
+
+/** Per pocket, [target] minus [recorded]; zero differences are omitted. */
+fun closureChanges(target: Map<SurplusPocket, Money>, recorded: Map<SurplusPocket, Money>): Map<SurplusPocket, Money> =
+    (target.keys + recorded.keys)
+        .associateWith { (target[it] ?: Money.ZERO) - (recorded[it] ?: Money.ZERO) }
+        .filterValues { !it.isZero }
+
+/**
  * Month closing rules:
  * - Each category's remaining amount is credited (if positive) or debited (if negative) to its own
  *   surplus pocket. A debit may make the balance negative. A boost's unspent money is part of
@@ -53,6 +74,9 @@ class MonthFinalizer(
         }
         if (summary.unallocatedBase.isPositive) put(SurplusPocket.Unallocated, summary.unallocatedBase)
     }
+
+    fun review(ledger: List<LedgerEntry>, summary: MonthSummary): CloseReview =
+        CloseReview(summary, preview(summary), SurplusLedger.closureNet(ledger, summary.month))
 
     /** True when closing [summary] now would post anything new for its month. */
     fun hasChangesSinceClosing(ledger: List<LedgerEntry>, summary: MonthSummary): Boolean =
@@ -108,16 +132,15 @@ class MonthFinalizer(
         val entries = net.map { (pocket, value) ->
             val type = if (value.isPositive) LedgerEntryType.ADJUSTMENT_DEBIT else LedgerEntryType.ADJUSTMENT_CREDIT
             val amount = if (value.isNegative) -value else value
-            LedgerEntry(LedgerEntryId(newId()), type, pocket, amount, at, sourceMonth = closure.month, note = "Month reopened")
+            LedgerEntry(LedgerEntryId(newId()), type, pocket, amount, at, sourceMonth = closure.month, note = REOPEN_NOTE)
         }
         return Outcome.Ok(ClosureResult(closure.copy(reopenedAt = at), entries))
     }
 
-    private fun deltas(ledger: List<LedgerEntry>, summary: MonthSummary): Map<SurplusPocket, Money> {
-        val desired = preview(summary)
-        val current = SurplusLedger.closureNet(ledger, summary.month)
-        return (desired.keys + current.keys)
-            .associateWith { (desired[it] ?: Money.ZERO) - (current[it] ?: Money.ZERO) }
-            .filterValues { !it.isZero }
+    private fun deltas(ledger: List<LedgerEntry>, summary: MonthSummary): Map<SurplusPocket, Money> = review(ledger, summary).pending
+
+    companion object {
+        /** Marks the adjustment entries a reopen posts, so history can tell them from a re-close. */
+        const val REOPEN_NOTE = "Month reopened"
     }
 }
