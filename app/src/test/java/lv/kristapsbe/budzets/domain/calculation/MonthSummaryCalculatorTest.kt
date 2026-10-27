@@ -27,7 +27,7 @@ class MonthSummaryCalculatorTest {
 
     private val april = ym("2026-04")
 
-    private fun plan(amount: Money) = MonthlyPlan(amount, amount, null, PlanSource.DAILY)
+    private fun plan(amount: Money) = MonthlyPlan(amount, amount, null, null, setOf(TargetKind.DAILY))
 
     private fun resolved(
         month: YearMonth = april,

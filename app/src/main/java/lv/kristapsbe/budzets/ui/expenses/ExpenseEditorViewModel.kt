@@ -28,6 +28,7 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Expense
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.domain.model.Outcome
+import lv.kristapsbe.budzets.util.amountInputChars
 import lv.kristapsbe.budzets.util.formatForInput
 import java.text.DecimalFormatSymbols
 import java.time.Clock
@@ -178,7 +179,7 @@ class ExpenseEditorViewModel(
         )
     }
 
-    fun onAmountChange(text: String) = updateForm(form.copy(amountText = text.filter { it.isDigit() || it == '.' || it == ',' }))
+    fun onAmountChange(text: String) = updateForm(form.copy(amountText = text.amountInputChars()))
     fun onCategorySelect(id: CategoryId) = updateForm(form.copy(categoryId = id))
     fun onDateSelect(date: LocalDate) = updateForm(form.copy(date = date))
     fun onNoteChange(text: String) = updateForm(form.copy(note = text))

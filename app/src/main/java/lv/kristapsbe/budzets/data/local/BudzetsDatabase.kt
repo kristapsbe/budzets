@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import lv.kristapsbe.budzets.data.local.dao.BudgetConfigDao
 import lv.kristapsbe.budzets.data.local.dao.CategoryDao
 import lv.kristapsbe.budzets.data.local.dao.ExpenseDao
@@ -26,7 +28,7 @@ import lv.kristapsbe.budzets.data.local.entity.MonthClosureEntity
         MonthClosureEntity::class,
         MonthClosureCategoryEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class BudzetsDatabase : RoomDatabase() {
@@ -44,6 +46,17 @@ abstract class BudzetsDatabase : RoomDatabase() {
          * against the exported schemas in `app/schemas/`.
          */
         fun build(context: Context): BudzetsDatabase =
-            Room.databaseBuilder(context.applicationContext, BudzetsDatabase::class.java, NAME).build()
+            Room.databaseBuilder(context.applicationContext, BudzetsDatabase::class.java, NAME)
+                .addMigrations(*MIGRATIONS)
+                .build()
+
+        /** v1 → v2: optional monthly budget target (Phase 5). Existing budgets keep daily/weekly only. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE budget_configs ADD COLUMN monthlyTargetMinor INTEGER")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2)
     }
 }

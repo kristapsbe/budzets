@@ -81,4 +81,21 @@ class BudgetRepositoryTest : DbTest() {
         assertEquals(eur(310), budgets.loadMonthSummary(ym("2026-03")).categories.getValue(food.id).base)
         assertNull(budgets.loadMonthSummary(ym("2026-04")).categories[food.id])
     }
+
+    @Test
+    fun `monthly target round-trips, and a mid-range edit leaves earlier and later versions alone`() = runTest {
+        val food = BudgetScope.Category(categories.create("Food").id)
+        budgets.setTarget(food, BudgetTarget(dailyMinor = 1_000), ym("2026-01"))
+        budgets.setTarget(food, BudgetTarget(dailyMinor = 2_000), ym("2026-09"))
+
+        budgets.setTarget(food, BudgetTarget(weeklyMinor = 7_000, monthlyMinor = 25_000), ym("2026-04"))
+
+        val target = budgets.configs.first().single { it.effectiveFrom == ym("2026-04") }.target
+        assertEquals(BudgetTarget(weeklyMinor = 7_000, monthlyMinor = 25_000), target)
+        val foodId = (food as BudgetScope.Category).id
+        assertEquals(eur(310), budgets.loadMonthSummary(ym("2026-03")).categories.getValue(foodId).base) // Jan version
+        assertEquals(eur(300), budgets.loadMonthSummary(ym("2026-04")).categories.getValue(foodId).base) // max(300, 250)
+        assertEquals(eur(310), budgets.loadMonthSummary(ym("2026-08")).categories.getValue(foodId).base) // max(310, 250)
+        assertEquals(eur(600), budgets.loadMonthSummary(ym("2026-09")).categories.getValue(foodId).base) // Sep version
+    }
 }

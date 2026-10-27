@@ -41,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -56,6 +55,7 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
+import lv.kristapsbe.budzets.ui.components.Banner
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import java.time.YearMonth
@@ -377,22 +377,6 @@ private fun SurplusShortcut(total: Money, money: MoneyFormatter, onClick: () -> 
                 Text(money.format(total), style = MaterialTheme.typography.titleSmall)
             }
             Text(stringResource(R.string.saved_surplus_hint), style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun Banner(icon: ImageVector, text: String, warning: Boolean = false) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (warning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(text, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

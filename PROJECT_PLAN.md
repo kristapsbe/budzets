@@ -97,7 +97,9 @@ Keep the assumptions easy to change.
 -   **Daily and weekly targets together:** allow the user to configure
     either or both, but avoid adding both together automatically. If
     both are configured for the same budget, use the **higher of the two
-    monthly equivalents** as the planned monthly amount. Show the
+    monthly equivalents** as the planned monthly amount. (Phase 5 review:
+    an optional **monthly** target was added; the plan is the highest of
+    all configured monthly equivalents.) Show the
     calculation in the budget editor. This prevents accidental
     double-counting of two ways of expressing the same spending limit.
     If the user later wants additive targets, make that an explicit
@@ -169,8 +171,9 @@ and month length `N` days:
 
 -   Daily monthly equivalent: `D × N`
 -   Weekly monthly equivalent: `W × N ÷ 7`
--   Base monthly budget: the available monthly equivalent, or the higher
-    of both equivalents if both are present.
+-   Monthly target `M` (added in Phase 5 review): monthly equivalent `M`
+-   Base monthly budget: the available monthly equivalent, or the highest
+    of the equivalents if more than one is present.
 -   Category monthly base budget: same rule applied to that category's
     targets.
 -   Category effective budget for a month: category base monthly
@@ -254,7 +257,9 @@ moved to another month due to UTC/local-time conversion.
 -   I can configure the same target types for each category.
 -   I can see the extrapolated monthly amount before saving.
 -   I can change budgets for future months without unintentionally
-    changing finalized historical results.
+    changing finalized historical results. (Phase 5 review: a change
+    applies from the month selected in the Budgets screen until a later
+    scheduled change.)
 
 **Acceptance criteria** - The UI displays the target values and computed
 monthly equivalent. - When both targets exist, the UI clearly explains
@@ -573,6 +578,7 @@ use separate entities if that makes the model clearer.
 -   `categoryId`: null for overall, otherwise a category ID.
 -   `dailyTargetMinor`: nullable integer.
 -   `weeklyTargetMinor`: nullable integer.
+-   `monthlyTargetMinor`: nullable integer (schema v2, Phase 5).
 -   `effectiveFromMonth`: calendar month identifier, e.g. `YYYY-MM`.
 -   `createdAt`, `updatedAt`.
 

@@ -38,6 +38,9 @@ class MoneyFormatter(private val currency: CurrencySpec, locale: Locale = Locale
         ?: ("" to currency.code)
 }
 
+/** Keeps only what an amount field accepts (digits and `,`/`.`), e.g. when text is pasted. */
+fun String.amountInputChars(): String = filter { it.isDigit() || it == '.' || it == ',' }
+
 fun formatForInput(money: Money, currency: CurrencySpec, decimalSeparator: Char): String =
     BigDecimal.valueOf(money.minor, currency.fractionDigits).toPlainString().replace('.', decimalSeparator)
 

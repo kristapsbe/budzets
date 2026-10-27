@@ -284,6 +284,81 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
     ("Don't keep activities").
   - Dark theme; no crashes in the crash log.
 
+## Decisions from Phase 5 review (approved 2026-10-27)
+
+- **Q11 — Effective month:** a budget change applies from the month shown in the Budgets tab
+  (default: the current month) until a later scheduled change, which stays in force. Past
+  and future months can be edited. In a closed month the editor shows the "close it again"
+  hint (Q3).
+- **Q12 — Category management:** lives in the Budgets tab: add, rename, archive and
+  unarchive, move up and down, and delete only when the category has no history.
+- **Q13 — Monthly target:** budgets can also take a monthly amount. The plan is the **highest**
+  of the configured monthly equivalents (daily × N, weekly × N ÷ 7, monthly), never their sum.
+
+## Phase 5 — budget management (done)
+
+- **No new dependencies.**
+- **Schema v2:**
+  - First real migration: `MIGRATION_1_2` adds `budget_configs.monthlyTargetMinor` (nullable).
+    It is registered in `BudzetsDatabase.build`, still with no destructive fallback.
+  - `app/schemas/.../2.json` is committed.
+  - `MigrationTest` builds a v1 database from the committed `1.json` and opens it with Room,
+    which runs the migration and Room's own schema validation. Columns are also compared
+    with `2.json`.
+  - Room's `MigrationTestHelper` reads schemas only from instrumentation assets, which
+    Robolectric can't see without shipping them in the debug APK.
+  - A deliberately broken migration was confirmed to fail the test.
+  - Also checked on the emulator: data created by the Phase 4 build plus v1 budget rows
+    upgraded to v2 with everything intact.
+- **Domain:**
+  - `MonthlyPlanRule` handles three targets. `MonthlyPlan.determinedBy` is now a set of
+    `TargetKind`, which lists every kind tied for the maximum. It replaces `PlanSource`.
+  - `BudgetPlanning` adds three helpers:
+    - `nextChangeAfter`
+    - `previewWith`: resolves a month as if the draft were saved
+    - `parseTargets`: empty = not set, 0 allowed, all empty = no budget from that month
+- **Budgets tab:**
+  - Month selector, plus a closed-month banner.
+  - Overall card shows the plan, targets, "Since …" / "Changes in …", and an explanation
+    when the overall is derived (Q2).
+  - Warning when category budgets exceed the overall; otherwise the unassigned amount is
+    shown (it becomes unallocated surplus).
+  - Category rows with a ⋮ menu; an Archived section with Unarchive and Delete.
+  - Delete asks for confirmation (its budgets go too) and is refused, with a message, for a
+    category with history.
+  - Archiving starts from the current month; earlier months keep the category.
+- **Budget editor** (`BudgetEditorRoute(categoryId?, month)`):
+  - Day, week and month fields; "Applies from … until …".
+  - Live preview of each equivalent, with a check mark on the one that sets the plan and the
+    "highest, not added" rule shown when more than one target is set.
+  - "Clear all" means no budget from this month.
+  - Save is disabled until the draft differs from the version in force, so no duplicate
+    versions are stored.
+  - Live warnings for categories above the overall and for closed months in the range.
+  - Uses the same Compose-state + `SavedStateHandle` pattern as the expense editor.
+- **Shared code:**
+  - `ui/components/Banner` (moved from Overview)
+  - `amountInputChars()` (moved from the expense editor)
+- **Found on the emulator and fixed:** the rename dialog put the cursor before the existing
+  name, so typing produced "LeisureFun". The name now opens fully selected. It has a
+  regression test, confirmed to fail without the fix.
+- **Also fixed:** a race in Phase 4's `ExpenseFlowTest`, which waited for the editor's Cancel
+  button (present while still loading) instead of the form.
+- **Tests:**
+  - 39 new (173 total): plan rule 1, planning 4, repository 1, migration 1, Budgets VM 7,
+    editor VM 9, Budgets UI 8, editor UI 7, and the `BudgetFlowTest` end-to-end flow.
+  - `BudgetFlowTest`: overall daily → over-overall category → add category → Overview agrees.
+    It was stable across 3 reruns.
+- **Manual check on emulator** (API 37):
+  - v1 → v2 upgrade with real data
+  - Each target type, with the preview maths checked by hand (€12 × 31 = €372,
+    €70 × 31 ÷ 7 = €310, €400 wins)
+  - A November change shows "Changes in November 2026" in October; September is untouched
+  - Add, rename, move, archive, and delete (both allowed and refused)
+  - Editor draft and Budgets month survive "Don't keep activities"
+  - Dark theme; no crashes
+- **Phase 8 note:** the backup must include `monthlyTargetMinor`.
+
 ## Open questions
 
 None currently.

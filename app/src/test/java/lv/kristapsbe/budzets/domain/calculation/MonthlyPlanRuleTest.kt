@@ -52,16 +52,39 @@ class MonthlyPlanRuleTest {
         // daily 10.00 -> 310.00 ; weekly 100.00 -> 442.86
         val plan = MonthlyPlanRule.plan(BudgetTarget(dailyMinor = 1_000, weeklyMinor = 10_000), month)!!
         assertEquals(Money(44_286), plan.amount)
-        assertEquals(PlanSource.WEEKLY, plan.determinedBy)
+        assertEquals(setOf(TargetKind.WEEKLY), plan.determinedBy)
         assertEquals(eur(310), plan.dailyEquivalent)
 
         val dailyWins = MonthlyPlanRule.plan(BudgetTarget(dailyMinor = 2_000, weeklyMinor = 10_000), month)!!
         assertEquals(eur(620), dailyWins.amount)
-        assertEquals(PlanSource.DAILY, dailyWins.determinedBy)
+        assertEquals(setOf(TargetKind.DAILY), dailyWins.determinedBy)
 
         val equal = MonthlyPlanRule.plan(BudgetTarget(dailyMinor = 1_000, weeklyMinor = 7_000), ym("2025-02"))!!
         assertEquals(eur(280), equal.amount)
-        assertEquals(PlanSource.BOTH_EQUAL, equal.determinedBy)
+        assertEquals(setOf(TargetKind.DAILY, TargetKind.WEEKLY), equal.determinedBy)
+    }
+
+    @Test
+    fun `monthly target is used as is and competes on equal terms`() {
+        val month = ym("2026-02") // 28 days
+        val monthlyOnly = MonthlyPlanRule.plan(BudgetTarget(monthlyMinor = 30_000), month)!!
+        assertEquals(eur(300), monthlyOnly.amount)
+        assertEquals(eur(300), monthlyOnly.monthlyEquivalent)
+        assertEquals(setOf(TargetKind.MONTHLY), monthlyOnly.determinedBy)
+        // Same amount in every month length, unlike daily/weekly.
+        assertEquals(eur(300), MonthlyPlanRule.plan(BudgetTarget(monthlyMinor = 30_000), ym("2026-01"))!!.amount)
+
+        // daily 10.00 -> 280.00, weekly 100.00 -> 400.00, monthly 300.00: weekly is highest.
+        val all = MonthlyPlanRule.plan(BudgetTarget(1_000, 10_000, 30_000), month)!!
+        assertEquals(eur(400), all.amount)
+        assertEquals(setOf(TargetKind.WEEKLY), all.determinedBy)
+        assertEquals(eur(280), all.dailyEquivalent)
+
+        // In a 31-day month the daily equivalent (310.00) beats the monthly 300.00.
+        assertEquals(setOf(TargetKind.DAILY), MonthlyPlanRule.plan(BudgetTarget(dailyMinor = 1_000, monthlyMinor = 30_000), ym("2026-01"))!!.determinedBy)
+
+        val tie = MonthlyPlanRule.plan(BudgetTarget(dailyMinor = 1_000, weeklyMinor = 7_000, monthlyMinor = 28_000), month)!!
+        assertEquals(TargetKind.entries.toSet(), tie.determinedBy)
     }
 
     @Test
@@ -69,6 +92,7 @@ class MonthlyPlanRuleTest {
         assertNull(MonthlyPlanRule.plan(BudgetTarget(), ym("2026-01")))
         assertEquals(Money.ZERO, MonthlyPlanRule.plan(BudgetTarget(dailyMinor = 0), ym("2026-01"))!!.amount)
         assertEquals(Money.ZERO, MonthlyPlanRule.plan(BudgetTarget(weeklyMinor = 0), ym("2026-01"))!!.amount)
+        assertEquals(Money.ZERO, MonthlyPlanRule.plan(BudgetTarget(monthlyMinor = 0), ym("2026-01"))!!.amount)
     }
 
     @Test(expected = IllegalArgumentException::class)

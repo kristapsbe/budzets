@@ -50,6 +50,8 @@ data class BudgetConfigEntity(
     val effectiveFrom: String,
     val createdAt: Long,
     val updatedAt: Long,
+    /** Added in schema v2 (last, matching `ALTER TABLE … ADD COLUMN`). */
+    val monthlyTargetMinor: Long? = null,
 ) {
     companion object {
         const val OVERALL_SCOPE = "@overall"

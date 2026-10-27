@@ -47,7 +47,12 @@ class BudgetRepository(
             val existing = configDao.find(scope.scopeKey(), effectiveFrom.toDb())
             if (existing != null) {
                 configDao.update(
-                    existing.copy(dailyTargetMinor = target.dailyMinor, weeklyTargetMinor = target.weeklyMinor, updatedAt = now)
+                    existing.copy(
+                        dailyTargetMinor = target.dailyMinor,
+                        weeklyTargetMinor = target.weeklyMinor,
+                        monthlyTargetMinor = target.monthlyMinor,
+                        updatedAt = now,
+                    )
                 )
             } else {
                 configDao.insert(
@@ -60,6 +65,7 @@ class BudgetRepository(
                         effectiveFrom = effectiveFrom.toDb(),
                         createdAt = now,
                         updatedAt = now,
+                        monthlyTargetMinor = target.monthlyMinor,
                     )
                 )
             }

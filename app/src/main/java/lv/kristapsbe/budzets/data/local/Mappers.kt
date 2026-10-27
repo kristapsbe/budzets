@@ -64,7 +64,7 @@ internal fun Category.toEntity() = CategoryEntity(
 
 internal fun BudgetConfigEntity.toDomain() = BudgetConfig(
     scope = categoryId?.let { BudgetScope.Category(CategoryId(it)) } ?: BudgetScope.Overall,
-    target = BudgetTarget(dailyTargetMinor, weeklyTargetMinor),
+    target = BudgetTarget(dailyTargetMinor, weeklyTargetMinor, monthlyTargetMinor),
     effectiveFrom = effectiveFrom.toYearMonth(),
 )
 

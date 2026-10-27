@@ -37,6 +37,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
 import lv.kristapsbe.budzets.R
+import lv.kristapsbe.budzets.ui.budgets.BudgetEditorScreen
+import lv.kristapsbe.budzets.ui.budgets.BudgetsScreen
 import lv.kristapsbe.budzets.ui.expenses.ExpenseEditorScreen
 import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
@@ -54,6 +56,9 @@ import kotlin.reflect.KClass
  * a stale filter instead of the one just tapped.
  */
 @Serializable data class CategorySpendingRoute(val categoryId: String, val month: String)
+
+/** Edits a budget from [month] ("YYYY-MM") on: a category's, or the overall one when [categoryId] is null. */
+@Serializable data class BudgetEditorRoute(val categoryId: String? = null, val month: String)
 
 /** Edits [expenseId], or adds a new expense with [categoryId] preselected. */
 @Serializable data class ExpenseEditorRoute(val expenseId: String? = null, val categoryId: String? = null)
@@ -125,7 +130,12 @@ fun BudzetsApp(navController: NavHostController = rememberNavController()) {
                     onBack = { navController.popBackStack<CategorySpendingRoute>(inclusive = true) },
                 )
             }
-            composable<BudgetsRoute> { PlaceholderScreen(R.string.nav_budgets) }
+            composable<BudgetsRoute> {
+                BudgetsScreen(onEditBudget = { id, month -> navController.navigate(BudgetEditorRoute(id?.value, month.toString())) })
+            }
+            composable<BudgetEditorRoute> {
+                BudgetEditorScreen(onClose = { navController.popBackStack<BudgetEditorRoute>(inclusive = true) })
+            }
             composable<SurplusRoute> { PlaceholderScreen(R.string.nav_surplus) }
             composable<SettingsRoute> { PlaceholderScreen(R.string.nav_settings) }
             composable<ExpenseEditorRoute> {

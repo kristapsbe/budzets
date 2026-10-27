@@ -2,11 +2,11 @@ package lv.kristapsbe.budzets.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -55,7 +55,7 @@ class ExpenseFlowTest {
         // Add from the overview. Nothing is preselected for the very first expense.
         waitForText("Add expense")
         compose.onNodeWithText("Add expense").performClick()
-        waitFor(hasContentDescription("Cancel"))
+        waitFor(hasTestTag(AMOUNT_FIELD_TAG)) // the form appears once its data has loaded
         compose.onNodeWithTag(AMOUNT_FIELD_TAG).performTextInput("12.5")
         compose.onNodeWithText("Save").performClick()
         waitForText("Choose a category")
@@ -82,8 +82,7 @@ class ExpenseFlowTest {
 
         // The next expense starts on the last used category; the keyboard's Done saves it.
         compose.onNodeWithText("Add expense").performClick()
-        waitFor(hasContentDescription("Cancel"))
-        compose.onNodeWithText("Groceries").assertIsSelected()
+        waitFor(hasText("Groceries") and isSelected())
         compose.onNodeWithTag(AMOUNT_FIELD_TAG).performTextInput("5")
         compose.onNodeWithTag(AMOUNT_FIELD_TAG).performImeAction()
         waitForText("€25.00 spent · 2 expenses")

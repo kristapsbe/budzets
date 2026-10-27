@@ -106,6 +106,68 @@
     <string name="undo">Undo</string>
     <string name="restore_failed">Couldn’t restore the expense.</string>
 
+    <!-- Budgets -->
+    <string name="overall_budget">Overall budget</string>
+    <string name="overall_not_set">Not set</string>
+    <string name="overall_not_set_derived">Not set: the overall plan is the sum of category budgets, %1$s.</string>
+    <string name="budget_per_day">%1$s/day</string>
+    <string name="budget_per_week">%1$s/week</string>
+    <string name="budget_per_month">%1$s/month</string>
+    <string name="budget_since">Since %1$s</string>
+    <string name="budget_changes_in">Changes in %1$s</string>
+    <string name="no_budget">No budget</string>
+    <string name="category_budgets_of_overall">Category budgets: %1$s of %2$s</string>
+    <string name="budget_unallocated">%1$s isn’t assigned to a category. It becomes unallocated surplus when the month closes.</string>
+    <string name="budgets_month_closed">%1$s is closed. Budget changes here mean closing it again.</string>
+    <string name="add_category">Add category</string>
+    <string name="rename_category">Rename category</string>
+    <string name="category_name">Name</string>
+    <plurals name="category_name_too_long">
+        <item quantity="one">Use at most %d character</item>
+        <item quantity="other">Use at most %d characters</item>
+    </plurals>
+    <string name="rename">Rename</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
+    <string name="archive">Archive</string>
+    <string name="unarchive">Unarchive</string>
+    <string name="category_actions">Actions for %1$s</string>
+    <string name="archived_categories">Archived</string>
+    <string name="archived_from">Archived from %1$s</string>
+    <string name="delete_category_title">Delete %1$s?</string>
+    <string name="delete_category_body">Its budgets are deleted too. A category with spending or surplus history can only stay archived.</string>
+    <string name="category_delete_refused">This category has spending or surplus history, so it can only stay archived.</string>
+    <string name="category_deleted">Category deleted</string>
+    <string name="action_failed">Couldn’t do that. Try again.</string>
+
+    <!-- Budget editor -->
+    <string name="category_budget_title">%1$s budget</string>
+    <string name="category_not_found">This category no longer exists.</string>
+    <string name="applies_from">Applies from %1$s on.</string>
+    <string name="applies_from_until">Applies from %1$s until %2$s, when a later change takes over.</string>
+    <string name="targets_explanation">Set one or more targets. Leave a field empty if you don’t use it.</string>
+    <string name="target_daily">Per day</string>
+    <string name="target_weekly">Per week</string>
+    <string name="target_monthly">Per month</string>
+    <string name="target_not_set">Not set</string>
+    <string name="clear_targets">Clear all</string>
+    <plurals name="equivalent_daily">
+        <item quantity="one">%1$s/day × %2$d day = %3$s</item>
+        <item quantity="other">%1$s/day × %2$d days = %3$s</item>
+    </plurals>
+    <plurals name="equivalent_weekly">
+        <item quantity="one">%1$s/week × %2$d day ÷ 7 = %3$s</item>
+        <item quantity="other">%1$s/week × %2$d days ÷ 7 = %3$s</item>
+    </plurals>
+    <string name="equivalent_monthly">%1$s/month</string>
+    <string name="monthly_plan_for">Plan for %1$s: %2$s</string>
+    <string name="highest_rule">The highest one is used. They’re alternative ways to state one limit, so they aren’t added together.</string>
+    <string name="sets_the_plan">Sets the plan</string>
+    <string name="no_budget_from">No budget from %1$s.</string>
+    <string name="no_overall_budget_from">No overall budget from %1$s. The overall plan becomes the sum of category budgets.</string>
+    <string name="preview_fix_errors">Fix the highlighted amount to see the plan.</string>
+    <string name="categories_would_exceed_overall">Category budgets would add up to %1$s, more than the overall budget of %2$s.</string>
+
     <string-array name="starter_categories">
         <item>Groceries</item>
         <item>Eating out</item>
