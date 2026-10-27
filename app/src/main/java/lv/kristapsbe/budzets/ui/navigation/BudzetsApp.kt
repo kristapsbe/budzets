@@ -21,6 +21,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,8 +93,17 @@ private val topLevelDestinations = listOf(
     TopLevelDestination(SettingsRoute, SettingsRoute::class, R.string.nav_settings, Icons.Filled.Settings),
 )
 
+/**
+ * @param addExpenseRequested set when the app is opened from the widget's + button; Add expense
+ *   opens on top of the current screen, then [onAddExpenseHandled] clears the request.
+ */
 @Composable
-fun BudzetsApp(navController: NavHostController = rememberNavController()) {
+fun BudzetsApp(
+    navController: NavHostController = rememberNavController(),
+    addExpenseRequested: Boolean = false,
+    onAddExpenseHandled: () -> Unit = {},
+) {
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val showBottomBar = topLevelDestinations.any { dest -> currentDestination?.hierarchy?.any { it.hasRoute(dest.routeClass) } == true }
@@ -169,6 +179,14 @@ fun BudzetsApp(navController: NavHostController = rememberNavController()) {
             composable<SettingsRoute> { PlaceholderScreen(R.string.nav_settings) }
             composable<ExpenseEditorRoute> {
                 ExpenseEditorScreen(onClose = { navController.popBackStack<ExpenseEditorRoute>(inclusive = true) })
+            }
+        }
+        // After the NavHost, so its graph is set before this navigates.
+        LaunchedEffect(addExpenseRequested) {
+            if (addExpenseRequested) {
+                // An editor that is already open (e.g. a half-typed expense) is kept rather than stacked.
+                navController.navigate(ExpenseEditorRoute()) { launchSingleTop = true }
+                onAddExpenseHandled()
             }
         }
     }

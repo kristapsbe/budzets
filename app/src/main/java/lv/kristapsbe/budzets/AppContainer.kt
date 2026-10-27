@@ -3,12 +3,16 @@ package lv.kristapsbe.budzets
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
+import lv.kristapsbe.budzets.widget.WidgetRefresher
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -31,6 +35,13 @@ class AppContainer(context: Context) {
             PreferenceDataStoreFactory.create { appContext.preferencesDataStoreFile(SETTINGS_FILE) },
             hasMonetaryData = { database.expenseDao().hasMonetaryData() },
         )
+    }
+
+    /** Work that outlives a screen, such as widget refreshes. */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    val widgetRefresher by lazy {
+        WidgetRefresher(database, settings, appScope) { WidgetRefresher.refreshAll(appContext, clock) }
     }
 
     private companion object {
