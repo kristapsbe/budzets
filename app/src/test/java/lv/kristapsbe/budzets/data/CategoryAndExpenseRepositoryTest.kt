@@ -108,4 +108,18 @@ class CategoryAndExpenseRepositoryTest : DbTest() {
             }
         }
     }
+
+    @Test
+    fun `last used category is the most recently added expense's, not the last edited`() = runTest {
+        assertNull(expenses.lastUsedCategory())
+        val food = categories.create("Food")
+        val fun_ = categories.create("Fun")
+        val first = expenses.add(eur(1), food.id, LocalDate.of(2026, 4, 1))
+        // Same createdAt (fixed clock): insertion order breaks the tie.
+        expenses.add(eur(2), fun_.id, LocalDate.of(2026, 3, 1))
+        assertEquals(fun_.id, expenses.lastUsedCategory())
+
+        expenses.update(first.id, eur(3), food.id, first.date, null)
+        assertEquals(fun_.id, expenses.lastUsedCategory())
+    }
 }

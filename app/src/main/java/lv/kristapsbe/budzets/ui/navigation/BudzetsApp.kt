@@ -37,15 +37,26 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
 import lv.kristapsbe.budzets.R
+import lv.kristapsbe.budzets.ui.expenses.ExpenseEditorScreen
+import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
 import kotlin.reflect.KClass
 
 @Serializable data object OverviewRoute
-@Serializable data class TransactionsRoute(val categoryId: String? = null)
+@Serializable data object TransactionsRoute
 @Serializable data object BudgetsRoute
 @Serializable data object SurplusRoute
 @Serializable data object SettingsRoute
-@Serializable data class ExpenseEditorRoute(val expenseId: String? = null)
+
+/**
+ * One category's spending in [month] ("YYYY-MM"), opened from the overview. A separate route,
+ * not Spending-tab arguments: tab switches save and restore back stacks, which would bring back
+ * a stale filter instead of the one just tapped.
+ */
+@Serializable data class CategorySpendingRoute(val categoryId: String, val month: String)
+
+/** Edits [expenseId], or adds a new expense with [categoryId] preselected. */
+@Serializable data class ExpenseEditorRoute(val expenseId: String? = null, val categoryId: String? = null)
 
 private data class TopLevelDestination(
     val route: Any,
@@ -56,7 +67,7 @@ private data class TopLevelDestination(
 
 private val topLevelDestinations = listOf(
     TopLevelDestination(OverviewRoute, OverviewRoute::class, R.string.nav_overview, Icons.Filled.Home),
-    TopLevelDestination(TransactionsRoute(), TransactionsRoute::class, R.string.nav_transactions, Icons.AutoMirrored.Filled.List),
+    TopLevelDestination(TransactionsRoute, TransactionsRoute::class, R.string.nav_transactions, Icons.AutoMirrored.Filled.List),
     TopLevelDestination(BudgetsRoute, BudgetsRoute::class, R.string.nav_budgets, Icons.Filled.DateRange),
     TopLevelDestination(SurplusRoute, SurplusRoute::class, R.string.nav_surplus, Icons.Filled.Star),
     TopLevelDestination(SettingsRoute, SettingsRoute::class, R.string.nav_settings, Icons.Filled.Settings),
@@ -97,14 +108,29 @@ fun BudzetsApp(navController: NavHostController = rememberNavController()) {
                     onAddExpense = { navController.navigate(ExpenseEditorRoute()) },
                     onOpenBudgets = { navController.navigateTopLevel(BudgetsRoute) },
                     onOpenSurplus = { navController.navigateTopLevel(SurplusRoute) },
-                    onOpenCategory = { navController.navigate(TransactionsRoute(it.value)) },
+                    onOpenCategory = { id, month -> navController.navigate(CategorySpendingRoute(id.value, month.toString())) },
                 )
             }
-            composable<TransactionsRoute> { PlaceholderScreen(R.string.nav_transactions) }
+            composable<TransactionsRoute> {
+                TransactionsScreen(
+                    onAddExpense = { navController.navigate(ExpenseEditorRoute(categoryId = it?.value)) },
+                    onOpenExpense = { navController.navigate(ExpenseEditorRoute(expenseId = it.value)) },
+                )
+            }
+            composable<CategorySpendingRoute> {
+                TransactionsScreen(
+                    onAddExpense = { navController.navigate(ExpenseEditorRoute(categoryId = it?.value)) },
+                    onOpenExpense = { navController.navigate(ExpenseEditorRoute(expenseId = it.value)) },
+                    // Pops only this route, so a repeated tap can't pop the screen below it too.
+                    onBack = { navController.popBackStack<CategorySpendingRoute>(inclusive = true) },
+                )
+            }
             composable<BudgetsRoute> { PlaceholderScreen(R.string.nav_budgets) }
             composable<SurplusRoute> { PlaceholderScreen(R.string.nav_surplus) }
             composable<SettingsRoute> { PlaceholderScreen(R.string.nav_settings) }
-            composable<ExpenseEditorRoute> { PlaceholderScreen(R.string.add_expense) }
+            composable<ExpenseEditorRoute> {
+                ExpenseEditorScreen(onClose = { navController.popBackStack<ExpenseEditorRoute>(inclusive = true) })
+            }
         }
     }
 }

@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
@@ -31,13 +29,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,7 +49,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -61,15 +56,16 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
+import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
-import lv.kristapsbe.budzets.util.displayName
+import java.time.YearMonth
 
 @Composable
 fun OverviewScreen(
     onAddExpense: () -> Unit,
     onOpenBudgets: () -> Unit,
     onOpenSurplus: () -> Unit,
-    onOpenCategory: (CategoryId) -> Unit,
+    onOpenCategory: (CategoryId, YearMonth) -> Unit,
     viewModel: OverviewViewModel = viewModel(factory = OverviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -99,7 +95,7 @@ data class OverviewActions(
     val onAddStarterCategories: () -> Unit = {},
     val onOpenBudgets: () -> Unit = {},
     val onOpenSurplus: () -> Unit = {},
-    val onOpenCategory: (CategoryId) -> Unit = {},
+    val onOpenCategory: (CategoryId, YearMonth) -> Unit = { _, _ -> },
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,7 +149,9 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { MonthSelector(state, actions) }
+        item {
+            MonthSelector(state.month, state.isCurrentMonth, actions.onPreviousMonth, actions.onNextMonth, actions.onCurrentMonth)
+        }
 
         if (!state.hasCategories) {
             item {
@@ -222,31 +220,7 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
             )
         }
         items(state.rows, key = { it.id.value }) { row ->
-            CategoryRowItem(row, money, onClick = { actions.onOpenCategory(row.id) })
-        }
-    }
-}
-
-@Composable
-private fun MonthSelector(state: OverviewUiState.Ready, actions: OverviewActions) {
-    val locale = LocalConfiguration.current.locales[0]
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = actions.onPreviousMonth) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.previous_month))
-        }
-        Text(
-            state.month.displayName(locale),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f).semantics { heading() },
-            textAlign = TextAlign.Center,
-        )
-        IconButton(onClick = actions.onNextMonth) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.next_month))
-        }
-    }
-    if (!state.isCurrentMonth) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            TextButton(onClick = actions.onCurrentMonth) { Text(stringResource(R.string.go_to_current_month)) }
+            CategoryRowItem(row, money, onClick = { actions.onOpenCategory(row.id, state.month) })
         }
     }
 }

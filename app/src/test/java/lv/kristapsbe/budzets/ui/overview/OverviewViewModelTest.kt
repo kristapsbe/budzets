@@ -1,70 +1,34 @@
 package lv.kristapsbe.budzets.ui.overview
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import lv.kristapsbe.budzets.data.DbTest
-import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.BudgetScope
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
 import lv.kristapsbe.budzets.domain.ok
 import lv.kristapsbe.budzets.domain.ym
-import org.junit.After
+import lv.kristapsbe.budzets.ui.ViewModelTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
-import java.io.File
 import java.time.LocalDate
 
-@OptIn(ExperimentalCoroutinesApi::class)
-class OverviewViewModelTest : DbTest() {
+class OverviewViewModelTest : ViewModelTest() {
 
-    @get:Rule
-    val tmp = TemporaryFolder()
-
-    private val dataStoreScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var vm: OverviewViewModel
 
     @Before
     fun createViewModel() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-        val settings = SettingsRepository(
-            PreferenceDataStoreFactory.create(scope = dataStoreScope) { File(tmp.root, "s.preferences_pb") },
-            hasMonetaryData = { db.expenseDao().hasMonetaryData() },
-        )
-        vm = OverviewViewModel(budgets, surplus, categories, settings, clock)
+        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, clock)
     }
 
-    @After
-    fun tearDown() {
-        dataStoreScope.cancel()
-        Dispatchers.resetMain()
-    }
-
-    /** Waits in real time: Room and DataStore emit from their own threads. */
     private suspend fun awaitReady(predicate: (OverviewUiState.Ready) -> Boolean = { true }): OverviewUiState.Ready =
-        withContext(Dispatchers.Default) {
-            withTimeout(5_000) {
-                vm.uiState.first { it is OverviewUiState.Ready && predicate(it) } as OverviewUiState.Ready
-            }
-        }
+        vm.uiState.awaitFirst { it is OverviewUiState.Ready && predicate(it) } as OverviewUiState.Ready
 
     @Test
     fun `first launch - empty but usable`() = runTest {
@@ -146,5 +110,19 @@ class OverviewViewModelTest : DbTest() {
         val row = awaitReady { it.rows.isNotEmpty() }.rows.single()
         assertTrue(row.isArchived)
         assertEquals(eur(3), row.summary.spent)
+    }
+
+    @Test
+    fun `selected month survives process death via SavedStateHandle`() = runTest {
+        val handle = SavedStateHandle()
+        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, clock)
+        first.previousMonth()
+        first.previousMonth()
+        // A recreated process hands the ViewModel the saved handle contents.
+        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, clock)
+        val state = restored.uiState.awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
+        assertEquals(ym("2026-02"), state.month)
+        restored.goToCurrentMonth()
+        assertTrue((restored.uiState.awaitFirst { it is OverviewUiState.Ready && it.isCurrentMonth } as OverviewUiState.Ready).isCurrentMonth)
     }
 }

@@ -103,6 +103,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE id = :id")
     suspend fun get(id: String): ExpenseEntity?
 
+    @Query("SELECT categoryId FROM expenses ORDER BY createdAt DESC, rowid DESC LIMIT 1")
+    suspend fun lastAddedCategoryId(): String?
+
     @Insert
     suspend fun insert(expense: ExpenseEntity)
 

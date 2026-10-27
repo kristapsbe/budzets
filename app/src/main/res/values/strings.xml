@@ -58,6 +58,54 @@
     <string name="error_loading">Couldn’t load this month.</string>
     <string name="retry">Retry</string>
 
+    <!-- Expense editor -->
+    <string name="edit_expense">Edit expense</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="close">Close</string>
+    <string name="amount">Amount</string>
+    <string name="category">Category</string>
+    <string name="date">Date</string>
+    <string name="note_optional">Note (optional)</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="pick_date">Other date</string>
+    <string name="error_amount_empty">Enter an amount</string>
+    <string name="error_amount_not_number">Enter a number, such as 12.50</string>
+    <plurals name="error_amount_decimals">
+        <item quantity="one">Use at most %d decimal place</item>
+        <item quantity="other">Use at most %d decimal places</item>
+    </plurals>
+    <string name="error_amount_whole">Use a whole amount, without decimals</string>
+    <string name="error_amount_not_positive">The amount must be more than zero</string>
+    <string name="error_amount_too_large">That amount is too large</string>
+    <string name="error_category_missing">Choose a category</string>
+    <string name="error_date_future">The date can’t be in the future</string>
+    <string name="closed_month_edit_hint">Already closed: %1$s. After saving, close it again to update its surplus.</string>
+    <string name="save_failed">Couldn’t save. Try again.</string>
+    <string name="delete_failed">Couldn’t delete. Try again.</string>
+    <string name="delete_expense_title">Delete this expense?</string>
+    <string name="delete_expense_body">It will be removed from your spending and month totals.</string>
+    <string name="expense_not_found">This expense no longer exists.</string>
+
+    <!-- Spending -->
+    <string name="back">Back</string>
+    <string name="search_notes">Search notes</string>
+    <string name="close_search">Close search</string>
+    <string name="all_categories">All</string>
+    <plurals name="expense_count">
+        <item quantity="one">%d expense</item>
+        <item quantity="other">%d expenses</item>
+    </plurals>
+    <string name="empty_month_spending">No spending in %1$s.</string>
+    <string name="empty_category_spending">No %1$s spending in %2$s.</string>
+    <string name="empty_search">No notes match “%1$s”.</string>
+    <string name="empty_spending_no_categories">Add categories on the Overview screen first.</string>
+    <string name="expense_deleted">Expense deleted</string>
+    <string name="undo">Undo</string>
+    <string name="restore_failed">Couldn’t restore the expense.</string>
+
     <string-array name="starter_categories">
         <item>Groceries</item>
         <item>Eating out</item>

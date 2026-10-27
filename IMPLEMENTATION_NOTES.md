@@ -205,13 +205,84 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
 - **Formatting:** `util/MoneyFormatter` is the single currency formatter (locale-aware,
   currency precision). Month names use the standalone form ("LLLL").
 - **Robolectric UI tests** use `@GraphicsMode(NATIVE)`; legacy graphics mis-measures text.
-- **Known gap:** the selected month survives tab switches and configuration changes, but
-  not process death (no `SavedStateHandle` yet).
+- **Known gap (closed in Phase 4):** the selected month survived tab switches and configuration
+  changes but not process death. It now lives in `SavedStateHandle`.
 - Tests: 14 new (ViewModel 6, Compose UI 5, formatter 3); 87 unit tests total.
 - **Manual check on emulator** (API 37), with budgets/expenses seeded via sqlite:
   - first launch, starter categories, populated overview (totals checked by hand)
   - over-budget row, month navigation, tab switch, dark theme
   - no crashes in the crash log
+
+## Decisions from Phase 4 review (approved 2026-10-27)
+
+- **Q7 — Amount input:** the system decimal keyboard, with the amount field focused on entry.
+  No in-app keypad.
+- **Q8 — Future dates:** refused. The picker stops at today and `ExpenseDraft.validate` rejects a
+  later date. Repository `add`/`update` don't check this: tests and a future restore may need such
+  rows.
+- **Q9 — Preselected category:** the category of the most recently *added* expense (edits don't
+  count), taken from the expense table, so nothing new is stored. A category passed in from a
+  category's spending list wins. An archived category is never preselected.
+- **Q10 — Spending tab:** one month at a time, with the same month selector as Overview, a total
+  for the current filter, category chips and note search.
+
+## Phase 4 — expense logging and history (done)
+
+- **No new dependencies.**
+- **Domain:** `domain/expense/ExpenseDraft.validate` reports every problem at once: amount
+  (via `AmountParser`), missing category, future date.
+- **Editor** (`ui/expenses/ExpenseEditor*`):
+  - Amount field (locale symbol as prefix or suffix, locale decimal separator in placeholder and
+    prefill), category chips, Today / Yesterday / date-picker chips, optional note.
+  - Keyboard Done saves. The common path is FAB → amount → ✓.
+  - Before the first save attempt only unfixable amount errors show (too many decimals, too
+    large). After it, all errors show and update live.
+  - Archived categories are hidden, except the one an old expense already uses.
+  - A closed month that the save would change (the new date's or the original's) gets a hint to
+    close it again (Q3).
+  - Delete asks for confirmation.
+- **State deviation:** the editor ViewModel exposes Compose snapshot state, not a `StateFlow`.
+  Text-field values must update synchronously, or typing can drop characters and move the
+  cursor. The form is mirrored into `SavedStateHandle`.
+- **Date picker:** Material's picker uses UTC-midnight millis. Conversion is plain epoch-day
+  arithmetic (`util/DateFormatting.kt`), never the device zone, so a picked date can't shift
+  day or month. Tested across UTC+14 and UTC−11.
+- **Spending** (`ui/expenses/Transactions*`):
+  - Grouped by day with day totals (Today / Yesterday / weekday names).
+  - Unfiltered, the month total equals Overview's spent; tests check it against `MonthSummary`.
+  - Chips: categories active in the month, archived ones with spending in it, and always the
+    selected one.
+  - Swipe toward the start, or TalkBack's "Delete" custom action, deletes immediately with an Undo
+    snackbar (10 s) that calls `ExpenseRepository.restore`.
+  - The swipe state uses plain `remember`, not the saveable default. Otherwise an undone row
+    would come back in its saved "dismissed" state and delete itself again.
+- **Navigation:**
+  - Tapping a category on Overview opens `CategorySpendingRoute(categoryId, month)`: a separate
+    route with an up arrow and no bottom bar. Spending-tab arguments wouldn't work, because tab
+    switches save and restore back stacks and would bring back a stale filter.
+  - Close/back use `popBackStack<Route>(inclusive = true)`, so a double tap can't pop the screen
+    underneath.
+  - Month, category and query filters live in `SavedStateHandle`. Overview's month does too
+    (null = follow the current month).
+- **Widget:** saving updates Overview reactively. Widget refresh triggers come in Phase 7.
+- **Found on the emulator and fixed:**
+  - The keyboard stayed open over the date picker, hiding the lower weeks and OK.
+  - Opening search didn't focus the field.
+  - Both now have regression tests; the date-picker test was confirmed to fail without the fix.
+- **Tests:**
+  - 47 new (134 total): domain 5, formatting 3, repository 1, editor VM 12, Spending VM 7,
+    editor UI 9, Spending UI 8, Overview VM 1, and 1 end-to-end flow.
+  - The end-to-end flow runs the real activity, Room and DataStore under Robolectric: add from
+    Overview → Overview updates → edit from Spending → delete + undo → last-used preselect + Done
+    → drill-down and back. It was stable across 3 reruns.
+  - `ui/ViewModelTest` is a shared base (Main dispatcher, temp DataStore). Its `awaitValue` result
+    must be bound: as the last expression of `runTest`, T is inferred as `Unit`.
+- **Manual check on emulator** (API 37, fresh install):
+  - Add with picker (future days disabled); last-used + Done; Overview and Spending totals match
+    (€22.70); swipe delete and undo; edit prefill.
+  - The form, Overview month and Spending month survive activity and ViewModel destruction
+    ("Don't keep activities").
+  - Dark theme; no crashes in the crash log.
 
 ## Open questions
 

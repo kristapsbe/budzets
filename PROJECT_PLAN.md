@@ -85,7 +85,8 @@ Keep the assumptions easy to change.
     as integer minor units (for example, cents), not floating-point
     numbers.
 -   **Expense date:** store a local calendar date, not only a timestamp.
-    Also store creation/edit timestamps for audit and sorting.
+    Also store creation/edit timestamps for audit and sorting. Dates after
+    today are refused (decided in Phase 4 review).
 -   **Month calculation:** use the actual number of calendar days in the
     month, including leap years.
 -   **Daily target extrapolation:** daily target × number of days in the
@@ -232,7 +233,9 @@ action. - Default categories are editable and can be archived.
 -   I can add an expense with amount, category, date, and optional note.
 -   The default date is today.
 -   The most recently used category may be preselected, provided the
-    selection is visible and easy to change.
+    selection is visible and easy to change. (Phase 4 review: yes, the
+    category of the last *added* expense; a category drill-down's own
+    category takes precedence.)
 -   I can edit or delete an expense later.
 -   I can see a list of recent expenses and filter by month/category.
 

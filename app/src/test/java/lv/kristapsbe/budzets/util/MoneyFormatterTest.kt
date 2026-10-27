@@ -31,4 +31,22 @@ class MoneyFormatterTest {
         assertEquals("April 2026", ym("2026-04").displayName(Locale.US))
         assertEquals("Aprīlis 2026", ym("2026-04").displayName(Locale.forLanguageTag("lv-LV")))
     }
+
+    @Test
+    fun `input text uses the locale separator and no symbol or grouping`() {
+        val us = MoneyFormatter(CurrencySpec.DEFAULT, Locale.US)
+        assertEquals("1234.50", us.formatForInput(Money(123_450)))
+        assertEquals("0.05", us.formatForInput(Money(5)))
+        assertEquals("0.00", us.inputPlaceholder)
+        assertEquals("€" to "", us.inputAffixes)
+
+        val lv = MoneyFormatter(CurrencySpec.DEFAULT, Locale.forLanguageTag("lv-LV"))
+        assertEquals("1234,50", lv.formatForInput(Money(123_450)))
+        assertEquals("0,00", lv.inputPlaceholder)
+        assertEquals("" to "€", lv.inputAffixes)
+
+        val yen = MoneyFormatter(CurrencySpec.of("JPY"), Locale.US)
+        assertEquals("500", yen.formatForInput(Money(500)))
+        assertEquals("0", yen.inputPlaceholder)
+    }
 }

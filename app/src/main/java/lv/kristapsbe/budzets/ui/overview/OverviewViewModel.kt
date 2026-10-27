@@ -1,7 +1,9 @@
 package lv.kristapsbe.budzets.ui.overview
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -59,6 +61,7 @@ sealed interface OverviewUiState {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OverviewViewModel(
+    private val savedState: SavedStateHandle,
     private val budgets: BudgetRepository,
     private val surplus: SurplusRepository,
     private val categories: CategoryRepository,
@@ -66,11 +69,14 @@ class OverviewViewModel(
     private val clock: Clock,
 ) : ViewModel() {
 
-    private val selectedMonth = MutableStateFlow(YearMonth.now(clock))
+    /** "YYYY-MM" in [SavedStateHandle] so it survives process death; null follows the current month. */
+    private val selectedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
     private val reload = MutableStateFlow(0)
 
+    private val month: YearMonth get() = savedState.get<String>(KEY_MONTH)?.let(YearMonth::parse) ?: YearMonth.now(clock)
+
     val uiState: StateFlow<OverviewUiState> =
-        combine(selectedMonth, reload) { month, _ -> month }
+        combine(selectedMonth, reload) { month, _ -> month?.let(YearMonth::parse) ?: YearMonth.now(clock) }
             .flatMapLatest { month -> observeMonth(month) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OverviewUiState.Loading)
 
@@ -123,9 +129,9 @@ class OverviewViewModel(
         return activeRows + otherRows
     }
 
-    fun previousMonth() = selectedMonth.update { it.minusMonths(1) }
-    fun nextMonth() = selectedMonth.update { it.plusMonths(1) }
-    fun goToCurrentMonth() = selectedMonth.update { YearMonth.now(clock) }
+    fun previousMonth() { savedState[KEY_MONTH] = month.minusMonths(1).toString() }
+    fun nextMonth() { savedState[KEY_MONTH] = month.plusMonths(1).toString() }
+    fun goToCurrentMonth() { savedState[KEY_MONTH] = null }
     fun retry() = reload.update { it + 1 }
 
     fun addStarterCategories(names: List<String>) {
@@ -133,10 +139,12 @@ class OverviewViewModel(
     }
 
     companion object {
+        private const val KEY_MONTH = "month"
+
         val Factory = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as BudzetsApplication).container
-                OverviewViewModel(container.budgets, container.surplus, container.categories, container.settings, container.clock)
+                OverviewViewModel(createSavedStateHandle(), container.budgets, container.surplus, container.categories, container.settings, container.clock)
             }
         }
     }

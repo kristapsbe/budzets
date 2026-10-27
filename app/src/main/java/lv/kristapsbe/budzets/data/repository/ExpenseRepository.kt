@@ -36,6 +36,9 @@ class ExpenseRepository(
 
     suspend fun get(id: ExpenseId): Expense? = dao.get(id.value)?.toDomain()
 
+    /** Category of the most recently *added* expense (edits don't count), to preselect for the next one. */
+    suspend fun lastUsedCategory(): CategoryId? = dao.lastAddedCategoryId()?.let(::CategoryId)
+
     suspend fun add(amount: Money, categoryId: CategoryId, date: LocalDate, note: String? = null): Expense {
         validate(amount)
         val now = clock.instant()
