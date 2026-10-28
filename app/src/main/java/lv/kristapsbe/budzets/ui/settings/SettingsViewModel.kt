@@ -98,7 +98,7 @@ class SettingsViewModel(
     val message: StateFlow<SettingsMessage?> = _message.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(settings.currency, expenses.hasMonetaryData, settings.lastBackupAt, settings.lastRestoreAt, combine(busy, pending, ::Pair)) {
+        combine(settings.currency, expenses.hasMonetaryData, settings.lastBackupAt, backups.lastRestoreAt, combine(busy, pending, ::Pair)) {
                 currency, hasData, lastBackup, lastRestore, (working, chosen) ->
             SettingsUiState.Ready(
                 currency = currency,

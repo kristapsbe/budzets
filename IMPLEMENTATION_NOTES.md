@@ -580,10 +580,99 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   - **Not checked:** Google Drive itself. The emulator has no Google account. Check on a real
     phone: back up to Drive, then restore from Drive.
 
+## Decisions from Phase 9 review (approved 2026-10-28)
+
+- **Q18 — Quick add as the task's root:** fix it (see below).
+- **Q23 — Android's own backup:** Google cloud backup stays off, but device-to-device transfer
+  (setting up a new phone from the old one) carries the database and settings. This revises Q6
+  for the transfer case only.
+- **Q24 — Release signing:** from a git-ignored `keystore.properties`; without it the release
+  build is unsigned.
+- **Q25 — Backup status on Overview** (spec §7.1): a reminder card when there is data and no
+  backup, or none in 30 days. "Back up" opens Settings.
+
+## Phase 9 — polish and release readiness (done)
+
+- **Q18 fixed:**
+  - The widget's "+" now opens `QuickAddActivity`: invisible, `noHistory`, kept out of recents,
+    with its own task affinity. It starts `MainActivity` the way the launcher does (MAIN/LAUNCHER,
+    `NEW_TASK | RESET_TASK_IF_NEEDED`), then sends `ACTION_ADD_EXPENSE`, which the singleTop
+    activity receives in `onNewIntent`.
+  - The app's task therefore always starts from a normal launch, so after an update the icon
+    opens Overview.
+  - Reproduced first (update → icon → Add expense), then checked on the emulator: with the app
+    running, "+" opens Add expense on top of the current tab and Back returns there; after an
+    update the icon opens Overview; the relay never shows in recents.
+  - Found on the way: after **Force stop**, the widget's buttons do nothing until the widget is
+    redrawn. Android cancels a force-stopped app's PendingIntents, and opening the app redraws
+    the widget. This is platform behaviour, listed in the README.
+- **Q25:** `BackupReminder.due` (in `OverviewViewModel`) gives the rule; the banner shows on the
+  current month only.
+- **Q23:**
+  - `data_extraction_rules.xml` (API 31+) excludes every domain from cloud backup and allows
+    device transfer except WorkManager's database, whose jobs belong to the old phone's widgets.
+  - `backup_rules.xml` (API 28–30) includes the same files with
+    `requireFlags="deviceToDeviceTransfer"`, so cloud backups there are empty too.
+  - "Undo restore" is now shown only while the safety copy exists (`BackupRepository.lastRestoreAt`):
+    the restore marker travels with the settings, the private copy doesn't.
+  - Checked with `bmgr` and the local transport: a device-transfer backup restored all data into
+    a cleared app, with no Undo banner; a cloud-style backup restored nothing.
+  - Side effect on the emulator: the widget instance disappeared during these `bmgr` restores and
+    was re-added. Neither `pm clear` nor a density change removes it. The likely cause is
+    Android's widget-restore pruning when restoring onto the same device without the launcher's
+    data (not chased further).
+- **Q24:** `signingConfigs.release` reads `keystore.properties` (storeFile, storePassword,
+  keyAlias, keyPassword). `.gitignore` covers it plus `*.jks` and `*.keystore`. The README explains
+  how to create a keystore.
+- **Release build — found and fixed:**
+  - The widget never rendered: it stayed on Glance's loading spinner.
+  - Glance pulls in WorkManager 2.7.1, whose consumer rule is `-keep class * extends InputMerger`.
+    In R8's full mode that keeps the class but not its constructor, so WorkManager couldn't
+    instantiate `OverwritingInputMerger` and Glance's session worker never ran.
+  - Fix: `app/src/main/keepRules/workmanager.keep` keeps the constructors.
+  - Smoke-tested a signed release on the emulator (throwaway keystore): restore from a file,
+    every tab, the expense editor, backup (its file keeps real field names), the widget rendering
+    and refreshing, and quick add. No crashes. The release APK is 6.5 MB, the debug one 38 MB.
+- **Large fonts and screen sizes:**
+  - At font scale 2.0 the five bottom-bar labels broke mid-word. From 1.5 the bar now shows icons
+    only, each named for screen readers; below that, labels stay on one line.
+  - Every tab was checked at 2.0, and Overview at about 308dp wide; text wraps, nothing is
+    clipped.
+  - Light and dark themes had been checked in earlier phases and with the widget.
+- **Accessibility audit:** every icon button has a description. The icons without one are
+  decorative, sitting next to text that says the same thing.
+- **Privacy review:**
+  - No INTERNET permission. All requested permissions are normal ones from WorkManager:
+    WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE.
+  - Exported components are the launcher activity, the widget receiver, and library components
+    guarded by system permissions.
+  - No logging in app code.
+- **Clean-ups:** removed the unused `glance-material3` (offered in Phase 7), the template colours
+  and a redundant activity label (lint). Lint: 0 errors. All 10 remaining warnings say a newer
+  Gradle, AGP or library version exists. Upgrading is left as its own deliberate step, since the
+  library versions must stay compatible with built-in Kotlin 2.2.10.
+- **Spec kept in step:** `PROJECT_PLAN.md` gained "(Phase 8/9 review: …)" notes where decisions
+  refined it (§4 Drive, §6.8, §7.1, §7.6, §14).
+- **README.md:** building, release signing, architecture, data/backup/privacy, migrations and
+  recovery, known limitations.
+  - The recovery recipe copies the database with its `-wal` and `-shm` files. Checked on the
+    emulator: the main file alone was 4 KB, with all the data still in the WAL.
+- **Tests:**
+  - 248 total, 5 new: the quick-add relay, the backup reminder rule and both of its banners, and
+    Undo hidden without the safety copy.
+  - Fixed two flaky tests, each confirmed before fixing:
+    - `SurplusFlowTest`: the new reminder banner moved "Review & close" under the floating
+      Add expense button, which took the tap. That step now clicks through the accessibility
+      action.
+    - `SettingsViewModelTest`: in about half of full-suite runs the state stayed stale. Logging
+      showed the stored currency was right while the ViewModel's state never updated. Without a
+      subscriber between awaits, `WhileSubscribed` stops on the virtual clock, and the restart
+      sometimes never reached the test scheduler. The tests now keep a collector in
+      `backgroundScope`.
+  - Five full runs in a row were clean. Instrumented tests (the template test) pass on the
+    emulator.
+- **Not verified here:** Google Drive itself (the emulator has no Google account); see Phase 8.
+
 ## Open questions
 
-- **Q18 — Quick add as the task's root.** If the app was first opened from the widget's "+",
-  Android keeps that intent as the task's base. When the activity is later rebuilt without
-  saved state (seen after an app update; a force-stop, and likely a reboot, do the same), the
-  launcher icon opens Add expense instead of Overview. Nothing is lost: cancelling shows
-  Overview. Seen again after each reinstall during Phase 8 checks. Fix or accept?
+None currently.

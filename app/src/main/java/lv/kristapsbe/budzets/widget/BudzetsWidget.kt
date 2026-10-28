@@ -92,7 +92,7 @@ internal val MEDIUM = DpSize(160.dp, 110.dp)
 /** 4×2 and up: adds the most over-budget category and saved surplus. */
 internal val LARGE = DpSize(250.dp, 150.dp)
 
-/** Opens the app straight at Add expense (Q17); [MainActivity] handles the action. */
+/** Asks [MainActivity] for Add expense (Q17). The widget goes through [QuickAddActivity] (Q18). */
 fun addExpenseIntent(context: Context): Intent =
     Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_ADD_EXPENSE)
 
@@ -134,7 +134,7 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
             CircleIconButton(
                 imageProvider = ImageProvider(R.drawable.ic_widget_add),
                 contentDescription = context.getString(R.string.add_expense),
-                onClick = actionStartActivity(addExpenseIntent(context)),
+                onClick = actionStartActivity(Intent(context, QuickAddActivity::class.java)),
                 backgroundColor = GlanceTheme.colors.primaryContainer,
                 contentColor = GlanceTheme.colors.onPrimaryContainer,
                 modifier = GlanceModifier.size(36.dp),

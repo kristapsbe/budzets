@@ -1,5 +1,6 @@
 package lv.kristapsbe.budzets.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsMatcher.Companion.keyIsDefined
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import lv.kristapsbe.budzets.MainActivity
 import lv.kristapsbe.budzets.ui.budgets.DAILY_FIELD_TAG
@@ -126,7 +128,9 @@ class SurplusFlowTest {
         compose.onNodeWithText("Groceries").performClick()
         compose.onNodeWithText("Save").performClick()
         waitAndScrollTo("Changed since this month was closed. Close it again to update surplus.")
-        compose.onNodeWithText("Review & close").performClick()
+        // Through the accessibility action, not a tap: scrolled into view, the button can sit
+        // under the floating Add expense button, which would take the tap.
+        compose.onNodeWithText("Review & close").performSemanticsAction(SemanticsActions.OnClick)
         waitForText("−€5.00 debit")
         scrollTo("Close again")
         compose.onNodeWithText("Close again").performClick()

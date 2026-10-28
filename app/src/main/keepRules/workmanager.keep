@@ -1,0 +1,5 @@
+# WorkManager 2.7 (pulled in by Glance) creates its input mergers reflectively. Its own rule keeps
+# the classes but not their constructors, and R8's full mode doesn't keep those implicitly, so in
+# release builds the widget's session worker failed ("OverwritingInputMerger has no zero argument
+# constructor") and the widget never rendered.
+-keep class * extends androidx.work.InputMerger { <init>(); }

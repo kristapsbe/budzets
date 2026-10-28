@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,12 +34,28 @@ import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.sumMoney
 import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 
 enum class CloseStatus { OPEN, CLOSED, CHANGED_SINCE_CLOSING }
 
 data class CategoryRow(val id: CategoryId, val name: String, val isArchived: Boolean, val summary: CategorySummary)
+
+/** Q25: shown while there is data and no backup, or none for [DAYS] days. [daysSinceLast] is null if never. */
+data class BackupReminder(val daysSinceLast: Long?) {
+    companion object {
+        const val DAYS = 30L
+
+        fun due(lastBackupAt: Instant?, hasData: Boolean, now: Instant): BackupReminder? {
+            if (!hasData) return null
+            if (lastBackupAt == null) return BackupReminder(null)
+            val days = Duration.between(lastBackupAt, now).toDays()
+            return if (days >= DAYS) BackupReminder(days) else null
+        }
+    }
+}
 
 sealed interface OverviewUiState {
     data object Loading : OverviewUiState
@@ -58,6 +75,7 @@ sealed interface OverviewUiState {
         val unclosedPastMonths: List<YearMonth> = emptyList(),
         /** Past months and the current one can be closed (Q14); future ones can't. */
         val canClose: Boolean = false,
+        val backupReminder: BackupReminder? = null,
     ) : OverviewUiState {
 
         val hasBudget: Boolean get() = summary.overallEffective.isPositive
@@ -72,6 +90,8 @@ class OverviewViewModel(
     private val surplus: SurplusRepository,
     private val categories: CategoryRepository,
     private val settings: SettingsRepository,
+    /** Whether amounts exist; with none, there is nothing worth a backup reminder. */
+    private val hasMonetaryData: Flow<Boolean>,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -101,10 +121,12 @@ class OverviewViewModel(
                 Triple(summary, status, closed)
             },
             categories.categories,
-            settings.currency,
+            combine(settings.currency, settings.lastBackupAt, hasMonetaryData) { currency, lastBackup, hasData ->
+                currency to BackupReminder.due(lastBackup, hasData, clock.instant())
+            },
             surplus.balances,
             budgets.configs,
-        ) { (summary, status, closed), allCategories, currency, balances, configs ->
+        ) { (summary, status, closed), allCategories, (currency, backupReminder), balances, configs ->
             val today = LocalDate.now(clock)
             OverviewUiState.Ready(
                 month = month,
@@ -120,6 +142,7 @@ class OverviewViewModel(
                     configs, allCategories.map { it.toRef() }, closed, YearMonth.from(today),
                 ),
                 canClose = month <= YearMonth.from(today),
+                backupReminder = backupReminder,
             ) as OverviewUiState
         }.catch { emit(OverviewUiState.Error(it.message)) }
 
@@ -155,7 +178,7 @@ class OverviewViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as BudzetsApplication).container
-                OverviewViewModel(createSavedStateHandle(), container.budgets, container.surplus, container.categories, container.settings, container.clock)
+                OverviewViewModel(createSavedStateHandle(), container.budgets, container.surplus, container.categories, container.settings, container.expenses.hasMonetaryData, container.clock)
             }
         }
     }

@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Release signing (README.md): never commit the keystore or its passwords.
+keystore.properties
+*.jks
+*.keystore

@@ -69,6 +69,7 @@ fun OverviewScreen(
     onOpenSurplus: () -> Unit,
     onOpenCategory: (CategoryId, YearMonth) -> Unit,
     onReviewClose: (YearMonth) -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: OverviewViewModel = viewModel(factory = OverviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -86,6 +87,7 @@ fun OverviewScreen(
             onOpenSurplus = onOpenSurplus,
             onOpenCategory = onOpenCategory,
             onReviewClose = onReviewClose,
+            onOpenSettings = onOpenSettings,
         ),
     )
 }
@@ -101,6 +103,7 @@ data class OverviewActions(
     val onOpenSurplus: () -> Unit = {},
     val onOpenCategory: (CategoryId, YearMonth) -> Unit = { _, _ -> },
     val onReviewClose: (YearMonth) -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -181,6 +184,19 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
                     else pluralStringResource(R.plurals.reminder_unclosed_more, earlier, latest.displayName(locale), earlier),
                     action = stringResource(R.string.review_and_close),
                     onAction = { actions.onReviewClose(latest) },
+                )
+            }
+        }
+        // Q25: a nudge when there is data and no recent backup.
+        if (state.isCurrentMonth && state.backupReminder != null) {
+            item {
+                val days = state.backupReminder.daysSinceLast
+                Banner(
+                    Icons.Filled.Info,
+                    if (days == null) stringResource(R.string.reminder_backup_never)
+                    else pluralStringResource(R.plurals.reminder_backup_old, days.toInt(), days.toInt()),
+                    action = stringResource(R.string.reminder_backup_action),
+                    onAction = actions.onOpenSettings,
                 )
             }
         }

@@ -134,7 +134,9 @@ Keep the assumptions easy to change.
 -   **Drive backup:** use a user-initiated Google Drive file
     picker/authorization flow where possible. The backup file is app
     data, not a sync protocol. Never upload automatically without a
-    clear opt-in.
+    clear opt-in. (Phase 8 review: the system file picker, with Drive as
+    one location; a new dated file each time; restore keeps a private
+    copy of the replaced data and offers Undo.)
 
 ### Clarification to preserve in implementation
 
@@ -350,7 +352,8 @@ revision flow.
 -   I can restore from a backup file I choose.
 -   The app explains whether restore replaces local data or merges it.
     Recommended first version: **replace local data after explicit
-    confirmation**.
+    confirmation**. (Phase 8 review: replace, plus a private safety
+    copy and "Undo restore" until the next restore.)
 -   Backup and restore work independently from normal offline app usage.
 
 **Acceptance criteria** - Backup includes all user-created data needed
@@ -383,6 +386,8 @@ Primary screen and default destination.
     indicator.
 -   A prominent "Add expense" action.
 -   Shortcut to surplus management and backup status/settings.
+    (Phase 9 review: a reminder card when there is data and no backup
+    in the last 30 days, opening Settings.)
 
 ### 7.2 Add/edit expense
 
@@ -429,7 +434,8 @@ keypad and a clear one-tap save action.
 -   Budget calculation explanation and any supported preferences.
 -   Backup to Drive.
 -   Restore from Drive.
--   Local backup/export fallback.
+-   Local backup/export fallback. (Phase 8 review: the same picker
+    saves to and restores from the phone's own storage.)
 -   Last successful backup timestamp and status.
 -   App version and data/schema version.
 -   Privacy statement: data stays local except for files the user
@@ -768,6 +774,8 @@ the project owner.
     data.
 -   If Android backup/Auto Backup could conflict with the explicit Drive
     backup model, document the behavior and configure it deliberately.
+    (Phase 9 review: Google cloud backup carries nothing; device-to-device
+    transfer to a new phone carries the database and settings.)
 -   Handle database migration failures safely; do not silently wipe user
     data.
 -   Include a database export path to support recovery during

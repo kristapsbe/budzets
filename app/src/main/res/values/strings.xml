@@ -256,6 +256,14 @@
     <string name="widget_top_over">%1$s over by %2$s</string>
     <string name="widget_saved_surplus">Saved surplus %1$s</string>
 
+    <!-- Overview: backup reminder -->
+    <string name="reminder_backup_never">No backup yet. Save one to Google Drive or this phone, in case the phone is lost.</string>
+    <plurals name="reminder_backup_old">
+        <item quantity="one">Your last backup was %d day ago.</item>
+        <item quantity="other">Your last backup was %d days ago.</item>
+    </plurals>
+    <string name="reminder_backup_action">Back up</string>
+
     <!-- Settings -->
     <string name="settings_backup">Backup</string>
     <string name="backup_explanation">Save a copy of all your data as a file in Google Drive or on this phone. Budzets never uploads anything by itself.</string>

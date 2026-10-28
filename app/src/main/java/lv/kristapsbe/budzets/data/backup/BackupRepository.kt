@@ -3,7 +3,9 @@ package lv.kristapsbe.budzets.data.backup
 import android.util.AtomicFile
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.data.local.entity.BoostEntity
@@ -38,6 +40,13 @@ class BackupRepository(
     private val safetyCopy: File,
 ) {
     private val dao = db.backupDao()
+
+    /**
+     * When the last restore happened, while it can still be undone. The marker lives in settings,
+     * which move to a new phone (Q23), but the safety copy doesn't, so the file decides.
+     */
+    val lastRestoreAt: Flow<Instant?> =
+        settings.lastRestoreAt.map { at -> at?.takeIf { withContext(Dispatchers.IO) { safetyCopy.exists() } } }
 
     /** A consistent snapshot of all data, as a backup file. */
     suspend fun export(): ByteArray {

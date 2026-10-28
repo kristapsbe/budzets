@@ -43,6 +43,7 @@ class OverviewContentTest {
         rows: List<CategoryRow>,
         hasCategories: Boolean = true,
         closeStatus: CloseStatus = CloseStatus.OPEN,
+        backupReminder: BackupReminder? = null,
     ) = OverviewUiState.Ready(
         month = april,
         isCurrentMonth = true,
@@ -53,6 +54,7 @@ class OverviewContentTest {
         closeStatus = closeStatus,
         totalSurplus = eur(42),
         hasCategories = hasCategories,
+        backupReminder = backupReminder,
     )
 
     private fun show(state: OverviewUiState, actions: OverviewActions = OverviewActions()) {
@@ -125,5 +127,21 @@ class OverviewContentTest {
         compose.onNodeWithText("Couldn’t load this month.").assertIsDisplayed()
         compose.onNodeWithText("Retry").performClick()
         assertEquals(true, retried)
+    }
+
+    @Test
+    fun `backup reminder opens Settings`() {
+        var opened = false
+        val summary = MonthSummary(april, null, false, emptyMap())
+        show(ready(summary, emptyList(), backupReminder = BackupReminder(34)), OverviewActions(onOpenSettings = { opened = true }))
+        compose.onNodeWithText("Your last backup was 34 days ago.").assertIsDisplayed()
+        compose.onNodeWithText("Back up").performClick()
+        assertEquals(true, opened)
+    }
+
+    @Test
+    fun `backup reminder when there is no backup at all`() {
+        show(ready(MonthSummary(april, null, false, emptyMap()), emptyList(), backupReminder = BackupReminder(null)))
+        compose.onNodeWithText("No backup yet", substring = true).assertIsDisplayed()
     }
 }

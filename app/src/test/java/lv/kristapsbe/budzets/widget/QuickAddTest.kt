@@ -1,5 +1,6 @@
 package lv.kristapsbe.budzets.widget
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.test.SemanticsMatcher
@@ -12,15 +13,18 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import lv.kristapsbe.budzets.MainActivity
 import lv.kristapsbe.budzets.ui.expenses.AMOUNT_FIELD_TAG
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** The widget's + button: [MainActivity] opens Add expense, from a cold start or while running. */
+/** The widget's + button: [QuickAddActivity], then [MainActivity] opens Add expense, from a cold start or while running. */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-rUS")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -41,6 +45,19 @@ class QuickAddTest {
             compose.onNodeWithContentDescription("Cancel").performClick()
             waitFor(hasText("Add starter categories"))
         }
+    }
+
+    @Test
+    fun `the widget's + opens the app like the launcher, then asks for Add expense`() {
+        val controller = Robolectric.buildActivity(QuickAddActivity::class.java).setup()
+        // Order-independent: Robolectric doesn't report startActivities() in call order.
+        val started = generateSequence { shadowOf(context as Application).nextStartedActivity }.associateBy { it.action }
+        assertEquals(setOf(Intent.ACTION_MAIN, MainActivity.ACTION_ADD_EXPENSE), started.keys)
+        val launcher = started.getValue(Intent.ACTION_MAIN)
+        assertEquals(setOf(Intent.CATEGORY_LAUNCHER), launcher.categories)
+        assertEquals(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED, launcher.flags)
+        assertEquals(quickAddIntents(context).map { it.action }, listOf(Intent.ACTION_MAIN, MainActivity.ACTION_ADD_EXPENSE))
+        assertTrue(controller.get().isFinishing)
     }
 
     @Test

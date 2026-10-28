@@ -1,6 +1,7 @@
 package lv.kristapsbe.budzets.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.ui.unit.DpSize
 import androidx.glance.appwidget.testing.unit.hasStartActivityClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
@@ -47,7 +48,7 @@ class WidgetContentTest {
         onNode(hasTextEqualTo("On track · 4 days left")).assertExists()
         // The label sits on the icon, the action on the button around it.
         onNode(hasContentDescription("Add expense")).assertExists()
-        onNode(hasStartActivityClickAction(addExpenseIntent(context))).assertExists()
+        onNode(hasStartActivityClickAction(Intent(context, QuickAddActivity::class.java))).assertExists()
         onNode(hasText("Saved surplus")).assertDoesNotExist()
     }
 

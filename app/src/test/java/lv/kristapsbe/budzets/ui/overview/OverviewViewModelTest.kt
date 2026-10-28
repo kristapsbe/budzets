@@ -16,6 +16,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Duration
 import java.time.LocalDate
 
 class OverviewViewModelTest : ViewModelTest() {
@@ -24,7 +25,7 @@ class OverviewViewModelTest : ViewModelTest() {
 
     @Before
     fun createViewModel() {
-        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, clock)
+        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
     }
 
     private suspend fun awaitReady(predicate: (OverviewUiState.Ready) -> Boolean = { true }): OverviewUiState.Ready =
@@ -115,11 +116,11 @@ class OverviewViewModelTest : ViewModelTest() {
     @Test
     fun `selected month survives process death via SavedStateHandle`() = runTest {
         val handle = SavedStateHandle()
-        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, clock)
+        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
         first.previousMonth()
         first.previousMonth()
         // A recreated process hands the ViewModel the saved handle contents.
-        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, clock)
+        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
         val state = restored.uiState.awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
         assertEquals(ym("2026-02"), state.month)
         restored.goToCurrentMonth()
@@ -139,5 +140,20 @@ class OverviewViewModelTest : ViewModelTest() {
 
         vm.nextMonth()
         assertFalse(awaitReady { it.month == ym("2026-05") }.canClose)
+    }
+
+    @Test
+    fun `backup reminder - only with data, until a backup, and again after 30 days`() = runTest {
+        assertNull(awaitReady().backupReminder) // nothing to back up yet
+        val food = categories.create("Food")
+        expenses.add(eur(5), food.id, LocalDate.of(2026, 4, 2))
+        assertNull(awaitReady { it.backupReminder != null }.backupReminder!!.daysSinceLast) // never backed up
+
+        settings.recordBackupSuccess(clock.instant().minus(Duration.ofDays(29)))
+        awaitReady { it.backupReminder == null }
+        settings.recordBackupSuccess(clock.instant().minus(Duration.ofDays(40)))
+        assertEquals(40L, awaitReady { it.backupReminder != null }.backupReminder!!.daysSinceLast)
+        settings.recordBackupSuccess(clock.instant())
+        awaitReady { it.backupReminder == null }
     }
 }

@@ -147,6 +147,16 @@ class BackupRepositoryTest : ViewModelTest() {
     }
 
     @Test
+    fun `undo is only offered while the safety copy exists`() = runTest {
+        seedEverything()
+        backups.restore(decoded(backups.export()))
+        assertEquals(clock.instant(), backups.lastRestoreAt.first())
+        // As on a new phone after a device transfer: the marker came along, the private copy didn't.
+        safetyCopy.delete()
+        assertNull(backups.lastRestoreAt.first())
+    }
+
+    @Test
     fun `a restore that fails part-way leaves the data as it was`() = runTest {
         seedEverything()
         val before = decoded(backups.export()).data

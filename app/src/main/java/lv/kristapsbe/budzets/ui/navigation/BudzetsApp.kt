@@ -19,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -105,14 +107,20 @@ fun BudzetsApp(
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
+                // Five labels don't fit at the largest font sizes: then icons only, named for
+                // screen readers. Otherwise one line each, never broken mid-word.
+                val iconsOnly = LocalDensity.current.fontScale >= ICONS_ONLY_FONT_SCALE
                 NavigationBar {
                     topLevelDestinations.forEach { dest ->
                         val selected = currentDestination?.hierarchy?.any { it.hasRoute(dest.routeClass) } == true
+                        val label = stringResource(dest.label)
                         NavigationBarItem(
                             selected = selected,
                             onClick = { navController.navigateTopLevel(dest.route) },
-                            icon = { Icon(dest.icon, contentDescription = null) },
-                            label = { Text(stringResource(dest.label)) },
+                            icon = { Icon(dest.icon, contentDescription = if (iconsOnly) label else null) },
+                            label = if (iconsOnly) null else {
+                                { Text(label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
+                            },
                         )
                     }
                 }
@@ -133,6 +141,7 @@ fun BudzetsApp(
                     onOpenSurplus = { navController.navigateTopLevel(SurplusRoute) },
                     onOpenCategory = { id, month -> navController.navigate(CategorySpendingRoute(id.value, month.toString())) },
                     onReviewClose = { navController.navigate(MonthCloseRoute(it.toString())) },
+                    onOpenSettings = { navController.navigateTopLevel(SettingsRoute) },
                 )
             }
             composable<TransactionsRoute> {
@@ -187,6 +196,8 @@ fun BudzetsApp(
 }
 
 /** Switches tabs keeping one copy of each tab on the back stack, restoring its state. */
+private const val ICONS_ONLY_FONT_SCALE = 1.5f
+
 private fun NavHostController.navigateTopLevel(route: Any) {
     navigate(route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }

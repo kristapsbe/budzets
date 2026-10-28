@@ -2,6 +2,8 @@ package lv.kristapsbe.budzets.ui.settings
 
 import android.net.Uri
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import lv.kristapsbe.budzets.data.backup.BackupCodec
 import lv.kristapsbe.budzets.data.backup.BackupDocuments
@@ -53,7 +55,13 @@ class SettingsViewModelTest : ViewModelTest() {
         backups = BackupRepository(db, settings, clock, "1.0", File(tmp.root, "pre-restore-backup.json"))
     }
 
-    private fun settingsVm() = SettingsViewModel(settings, expenses, backups, documents, clock, "1.0")
+    /**
+     * Collected for the whole test, as a screen would. Without a subscriber between awaits,
+     * `WhileSubscribed` stops the state on the virtual clock at once, and restarting it from the
+     * awaiting thread occasionally never reached the test scheduler: the state stayed stale.
+     */
+    private fun TestScope.settingsVm() = SettingsViewModel(settings, expenses, backups, documents, clock, "1.0")
+        .also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
 
     private suspend fun SettingsViewModel.awaitReady(predicate: (SettingsUiState.Ready) -> Boolean = { true }) =
         uiState.awaitFirst { it is SettingsUiState.Ready && predicate(it) } as SettingsUiState.Ready
