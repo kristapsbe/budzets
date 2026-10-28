@@ -429,6 +429,70 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   - Reopen refused, listing the pockets; release boost; refused again for Unallocated only.
   - Move form survives "Don't keep activities"; dark theme; no crashes.
 
+## Decisions from Phase 7 review (approved 2026-10-27)
+
+- **Q16 — What the widget shows** beyond the spec's minimum (month, spent, effective budget,
+  remaining, bar): pace status in words with days left, the category furthest over budget, and
+  saved surplus. The extras only appear at sizes with room for them.
+- **Q17 — Quick add:** a "+" button on the widget opens the app straight at Add expense.
+
+## Phase 7 — home-screen widget (done)
+
+- **Glance 1.2.0** (`glance-appwidget`, plus `glance-appwidget-testing` for tests). The widget
+  is written in the same Compose style as the app, instead of hand-built `RemoteViews`.
+  `GlanceTheme` gives dynamic colours and dark mode. No schema change.
+- **Layouts** (`SizeMode.Responsive`, default 3×2, resizable):
+  - Small (2×1): remaining (or "spent" with no budget) and the bar.
+  - Medium: adds the month, the "+" button, "€x of €y spent", and status · days left (icon and
+    words, never colour alone).
+  - Large (4×2 and up): adds the most over-budget category and saved surplus.
+- **Same source of truth:** `WidgetStates.observe` combines the repositories' flows (month
+  summary, categories, surplus balances, currency) into a `WidgetState`. `WidgetStates.build`
+  does the mapping and is tested on its own.
+  - Only categories with a budget or a boost count as "over". With no budget, spending is
+    shown as plain spending: a full bar in the normal colour, not red (`isOver`).
+- **Refresh triggers:**
+  - `WidgetRefresher` watches Room's invalidation tracker for every table the widget reads,
+    plus the currency in DataStore, debounced 500 ms. Every write the app makes goes through
+    Room, so expenses, budgets, categories, transfers, boosts, closes and the Phase 8 restore
+    are all covered without hooks in each screen. It runs only while a widget exists: started
+    on app launch if one does, and from `onUpdate` when the first one is added.
+  - `WidgetSchedule`: one inexact, non-waking alarm just after local midnight, so days left and
+    the month roll over. Rescheduled on every refresh.
+  - The daily `updatePeriodMillis` and the update Android sends after a reboot are fallbacks.
+- **Missing data:** no categories → "Open Budzets to set up categories and a budget."; no
+  budget → spending only, "No budget set".
+- **Quick add:** the widget opens `MainActivity` with `ACTION_ADD_EXPENSE`. The activity is
+  `singleTop`, so a running app gets `onNewIntent` and Add expense opens on top of where it was
+  (an editor already open is kept). A recreated activity doesn't replay the request.
+- **Found on the emulator and fixed:**
+  - The widget didn't change after an expense was added while its Glance session was still
+    alive. `provideGlance` loaded one snapshot before `provideContent`, and an update to a live
+    session only recomposes it, so it showed the old snapshot. The content now collects
+    `WidgetStates.observe` inside `provideContent`. The first value is loaded up front so the
+    first frame has data.
+  - With no budget, any spending showed a full red bar, as if over budget.
+- **Known limits:**
+  - "Today" is fixed for a session. A session alive at midnight shows yesterday until the next
+    change; sessions last seconds, so this is rare.
+  - Q18 below: after an app update, the launcher icon can reopen Add expense.
+- **Tests:**
+  - 14 new (215 total): state mapping and midnight schedule 5, content at each size 5,
+    refresher 1, live state flow 1, quick add 2.
+  - `WidgetStateFlowTest` keeps one collection open, as a session does. Setup, an expense, a
+    budget and a currency change must each arrive through it.
+- **Manual check on emulator** (API 37, widget at 4×2):
+  - Quick add from the widget → €12.50 → home shows it; a second quick add within seconds →
+    €19.50 (the bug above).
+  - Edit €7 → €27 (€39.50), delete (€12.50) and a €10 Groceries budget ("Over by €2.50",
+    "Groceries over by €2.50") all reached the widget.
+  - Light and dark theme. Small and medium sizes are covered by the content tests, not
+    resized by hand.
+
 ## Open questions
 
-None currently.
+- **Q18 — Quick add as the task's root.** If the app was first opened from the widget's "+",
+  Android keeps that intent as the task's base. When the activity is later rebuilt without
+  saved state (seen after an app update; a force-stop, and likely a reboot, do the same), the
+  launcher icon opens Add expense instead of Overview. Nothing is lost: cancelling shows
+  Overview. Fix or accept?

@@ -3,6 +3,8 @@ package lv.kristapsbe.budzets.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,33 +51,35 @@ import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
 import java.time.LocalDate
-import java.time.YearMonth
 
 /**
- * The home-screen widget. Each update reads a fresh [WidgetState] from the same repositories as
- * the app; [WidgetRefresher] and [WidgetSchedule] decide when updates happen.
+ * The home-screen widget, reading the same repositories as the app. While a Glance session is
+ * alive its content follows the data directly: an update to a live session only recomposes it,
+ * so a snapshot taken before [provideContent] would go stale. [WidgetRefresher] and
+ * [WidgetSchedule] start new sessions when none is running.
+ *
+ * "Today" is fixed for the session. Sessions last seconds, so one alive at midnight is rare and
+ * the next change corrects it.
  */
 class BudzetsWidget : GlanceAppWidget() {
 
     override val sizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = loadState(context)
-        provideContent { GlanceTheme { WidgetContent(state) } }
-    }
-
-    private suspend fun loadState(context: Context): WidgetState {
         val container = (context.applicationContext as BudzetsApplication).container
-        val today = LocalDate.now(container.clock)
-        val categories = container.categories.categories.first()
-        if (categories.isEmpty()) return WidgetState.NotSetUp
-        return WidgetStates.build(
-            summary = container.budgets.loadMonthSummary(YearMonth.from(today)),
-            today = today,
-            categories = categories,
-            balances = container.surplus.balances.first(),
-            currency = container.settings.currency.first(),
+        val states = WidgetStates.observe(
+            budgets = container.budgets,
+            categories = container.categories,
+            surplus = container.surplus,
+            settings = container.settings,
+            today = LocalDate.now(container.clock),
         )
+        // Loaded up front so the first frame already has data.
+        val initial = states.first()
+        provideContent {
+            val state by states.collectAsState(initial)
+            GlanceTheme { WidgetContent(state) }
+        }
     }
 }
 
@@ -148,7 +152,7 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
         style = TextStyle(
             fontSize = if (roomy) 22.sp else 18.sp,
             fontWeight = FontWeight.Bold,
-            color = if (state.remaining.isNegative && state.hasBudget) GlanceTheme.colors.error else GlanceTheme.colors.onSurface,
+            color = if (state.isOver) GlanceTheme.colors.error else GlanceTheme.colors.onSurface,
         ),
         maxLines = 1,
     )
@@ -158,7 +162,7 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
         modifier = GlanceModifier.fillMaxWidth().semantics {
             contentDescription = context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.budget))
         },
-        color = if (state.remaining.isNegative) GlanceTheme.colors.error else GlanceTheme.colors.primary,
+        color = if (state.isOver) GlanceTheme.colors.error else GlanceTheme.colors.primary,
         backgroundColor = GlanceTheme.colors.surfaceVariant,
     )
     if (!roomy) return

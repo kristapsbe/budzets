@@ -1,5 +1,12 @@
 package lv.kristapsbe.budzets.widget
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import lv.kristapsbe.budzets.data.repository.BudgetRepository
+import lv.kristapsbe.budzets.data.repository.CategoryRepository
+import lv.kristapsbe.budzets.data.repository.SettingsRepository
+import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
@@ -11,7 +18,7 @@ import lv.kristapsbe.budzets.domain.model.sumMoney
 import java.time.LocalDate
 import java.time.YearMonth
 
-/** What the home-screen widget shows: a snapshot taken when it is updated. */
+/** What the home-screen widget shows. */
 sealed interface WidgetState {
     /** No categories yet, so there is nothing to budget against. */
     data object NotSetUp : WidgetState
@@ -32,6 +39,9 @@ sealed interface WidgetState {
         val hasBudget: Boolean get() = budget.isPositive
         val remaining: Money get() = budget - spent
 
+        /** Over budget; spending with no budget set is never "over". */
+        val isOver: Boolean get() = hasBudget && remaining.isNegative
+
         /** Share of the budget spent, clamped to the bar; a full bar once over. */
         val progress: Float
             get() = when {
@@ -45,6 +55,25 @@ sealed interface WidgetState {
 data class TopOver(val name: String, val overBy: Money)
 
 object WidgetStates {
+
+    /**
+     * Live state for the month containing [today]: re-emits whenever anything the widget shows
+     * changes. Equal states are dropped so a session doesn't push identical views.
+     */
+    fun observe(
+        budgets: BudgetRepository,
+        categories: CategoryRepository,
+        surplus: SurplusRepository,
+        settings: SettingsRepository,
+        today: LocalDate,
+    ): Flow<WidgetState> =
+        combine(
+            budgets.observeMonthSummary(YearMonth.from(today)),
+            categories.categories,
+            surplus.balances,
+            settings.currency,
+        ) { summary, all, balances, currency -> build(summary, today, all, balances, currency) }
+            .distinctUntilChanged()
 
     /**
      * Only categories with a budget (or a boost) count as "over"; spending in a category without

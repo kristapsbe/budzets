@@ -18,6 +18,7 @@ import lv.kristapsbe.budzets.domain.ym
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
@@ -63,6 +64,7 @@ class WidgetStateTest {
         val state = build(summary) as WidgetState.Month
         assertEquals(TopOver("Fun", eur(30)), state.topOver)
         assertEquals(1f, state.progress) // the bar is full once over
+        assertTrue(state.isOver)
         assertEquals(PaceStatus.OVER, state.status)
     }
 
@@ -71,6 +73,7 @@ class WidgetStateTest {
         val summary = MonthSummary(april, null, false, mapOf(FOOD to CategorySummary(FOOD, null, Money.ZERO, eur(12))))
         val state = build(summary) as WidgetState.Month
         assertFalse(state.hasBudget)
+        assertFalse(state.isOver) // a full bar, but not shown as over
         assertEquals(PaceStatus.NO_BUDGET, state.status)
         assertEquals(eur(12), state.spent)
         assertEquals(0f, (build(MonthSummary(april, null, false, emptyMap())) as WidgetState.Month).progress)
