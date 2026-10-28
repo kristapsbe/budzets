@@ -82,6 +82,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
+    // Declared, not just inherited, so the app ships the same coroutines the tests run against.
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.compose.ui)

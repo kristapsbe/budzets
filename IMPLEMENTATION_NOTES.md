@@ -673,6 +673,46 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
     emulator.
 - **Not verified here:** Google Drive itself (the emulator has no Google account); see Phase 8.
 
+## Dependency upgrades (2026-10-28)
+
+The upgrades lint flagged, limited to versions released at least two weeks earlier. Release dates
+were read from the Maven repositories (the POMs' Last-Modified) and Gradle's release list.
+
+| What | From | To | Released |
+|---|---|---|---|
+| Gradle wrapper | 9.6.0 | 9.8.1 (with SHA-256) | 2026-10-07 |
+| Kotlin (compiler, Compose and serialization plugins) | 2.2.10 | 2.4.21 | 2026-10-08 |
+| kotlinx-serialization (core, json) | 1.9.0 | 1.11.0 | 2026-04-09 |
+| kotlinx-coroutines | 1.9.0 (app, transitive) / 1.10.2 (tests) | 1.11.0 both | 2026-05-07 |
+| Compose BOM | 2026.02.01 | 2026.09.00 (Compose 1.12.1, Material 3 1.4.0) | 2026-09-09 |
+| Navigation Compose | 2.9.8 | 2.10.2 | 2026-09-23 |
+
+- **Held back as too new** (lint still lists them; take them from about 2026-11-04):
+  - Gradle 9.8.2 (2026-10-19)
+  - AGP 9.5.0 (2026-10-28)
+  - DataStore 1.3.0 (2026-10-21)
+  - kotlinx-serialization 1.12.0 (2026-10-19)
+- **Kotlin under AGP 9:**
+  - AGP 9.4.1 bundles KGP 2.2.10. The `kotlin` catalog version drives the Compose and
+    serialization plugins, and Gradle resolves KGP to the higher version: `buildEnvironment`
+    shows `kotlin-gradle-plugin:2.2.10 -> 2.4.21`.
+  - KSP 2.3.12 (KSP2, independent of the Kotlin version) still generates Room's code.
+  - The compiler gave no new warnings.
+- **Coroutines were misaligned:** the app shipped 1.9.0 (from other libraries) while tests ran
+  1.10.2. The app now declares `kotlinx-coroutines-android` at the catalog version, so both use
+  1.11.0.
+- **Not upgraded:** WorkManager stays at Glance's 2.7.1. It isn't declared and lint didn't flag
+  it; the keep rule from Phase 9 covers it.
+- **Verification:**
+  - Each step (Gradle; Kotlin with serialization and coroutines; Compose and Navigation) was
+    built and passed the full suite before the next. Then two more full runs: 248 tests, no
+    failures.
+  - Lint: 0 errors; the 5 warnings are the held-back versions.
+  - Instrumented test passes.
+  - Signed release smoke test on the emulator: restore from a file, every tab, the expense
+    editor (navigation arguments), the boost form, backup, the currency picker, the widget
+    rendering and refreshing, and quick add. No crashes. Release APK 6.6 MB.
+
 ## Open questions
 
 None currently.

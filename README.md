@@ -12,7 +12,11 @@ month at a glance, and backups are files you save yourself to Google Drive or th
 ## Building
 
 Requirements: Android Studio with its bundled JDK, and the Android SDK (compileSdk 37). The
-project uses AGP 9.4.1 with built-in Kotlin 2.2.10 and supports Android 9 (API 28) and up.
+project uses Gradle 9.8.1 and AGP 9.4.1, and supports Android 9 (API 28) and up.
+
+Kotlin is 2.4.21: the `kotlin` version in `gradle/libs.versions.toml`. AGP 9 bundles an older
+Kotlin, and the Compose and serialization plugins at that version lift the build to it.
+`./gradlew buildEnvironment` shows the version in use.
 
 ```sh
 # Command-line builds need a JDK; Android Studio's works:
