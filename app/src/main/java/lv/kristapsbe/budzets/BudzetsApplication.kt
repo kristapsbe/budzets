@@ -1,16 +1,28 @@
 package lv.kristapsbe.budzets
 
 import android.app.Application
+import androidx.work.Configuration
+import kotlinx.coroutines.launch
 import lv.kristapsbe.budzets.widget.WidgetRefresher
 
-class BudzetsApplication : Application() {
+/**
+ * Also starts WorkManager on demand: only the widget (through Glance) uses it, so its start-up
+ * provider is removed in the manifest and it initializes on the first widget update instead of
+ * on every app start.
+ */
+class BudzetsApplication : Application(), Configuration.Provider {
     lateinit var container: AppContainer
         private set
 
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        // Only worth watching for changes when a widget is showing them.
-        if (WidgetRefresher.hasWidgets(this)) container.widgetRefresher.start()
+        // Only worth watching for changes when a widget is showing them. Off the main thread: it
+        // asks the widget service and builds the database, neither of which the first frame needs.
+        container.appScope.launch {
+            if (WidgetRefresher.hasWidgets(this@BudzetsApplication)) container.widgetRefresher.start()
+        }
     }
+
+    override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder().build()
 }

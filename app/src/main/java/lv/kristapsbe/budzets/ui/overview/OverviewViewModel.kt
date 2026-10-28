@@ -33,6 +33,7 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.sumMoney
 import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
+import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -106,27 +107,31 @@ class OverviewViewModel(
             .flatMapLatest { month -> observeMonth(month) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OverviewUiState.Loading)
 
+    /** The month's figures with what follows from them and the ledger, so each is read once. */
+    private data class MonthFigures(
+        val summary: MonthSummary,
+        val status: CloseStatus,
+        val closed: Set<YearMonth>,
+        val totalSurplus: Money,
+    )
+
     private fun observeMonth(month: YearMonth) =
         combine(
-            combine(
-                budgets.observeMonthSummary(month),
-                surplus.closedMonths,
-                surplus.observeHasChangesSinceClosing(month),
-            ) { summary, closed, changed ->
+            // One subscription each: the close status and the surplus total share the ledger and summary.
+            combine(budgets.observeMonthSummary(month), surplus.ledger, surplus.closedMonths) { summary, ledger, closed ->
                 val status = when {
                     month !in closed -> CloseStatus.OPEN
-                    changed -> CloseStatus.CHANGED_SINCE_CLOSING
+                    surplus.hasChangesSinceClosing(ledger, summary) -> CloseStatus.CHANGED_SINCE_CLOSING
                     else -> CloseStatus.CLOSED
                 }
-                Triple(summary, status, closed)
+                MonthFigures(summary, status, closed, SurplusLedger.balances(ledger).values.sumMoney())
             },
             categories.categories,
             combine(settings.currency, settings.lastBackupAt, hasMonetaryData) { currency, lastBackup, hasData ->
                 currency to BackupReminder.due(lastBackup, hasData, clock.instant())
             },
-            surplus.balances,
             budgets.configs,
-        ) { (summary, status, closed), allCategories, (currency, backupReminder), balances, configs ->
+        ) { (summary, status, closed, totalSurplus), allCategories, (currency, backupReminder), configs ->
             val today = LocalDate.now(clock)
             OverviewUiState.Ready(
                 month = month,
@@ -136,7 +141,7 @@ class OverviewViewModel(
                 pace = PaceCalculator.pace(summary, today),
                 rows = rows(month, summary, allCategories),
                 closeStatus = status,
-                totalSurplus = balances.values.sumMoney(),
+                totalSurplus = totalSurplus,
                 hasCategories = allCategories.isNotEmpty(),
                 unclosedPastMonths = ClosingSchedule.unclosedBudgetedPastMonths(
                     configs, allCategories.map { it.toRef() }, closed, YearMonth.from(today),

@@ -1,7 +1,6 @@
 package lv.kristapsbe.budzets.ui.budgets
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +51,7 @@ import lv.kristapsbe.budzets.domain.calculation.AmountError
 import lv.kristapsbe.budzets.domain.calculation.TargetKind
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.amountErrorText
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -110,9 +109,7 @@ fun BudgetEditorContent(state: BudgetEditorState, actions: BudgetEditorActions) 
         },
     ) { padding ->
         when (state) {
-            BudgetEditorState.Loading, BudgetEditorState.Done -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            BudgetEditorState.Loading, BudgetEditorState.Done -> LoadingIndicator(Modifier.padding(padding))
             BudgetEditorState.NotFound -> Column(
                 Modifier.fillMaxSize().padding(padding).padding(24.dp),
                 verticalArrangement = Arrangement.Center,

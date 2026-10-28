@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
@@ -45,6 +44,7 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.BoostId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
+import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
 import lv.kristapsbe.budzets.util.displayName
@@ -96,7 +96,7 @@ fun SurplusContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         when (state) {
-            SurplusUiState.Loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }
+            SurplusUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
             is SurplusUiState.Error -> Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), Alignment.Center) {
                 Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
             }

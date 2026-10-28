@@ -12,8 +12,10 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
@@ -37,18 +39,24 @@ class WidgetRefresher(
     private val db: BudzetsDatabase,
     private val settings: SettingsRepository,
     private val scope: CoroutineScope,
+    private val startupRefreshDelayMillis: Long = STARTUP_REFRESH_DELAY_MILLIS,
     private val update: suspend () -> Unit,
 ) {
     private var job: Job? = null
 
-    /** Idempotent. The initial emission also refreshes the widget when the app starts. */
+    /**
+     * Idempotent. The widget is also refreshed once when the app starts (which re-arms a midnight
+     * alarm lost to a force-stop), but only after [startupRefreshDelayMillis], so the widget's
+     * session doesn't compete with the app's first frames. Writes refresh it as soon as usual.
+     */
     @Synchronized
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
             merge(
-                db.invalidationTracker.createFlow(*WATCHED_TABLES).map { },
+                db.invalidationTracker.createFlow(*WATCHED_TABLES, emitInitialState = false).map { },
                 settings.currency.drop(1).map { },
+                flow { delay(startupRefreshDelayMillis); emit(Unit) },
             )
                 .debounce(DEBOUNCE_MILLIS)
                 .collect { runCatching { update() } }
@@ -58,6 +66,7 @@ class WidgetRefresher(
     companion object {
         val WATCHED_TABLES = arrayOf("expenses", "budget_configs", "categories", "boosts", "surplus_ledger", "month_closures")
         const val DEBOUNCE_MILLIS = 500L
+        const val STARTUP_REFRESH_DELAY_MILLIS = 3_000L
 
         /** Whether any widget is on the home screen; without one there is nothing to refresh. */
         fun hasWidgets(context: Context): Boolean =

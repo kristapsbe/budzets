@@ -76,7 +76,7 @@ class SurplusRepositoryTest : DbTest() {
 
         expenses.add(eur(30), food.id, LocalDate.of(2026, 3, 20))
         assertTrue(surplus.hasChangesSinceClosing(march))
-        assertTrue(surplus.observeHasChangesSinceClosing(march).first())
+        assertTrue(surplus.hasChangesSinceClosing(surplus.ledger.first(), budgets.loadMonthSummary(march)))
 
         assertEquals(2, surplus.closeMonth(march).ok().revision)
         assertEquals(2, surplus.ledger.first().size)

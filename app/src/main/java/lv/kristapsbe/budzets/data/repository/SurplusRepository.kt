@@ -124,11 +124,12 @@ class SurplusRepository(
             )
         }
 
-    /** Re-emits when the ledger or the month's inputs change. */
-    fun observeHasChangesSinceClosing(month: YearMonth): Flow<Boolean> =
-        combine(ledger, budgets.observeMonthSummary(month), closedMonths) { entries, summary: MonthSummary, closed ->
-            month in closed && finalizer.hasChangesSinceClosing(entries, summary)
-        }
+    /**
+     * For callers already observing [ledger] and the month's summary: whether a closed month's
+     * figures now differ from what closing it posted. Check that the month is closed first.
+     */
+    fun hasChangesSinceClosing(ledger: List<LedgerEntry>, summary: MonthSummary): Boolean =
+        finalizer.hasChangesSinceClosing(ledger, summary)
 
     /** First close, re-close after changes, or close after a reopen. */
     suspend fun closeMonth(month: YearMonth): Outcome<MonthClosure, ClosureError> = db.withTransaction {

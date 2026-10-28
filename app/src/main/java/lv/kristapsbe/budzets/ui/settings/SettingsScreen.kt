@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -58,6 +57,7 @@ import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.canSwitchCurrency
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.util.dateTimeText
 import java.time.Instant
 import java.time.ZoneId
@@ -120,7 +120,7 @@ fun SettingsContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         when (state) {
-            SettingsUiState.Loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }
+            SettingsUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
             is SettingsUiState.Error -> Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), Alignment.Center) {
                 Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
             }

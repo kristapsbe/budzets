@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -52,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.surplus.text
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -141,7 +141,7 @@ fun MonthCloseContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         when (state) {
-            MonthCloseUiState.Loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }
+            MonthCloseUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
             is MonthCloseUiState.Error -> Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), Alignment.Center) {
                 Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
             }

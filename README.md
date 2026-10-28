@@ -12,7 +12,7 @@ month at a glance, and backups are files you save yourself to Google Drive or th
 ## Building
 
 Requirements: Android Studio with its bundled JDK, and the Android SDK (compileSdk 37). The
-project uses Gradle 9.8.1 and AGP 9.4.1, and supports Android 9 (API 28) and up.
+project uses Gradle 9.8.1 and AGP 9.5.0, and supports Android 9 (API 28) and up.
 
 Kotlin is 2.4.21: the `kotlin` version in `gradle/libs.versions.toml`. AGP 9 bundles an older
 Kotlin, and the Compose and serialization plugins at that version lift the build to it.
@@ -52,9 +52,38 @@ keyPassword=…
 `./gradlew assembleRelease` then writes `app/build/outputs/apk/release/app-release.apk`. Keep the
 keystore safe: an update can only be installed over the app if it is signed with the same key.
 
+### Start-up performance
+
+Judge speed on a release-like build, never on debug. A debuggable build runs without R8 and
+without compiled code: it took about 2.3× as long to show Overview in our measurements, and it
+stutters for the first seconds. In Android Studio, pick the `benchmarkRelease` variant in the
+Build Variants panel. It is minified like release and signed with the debug key, so it installs
+over a debug build and keeps its data. The debugger can't attach to it.
+
+The app ships a Baseline Profile (`app/src/release/generated/baselineProfiles/`). It lists the
+code start-up and the main screens use, so Android compiles that code ahead of time. Play applies
+it at install time. A sideloaded APK gets it from the device's background compilation, usually
+overnight, so its first launches are still uncompiled.
+
+The `baselineprofile` module generates that profile and measures cold start. Both tasks need a
+device or emulator with API 33 or later (or a rooted one):
+
+```sh
+./gradlew :app:generateBaselineProfile      # rewrites the two profile files; commit them
+./gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=lv.kristapsbe.budzets.baselineprofile.StartupBenchmark
+```
+
+Regenerate the profile after larger UI changes. The journey it records
+(`baselineprofile/.../Journeys.kt`) finds things by their labels, so update it when those change.
+Results land in `baselineprofile/build/outputs/connected_android_test_additional_output/`. Emulator timings are
+only good for comparing runs with each other. Both tasks uninstall the app afterwards, data
+included; pass `-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true` to keep it.
+
 ## Architecture
 
-One module, layered by package under `lv.kristapsbe.budzets`:
+The app module, layered by package under `lv.kristapsbe.budzets`, plus `baselineprofile` (see
+Start-up performance above):
 
 | Package | What it holds |
 |---|---|

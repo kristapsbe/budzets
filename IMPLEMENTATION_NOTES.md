@@ -713,6 +713,134 @@ were read from the Maven repositories (the POMs' Last-Modified) and Gradle's rel
     editor (navigation arguments), the boost form, backup, the currency picker, the widget
     rendering and refreshing, and quick add. No crashes. Release APK 6.6 MB.
 
+## Performance pass (2026-10-28)
+
+The user found start-up laggy on a **debug build run from Android Studio**: a long wait before
+Overview, a spinner before the numbers, and stutter in the first seconds. Much of that comes
+from the debug build itself: no R8 and no compiled code. Against the same data, debug took 2.3×
+as long as release to show Overview (554 ms against 236 ms, below). The review still found
+start-up costs that apply to both builds.
+
+- **Findings:**
+  1. No Baseline Profile for the app's own code. The release APK only carried the libraries'
+     profiles.
+  2. `BudzetsApplication.onCreate` asked AppWidgetManager for widgets (a binder call) on the main
+     thread. With a widget, it then built the database and DataStore there, before the first frame.
+  3. WorkManager 2.7.1 (brought by Glance, used only by the widget) initialized on every cold
+     start through androidx-startup, on the main thread.
+  4. The widget refreshed 500 ms after every app start, so a Glance session, WorkManager work and
+     database reads competed with the first frames on slow devices.
+  5. Overview subscribed to about 15 Room queries. Six were duplicates:
+     `observeHasChangesSinceClosing` re-subscribed the month summary (4 queries), the ledger and
+     the closed months. StateFlow drops equal states, so this wasn't a second recomposition per
+     write. It was doubled queries and recomputation, and for a moment the close status could lag
+     the new figures.
+  6. All 10 screens showed a spinner the moment they were loading, even when data came a frame or
+     two later.
+- **Changes:**
+  - New `:baselineprofile` module (`com.android.test` + `androidx.baselineprofile`):
+    - `BaselineProfileGenerator` covers cold start, starter categories on a fresh install, an
+      Overview scroll, every tab, and Add expense.
+    - `StartupBenchmark` measures cold start without and with the profile.
+    - The generated `baseline-prof.txt` and `startup-prof.txt` (2,113 of their rules are app code)
+      are committed under `app/src/release/generated/baselineProfiles/`.
+    - The app declares `profileinstaller`.
+    - The plugin adds the `benchmarkRelease` and `nonMinifiedRelease` build types. Both are
+      signed with the debug key when `keystore.properties` is absent, and the existing keep rules
+      cover them.
+  - `BudzetsApplication`: the widget check and `widgetRefresher.start()` now run on `appScope`.
+    The container's `by lazy` properties are synchronized, so Overview's first access is safe.
+  - WorkManager starts on demand:
+    - `BudzetsApplication` is a `Configuration.Provider`.
+    - The manifest removes `WorkManagerInitializer` from the startup provider. EmojiCompat,
+      ProcessLifecycle and ProfileInstaller still run there.
+    - `work-runtime` is declared at the 2.7.1 Glance already brought, only to compile against
+      `Configuration.Provider`; nothing is upgraded.
+  - `WidgetRefresher` no longer refreshes on Room's initial emission (`emitInitialState = false`).
+    A one-shot timer refreshes 3 s after start instead
+    (`STARTUP_REFRESH_DELAY_MILLIS`, a constructor parameter so tests can shorten it). Writes still
+    refresh after the 500 ms debounce. The start-up refresh is kept because it re-arms a midnight
+    alarm lost to a force-stop.
+  - Overview subscribes once each to the summary, ledger, closed months, categories, configs and
+    settings: about 9 queries. Close status and the surplus total come from the same ledger and
+    summary, through a new pure `SurplusRepository.hasChangesSinceClosing(ledger, summary)`. It
+    replaces `observeHasChangesSinceClosing`, which only Overview used.
+  - `ui/components/LoadingIndicator`: the spinner appears only after 400 ms. All 10 screens use it.
+  - Overview calls `ReportDrawnWhen { state !is Loading }`, so start-up measurements (and Android's
+    "Fully drawn" log) can see when the numbers are on screen.
+- **Versions** (all at least two weeks old; the POMs' Last-Modified on maven.google.com):
+
+  | What | Version | Released |
+  |---|---|---|
+  | Benchmark: `androidx.baselineprofile` plugin, `benchmark-macro-junit4` | 1.5.0 (works with AGP 9.5.0) | 2026-09-09 |
+  | UiAutomator | 2.4.0 | 2026-07-01 |
+  | ProfileInstaller | 1.4.1 (was 1.4.0, transitive) | 2024-10-02 |
+  | WorkManager `work-runtime` | 2.7.1 (unchanged, now declared) | 2021-11-17 |
+
+- **How it was measured:**
+  - AVD `Medium_Phone_API_37.0` on an Apple M2, started with `-gpu host`. The AVD's default
+    `-no-window` renderer is SwiftShader (software), which made every frame look slow; those
+    first numbers were discarded.
+  - Seeded data: 6 starter categories with budgets from May, an overall budget, and 713 expenses
+    over May to October. The widget was on the home screen.
+  - First frame is `am start -W` TotalTime. Content is the "Fully drawn" time from `ReportDrawnWhen`.
+    The "before" builds are the previous commit plus only that marker.
+  - Before and after were installed alternately, 3 rounds of 10 cold starts each. Runs taken an
+    hour apart drifted by ±20 ms, more than the effects measured, so only interleaved runs are
+    compared.
+  - Release APKs were compiled with their profiles (`speed-profile`), as after background
+    compilation or a Play install.
+
+  | Build | First frame, before → after | Overview content, before → after |
+  |---|---|---|
+  | Debug | 342 → 319 ms | 569 → 554 ms |
+  | Release | 209 → 202 ms | 237 → 236 ms |
+
+  Macrobenchmark (`StartupBenchmark` on `benchmarkRelease`, 10 cold starts each). This measures
+  the profile against an uncompiled install, which is how a sideloaded APK starts:
+
+  | | No profile | Baseline Profile |
+  |---|---|---|
+  | Time to initial display | 229.7 ms | 228.3 ms |
+  | Time to full display (Overview content) | 502.6 ms | 459.4 ms |
+  | Frame CPU time P50 / P90 / P99 | 11.6 / 18.6 / 108.7 ms | 3.4 / 17.8 / 83.6 ms |
+
+- **Reading the numbers:**
+  - On this fast emulator the code changes save tens of milliseconds, and the app's profile adds
+    little on top of the libraries'. Both matter more on a slow phone, where the widget refresh
+    and WorkManager start used to overlap the first second.
+  - The clearest effect is the profile cutting per-frame CPU time in the first seconds by about
+    3×. That is the early stutter.
+  - Spinner: screenshots taken during a debug cold start showed the old build's loading frame
+    with a spinner, and the new one with only the top bar and navigation bar until the numbers
+    arrived.
+  - `gfxinfo` janky-frame percentages for a scroll and tab tour right after launch were the same
+    before and after (debug about 5%, release about 2–3%).
+- **Found while benchmarking:**
+  - With a widget, a kill during the widget's Glance session leaves a WorkManager job.
+    JobScheduler then restarts the process (`bound-service SystemJobService`), which broke the
+    benchmark's cold-start precondition. `StartupBenchmark` now calls `killProcess()` at the end
+    of `setupBlock`.
+  - On a phone this is ordinary WorkManager behaviour. It also explains why, in the manual check,
+    the widget was already current 2.4 s after a restart that followed a force-stop: the
+    interrupted session ran again. The 3 s start-up delay itself is covered by the new
+    `WidgetRefresherTest` case.
+- **Deviations from the plan:**
+  - No test that "one write produces a single Ready state". StateFlow conflation makes that
+    unobservable, so the existing Overview tests cover the behaviour.
+  - `ReportDrawnWhen` and the benchmark's `killProcess()` were added along the way.
+  - README: AGP version corrected to 9.5.0 (commit `10c16f0`).
+- Release APK: 6.69 → 6.87 MB. The startup profile makes R8 lay out the dex for start-up.
+- **Verification:**
+  - 249 unit tests (one new), 3 full runs, no failures.
+  - Lint: 0 errors. The 2 warnings are Gradle 9.8.2 and `work-runtime` 2.12.0 being available.
+  - Instrumented test passes.
+  - Profile generated and both benchmarks pass on the emulator.
+  - Manual checks on the R8 release build: quick add from the widget on a cold start opens Add
+    expense, and a saved expense showed on the widget within about 1.3 s, so WorkManager's
+    on-demand start works under R8. With the debug build, a change made while the app was stopped
+    reached the widget after start.
+
 ## Open questions
 
 None currently.

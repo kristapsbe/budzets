@@ -1,7 +1,6 @@
 package lv.kristapsbe.budzets.ui.expenses
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,6 +60,7 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.ui.components.Banner
 import lv.kristapsbe.budzets.ui.components.FormSection
+import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.amountErrorText
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
@@ -133,9 +132,7 @@ fun ExpenseEditorContent(state: ExpenseEditorState, actions: EditorActions) {
         },
     ) { padding ->
         when (state) {
-            ExpenseEditorState.Loading, ExpenseEditorState.Done -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ExpenseEditorState.Loading, ExpenseEditorState.Done -> LoadingIndicator(Modifier.padding(padding))
             ExpenseEditorState.NotFound -> Column(
                 Modifier.fillMaxSize().padding(padding).padding(24.dp),
                 verticalArrangement = Arrangement.Center,

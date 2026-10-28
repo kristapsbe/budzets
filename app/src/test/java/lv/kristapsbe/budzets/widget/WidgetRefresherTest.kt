@@ -19,6 +19,7 @@ import lv.kristapsbe.budzets.domain.ym
 import lv.kristapsbe.budzets.ui.ViewModelTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.time.LocalDate
@@ -39,10 +40,10 @@ class WidgetRefresherTest : ViewModelTest() {
 
     @Test
     fun `every kind of write refreshes the widget, bursts only once`() = runTest {
-        val refresher = WidgetRefresher(db, settings, scope) { updates.incrementAndGet() }
+        val refresher = WidgetRefresher(db, settings, scope, startupRefreshDelayMillis = 0) { updates.incrementAndGet() }
         refresher.start()
         refresher.start() // idempotent
-        awaitUpdates(1) // initial refresh, as when the app starts
+        awaitUpdates(1) // start-up refresh
         settle()
         assertEquals(1, updates.get())
 
@@ -68,5 +69,20 @@ class WidgetRefresherTest : ViewModelTest() {
         awaitUpdates(6)
         settle()
         assertEquals(6, updates.get())
+    }
+
+    @Test
+    fun `the start-up refresh waits, a write doesn't`() = runTest {
+        val startupDelay = 2_000L
+        WidgetRefresher(db, settings, scope, startupDelay) { updates.incrementAndGet() }.start()
+        withContext(Dispatchers.Default) { delay(300) } // let it subscribe
+        val written = System.nanoTime()
+        categories.create("Food")
+        awaitUpdates(1)
+        val afterWrite = (System.nanoTime() - written) / 1_000_000
+        assertTrue("write refreshed after ${afterWrite}ms", afterWrite < startupDelay)
+        awaitUpdates(2) // then the delayed start-up refresh
+        settle()
+        assertEquals(2, updates.get())
     }
 }

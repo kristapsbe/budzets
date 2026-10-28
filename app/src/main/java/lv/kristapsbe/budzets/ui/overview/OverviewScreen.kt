@@ -1,8 +1,8 @@
 package lv.kristapsbe.budzets.ui.overview
 
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -57,6 +56,7 @@ import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -73,6 +73,8 @@ fun OverviewScreen(
     viewModel: OverviewViewModel = viewModel(factory = OverviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Marks the app as fully drawn once the numbers are on screen, for startup measurements.
+    ReportDrawnWhen { state !is OverviewUiState.Loading }
     val starterNames = stringArrayResource(R.array.starter_categories).toList()
     OverviewContent(
         state = state,
@@ -124,9 +126,7 @@ fun OverviewContent(state: OverviewUiState, actions: OverviewActions) {
         },
     ) { padding ->
         when (state) {
-            OverviewUiState.Loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            OverviewUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
             is OverviewUiState.Error -> Column(
                 Modifier.fillMaxSize().padding(padding).padding(24.dp),
                 verticalArrangement = Arrangement.Center,
