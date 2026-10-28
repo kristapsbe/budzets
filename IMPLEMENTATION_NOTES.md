@@ -489,10 +489,101 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   - Light and dark theme. Small and medium sizes are covered by the content tests, not
     resized by hand.
 
+## Decisions from Phase 8 review (approved 2026-10-28)
+
+- **Q19 — Settings:** the full §7.6 screen, not only backup: backup and restore, last-backup
+  status, a currency picker (the Q5 equal-decimals rule), how budgets work, privacy, and
+  versions.
+- **Q20 — Backup destination:** a new dated file each time (`budzets-backup-YYYY-MM-DD.json`,
+  and the picker adds " (1)" if the name is taken). Earlier backups are never overwritten.
+- **Q21 — Restore safety:** a confirmation stating that data is replaced, plus an automatic
+  private copy of the current data, with "Undo restore" until the next restore.
+- **Q22 — Fallback:** the save picker alone. It already offers the phone's own storage, and
+  restore reads from there too. No separate Share action.
+
+## Phase 8 — backup and restore (done)
+
+- **Dependency:** `kotlinx-serialization-json` 1.9.0, the same version as the
+  `kotlinx-serialization-core` already used by navigation, and compatible with Kotlin 2.2.10.
+  No schema change; the new `BackupDao` only adds queries.
+- **Drive route:** the Storage Access Framework, as chosen in Phase 0, with no Google sign-in
+  and no Cloud project. Drive appears in the system picker when its app is installed and
+  signed in. A successful write means Drive accepted the file; it uploads it afterwards.
+- **File format** (`data/backup/BackupFormat.kt`, version 1): a JSON envelope with `format`,
+  `schemaVersion` (the format's own version, not the database's), `appVersion`, `createdAt`,
+  `checksum` and `data`. `data` holds the settings (currency), categories, budget versions,
+  expenses, the ledger, boosts, and month closures with their category snapshots.
+  - Instants are ISO-8601; other values follow the database conventions. Pretty-printed, so the
+    file can be read by hand.
+  - Rows are in insertion order, so ties in "newest first" lists survive a restore.
+  - The checksum is SHA-256 of `data` in compact form, so re-indenting is fine but any changed
+    value is caught.
+  - Never stored: the last-backup time, the restore marker, and any credential or device id.
+- **Reading a file** (`BackupCodec.decode`, `BackupValidator`): nothing is touched until it
+  passes every check.
+  - Not JSON, or no format marker → "not a backup". A file cut short is "damaged".
+  - A newer `schemaVersion` → "update the app". Version 0 or a missing version → damaged.
+  - Checksum mismatch, missing or unknown fields → damaged.
+  - Content checks: unique ids and keys; every reference resolves; dates, months and instants
+    parse; amounts are within the domain's limits (positive ledger and boost amounts, expenses
+    up to `AmountParser.MAX_MINOR`); enum values are known; the currency exists.
+  - Files over 64 MB are refused.
+  - Older formats: only version 1 exists. The decoder has a marked place where a later version
+    upgrades an older `data` before decoding. Optional fields missing from a file read as null.
+- **Restore** (`BackupRepository`):
+  - Export the current data to `noBackupFilesDir/pre-restore-backup.json` (an atomic write,
+    never uploaded by Android).
+  - Then, in one Room transaction, clear every table (children first) and insert the backup
+    (parents first). Any failure rolls back; a failure writing the safety copy stops before
+    anything changes.
+  - Then set the backup's currency, bypassing the equal-decimals rule since all amounts were
+    replaced, and record the restore time, which turns on Undo.
+  - Undo restores the safety copy the same way, then deletes it and clears the marker.
+  - Known limit: the currency lives in DataStore, outside the Room transaction. If that one
+    write failed after the data was committed, the old currency would remain.
+- **Screens and widget** update through the existing flows and Room invalidation; the widget
+  needed no hook (checked in `WidgetRefresherTest`). Open editors in other tabs whose record is
+  gone after a restore show their existing "not found" state.
+- **Settings screen** (`ui/settings`):
+  - The backup card: what backup does, the last backup time (on this phone), "Back up now" and
+    "Restore", and a progress line while busy.
+  - After a restore, a banner with "Undo restore", which asks first.
+  - The restore confirmation shows the backup's date, its counts (categories, expenses, closed
+    months), the expense date range and currency, and the replacement warning.
+  - Currency: a searchable list of currencies in use today, without historic ones.
+    Different-decimals currencies are disabled with "N decimals" once amounts exist.
+  - Static sections: how budgets work, privacy, versions.
+  - Messages for every outcome: saved, not confirmed, failed, not a backup, too new, damaged,
+    too large, unreadable, restored, restore failed, undone, undo failed, currency refused.
+  - The chosen file is held in memory only. After process death it is picked again, since the
+    file permission ends with the activity anyway.
+- **Not done here:** the Overview shortcut to backup status (spec §7.1). It is left for Phase 9.
+- **Tests:**
+  - 28 new (243 total): codec 10, repository 5, Settings VM 6, Settings UI 7. The widget
+    refresher test now covers a restore.
+  - `BackupRepositoryTest` restores a full data set into a second, empty database and compares
+    a fresh export plus month summaries, balances, boosts, closed months, categories and the
+    last-added category. The data set covers every kind of record, including a reopened and
+    re-closed month, a re-close adjustment, a released boost and an archived category.
+  - Other repository tests: a mid-way failure leaves the data as it was; restoring a JPY backup
+    over EUR data; an empty install round trip.
+  - Lint: 0 errors; the one new warning (a plural) was fixed.
+- **Manual check on emulator** (API 37, through the real system picker, saving to Downloads):
+  - Back up: the suggested name; "Backup saved"; the file is readable JSON; a second backup
+    became "… (1).json".
+  - Add an expense → restore → it is gone, and the widget updates → undo → it is back.
+  - A hand-edited file → damaged; a non-backup → "isn't a Budzets backup"; a file cut short →
+    damaged. Data unchanged each time.
+  - Currency picker: JPY disabled ("0 decimals"), USD chosen.
+  - Close October + €5 November boost + USD → back up → `pm clear` → restore. Overview,
+    Surplus and the widget show the same values as before, in USD.
+  - **Not checked:** Google Drive itself. The emulator has no Google account. Check on a real
+    phone: back up to Drive, then restore from Drive.
+
 ## Open questions
 
 - **Q18 — Quick add as the task's root.** If the app was first opened from the widget's "+",
   Android keeps that intent as the task's base. When the activity is later rebuilt without
   saved state (seen after an app update; a force-stop, and likely a reboot, do the same), the
   launcher icon opens Add expense instead of Overview. Nothing is lost: cancelling shows
-  Overview. Fix or accept?
+  Overview. Seen again after each reinstall during Phase 8 checks. Fix or accept?

@@ -124,6 +124,15 @@ interface ExpenseDao {
         """
     )
     suspend fun hasMonetaryData(): Boolean
+
+    @Query(
+        """
+        SELECT EXISTS(SELECT 1 FROM expenses)
+            OR EXISTS(SELECT 1 FROM budget_configs)
+            OR EXISTS(SELECT 1 FROM surplus_ledger)
+        """
+    )
+    fun observeHasMonetaryData(): Flow<Boolean>
 }
 
 @Dao
@@ -191,4 +200,75 @@ interface SurplusDao {
 
     @Update
     suspend fun updateClosure(closure: MonthClosureEntity)
+}
+
+/**
+ * Whole-table reads and writes for backup and restore. Reads are in insertion (rowid) order, so
+ * a restore re-inserts rows in the same order and ties in "newest first" lists stay the same.
+ * Callers run these in one transaction.
+ */
+@Dao
+interface BackupDao {
+    @Query("SELECT * FROM categories ORDER BY rowid")
+    suspend fun categories(): List<CategoryEntity>
+
+    @Query("SELECT * FROM budget_configs ORDER BY rowid")
+    suspend fun budgetConfigs(): List<BudgetConfigEntity>
+
+    @Query("SELECT * FROM expenses ORDER BY rowid")
+    suspend fun expenses(): List<ExpenseEntity>
+
+    @Query("SELECT * FROM surplus_ledger ORDER BY rowid")
+    suspend fun ledger(): List<LedgerEntryEntity>
+
+    @Query("SELECT * FROM boosts ORDER BY rowid")
+    suspend fun boosts(): List<BoostEntity>
+
+    @Query("SELECT * FROM month_closures ORDER BY rowid")
+    suspend fun monthClosures(): List<MonthClosureEntity>
+
+    @Query("SELECT * FROM month_closure_categories ORDER BY rowid")
+    suspend fun monthClosureCategories(): List<MonthClosureCategoryEntity>
+
+    @Insert
+    suspend fun insertCategories(rows: List<CategoryEntity>)
+
+    @Insert
+    suspend fun insertBudgetConfigs(rows: List<BudgetConfigEntity>)
+
+    @Insert
+    suspend fun insertExpenses(rows: List<ExpenseEntity>)
+
+    @Insert
+    suspend fun insertLedger(rows: List<LedgerEntryEntity>)
+
+    @Insert
+    suspend fun insertBoosts(rows: List<BoostEntity>)
+
+    @Insert
+    suspend fun insertMonthClosures(rows: List<MonthClosureEntity>)
+
+    @Insert
+    suspend fun insertMonthClosureCategories(rows: List<MonthClosureCategoryEntity>)
+
+    @Query("DELETE FROM month_closure_categories")
+    suspend fun clearMonthClosureCategories()
+
+    @Query("DELETE FROM month_closures")
+    suspend fun clearMonthClosures()
+
+    @Query("DELETE FROM boosts")
+    suspend fun clearBoosts()
+
+    @Query("DELETE FROM surplus_ledger")
+    suspend fun clearLedger()
+
+    @Query("DELETE FROM expenses")
+    suspend fun clearExpenses()
+
+    @Query("DELETE FROM budget_configs")
+    suspend fun clearBudgetConfigs()
+
+    @Query("DELETE FROM categories")
+    suspend fun clearCategories()
 }

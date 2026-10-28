@@ -7,16 +7,20 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import lv.kristapsbe.budzets.data.backup.BackupCodec
+import lv.kristapsbe.budzets.data.backup.BackupRepository
 import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.BudgetScope
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
+import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.ok
 import lv.kristapsbe.budzets.domain.ym
 import lv.kristapsbe.budzets.ui.ViewModelTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -56,5 +60,13 @@ class WidgetRefresherTest : ViewModelTest() {
         awaitUpdates(4)
         settings.setCurrency(CurrencySpec.of("USD"))
         awaitUpdates(5)
+
+        // A restore replaces every table in one transaction: one more refresh, no hook needed.
+        val backups = BackupRepository(db, settings, clock, "1.0", File(tmp.root, "pre-restore-backup.json"))
+        val backup = (BackupCodec.decode(backups.export()) as Outcome.Ok).value
+        backups.restore(backup)
+        awaitUpdates(6)
+        settle()
+        assertEquals(6, updates.get())
     }
 }

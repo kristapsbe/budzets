@@ -1,10 +1,8 @@
 package lv.kristapsbe.budzets.ui.navigation
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -12,22 +10,17 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -46,6 +39,7 @@ import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
 import lv.kristapsbe.budzets.ui.surplus.BoostScreen
 import lv.kristapsbe.budzets.ui.surplus.MoveSurplusScreen
+import lv.kristapsbe.budzets.ui.settings.SettingsScreen
 import lv.kristapsbe.budzets.ui.surplus.SurplusScreen
 import lv.kristapsbe.budzets.ui.surplus.key
 import kotlin.reflect.KClass
@@ -176,7 +170,7 @@ fun BudzetsApp(
             composable<BoostRoute> {
                 BoostScreen(onClose = { navController.popBackStack<BoostRoute>(inclusive = true) })
             }
-            composable<SettingsRoute> { PlaceholderScreen(R.string.nav_settings) }
+            composable<SettingsRoute> { SettingsScreen() }
             composable<ExpenseEditorRoute> {
                 ExpenseEditorScreen(onClose = { navController.popBackStack<ExpenseEditorRoute>(inclusive = true) })
             }
@@ -198,16 +192,5 @@ private fun NavHostController.navigateTopLevel(route: Any) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
-    }
-}
-
-/** Temporary stand-in for screens built in later phases. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlaceholderScreen(@StringRes title: Int) {
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(title)) }) }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = Alignment.Center) {
-            Text(stringResource(R.string.placeholder_coming), style = MaterialTheme.typography.bodyLarge)
-        }
     }
 }

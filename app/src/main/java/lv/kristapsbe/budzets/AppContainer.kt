@@ -6,6 +6,9 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import lv.kristapsbe.budzets.data.backup.BackupDocuments
+import lv.kristapsbe.budzets.data.backup.BackupRepository
+import lv.kristapsbe.budzets.data.backup.SafBackupDocuments
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
@@ -13,6 +16,7 @@ import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.widget.WidgetRefresher
+import java.io.File
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -37,6 +41,15 @@ class AppContainer(context: Context) {
         )
     }
 
+    val appVersion: String by lazy {
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: "?"
+    }
+
+    val backups by lazy {
+        BackupRepository(database, settings, clock, appVersion, File(appContext.noBackupFilesDir, SAFETY_COPY_FILE))
+    }
+    val backupDocuments: BackupDocuments by lazy { SafBackupDocuments(appContext.contentResolver) }
+
     /** Work that outlives a screen, such as widget refreshes. */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -46,6 +59,7 @@ class AppContainer(context: Context) {
 
     private companion object {
         const val SETTINGS_FILE = "settings"
+        const val SAFETY_COPY_FILE = "pre-restore-backup.json"
     }
 }
 

@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import lv.kristapsbe.budzets.data.local.dao.BackupDao
 import lv.kristapsbe.budzets.data.local.dao.BudgetConfigDao
 import lv.kristapsbe.budzets.data.local.dao.CategoryDao
 import lv.kristapsbe.budzets.data.local.dao.ExpenseDao
@@ -28,7 +29,7 @@ import lv.kristapsbe.budzets.data.local.entity.MonthClosureEntity
         MonthClosureEntity::class,
         MonthClosureCategoryEntity::class,
     ],
-    version = 2,
+    version = BudzetsDatabase.VERSION,
     exportSchema = true,
 )
 abstract class BudzetsDatabase : RoomDatabase() {
@@ -36,9 +37,11 @@ abstract class BudzetsDatabase : RoomDatabase() {
     abstract fun budgetConfigDao(): BudgetConfigDao
     abstract fun expenseDao(): ExpenseDao
     abstract fun surplusDao(): SurplusDao
+    abstract fun backupDao(): BackupDao
 
     companion object {
         const val NAME = "budzets.db"
+        const val VERSION = 2
 
         /**
          * Never add a destructive-migration fallback. A missing migration must fail loudly

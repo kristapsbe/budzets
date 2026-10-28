@@ -26,6 +26,9 @@ class SettingsRepository(
 
     val lastBackupAt: Flow<Instant?> = dataStore.data.map { prefs -> prefs[LAST_BACKUP_AT]?.let(Instant::ofEpochMilli) }
 
+    /** When the current data was put in place by a restore that can still be undone; null otherwise. */
+    val lastRestoreAt: Flow<Instant?> = dataStore.data.map { prefs -> prefs[LAST_RESTORE_AT]?.let(Instant::ofEpochMilli) }
+
     /** @return false if refused: amounts exist and the new currency has a different minor unit. */
     suspend fun setCurrency(to: CurrencySpec): Boolean {
         var applied = false
@@ -44,8 +47,23 @@ class SettingsRepository(
         dataStore.edit { it[LAST_BACKUP_AT] = at.toEpochMilli() }
     }
 
+    /**
+     * For a restore: the restored amounts are in [currency]'s minor units, so it is set whatever
+     * the current data, which the restore replaces anyway.
+     */
+    suspend fun replaceCurrency(currency: CurrencySpec) {
+        dataStore.edit { it[CURRENCY] = currency.code }
+    }
+
+    suspend fun recordRestore(at: Instant?) {
+        dataStore.edit { prefs ->
+            if (at == null) prefs.remove(LAST_RESTORE_AT) else prefs[LAST_RESTORE_AT] = at.toEpochMilli()
+        }
+    }
+
     private companion object {
         val CURRENCY = stringPreferencesKey("currency_code")
         val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
+        val LAST_RESTORE_AT = longPreferencesKey("last_restore_at")
     }
 }

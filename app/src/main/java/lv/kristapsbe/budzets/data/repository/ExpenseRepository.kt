@@ -23,6 +23,9 @@ class ExpenseRepository(
 ) {
     private val dao = db.expenseDao()
 
+    /** Whether amounts exist whose meaning depends on the currency's minor unit. */
+    val hasMonetaryData: Flow<Boolean> = dao.observeHasMonetaryData()
+
     /** Expenses dated within [month], newest first, optionally limited to one category. */
     fun observeMonth(month: YearMonth, categoryId: CategoryId? = null): Flow<List<Expense>> {
         val (from, to) = month.dateRange()
