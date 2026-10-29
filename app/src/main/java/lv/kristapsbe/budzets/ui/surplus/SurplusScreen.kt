@@ -171,7 +171,7 @@ private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padd
                 }
             }
         }
-        items(state.history, key = { "entry-${it.id.value}" }) { row -> HistoryItem(row, money, locale, showPocket = state.filter == null) }
+        items(state.history, key = { "entry-${it.id.value}" }, contentType = { "entry" }) { row -> HistoryItem(row, money, locale, showPocket = state.filter == null) }
     }
 }
 

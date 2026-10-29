@@ -310,10 +310,11 @@ private fun ReadyList(
         }
 
         state.days.forEach { day ->
-            item(key = "day-${day.date}") {
+            // Content types let rows scrolled out of view be reused for rows of the same kind.
+            item(key = "day-${day.date}", contentType = "day") {
                 DayHeader(day, state.today, money, locale)
             }
-            items(day.rows, key = { it.id.value }) { row ->
+            items(day.rows, key = { it.id.value }, contentType = { "expense" }) { row ->
                 SwipeToDeleteRow(row, money, onOpen = { actions.onOpenExpense(row.id) }, onDelete = { actions.onDelete(row.id) })
             }
         }

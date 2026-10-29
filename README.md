@@ -30,9 +30,9 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 ### Release builds
 
-Release builds are shrunk with R8. Keep rules live in `app/src/main/keepRules/`. Some problems
-only show up in a release build, so always try one on a device; check the widget as well as the
-app.
+Release builds are shrunk and optimized with R8, the app's own code as well as the libraries.
+Keep rules live in `app/src/main/keepRules/`. Some problems only show up in a release build, so
+always try one on a device; check the widget as well as the app.
 
 Signing reads a git-ignored `keystore.properties` in the project root. Without that file,
 `assembleRelease` produces an unsigned APK.

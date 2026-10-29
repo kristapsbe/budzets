@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -111,6 +113,7 @@ class SettingsViewModel(
             ) as SettingsUiState
         }
             .catch { emit(SettingsUiState.Error(it.message)) }
+            .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState.Loading)
 
     /** Suggested name for a new backup; the picker adds " (1)" if it already exists. */
@@ -140,7 +143,8 @@ class SettingsViewModel(
             } catch (e: SecurityException) {
                 return@operate SettingsMessage.FILE_UNREADABLE
             }
-            when (val result = BackupCodec.decode(bytes)) {
+            // Parsing and checking a large file would stall the main thread.
+            when (val result = withContext(Dispatchers.Default) { BackupCodec.decode(bytes) }) {
                 is Outcome.Ok -> {
                     pending.value = result.value
                     null

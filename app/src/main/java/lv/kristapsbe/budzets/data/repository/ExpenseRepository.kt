@@ -2,6 +2,7 @@ package lv.kristapsbe.budzets.data.repository
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.data.local.dateRange
@@ -23,8 +24,11 @@ class ExpenseRepository(
 ) {
     private val dao = db.expenseDao()
 
-    /** Whether amounts exist whose meaning depends on the currency's minor unit. */
-    val hasMonetaryData: Flow<Boolean> = dao.observeHasMonetaryData()
+    /**
+     * Whether amounts exist whose meaning depends on the currency's minor unit. Room re-runs the
+     * query on every expense, budget or ledger write; repeats are dropped so screens don't rebuild.
+     */
+    val hasMonetaryData: Flow<Boolean> = dao.observeHasMonetaryData().distinctUntilChanged()
 
     /** Expenses dated within [month], newest first, optionally limited to one category. */
     fun observeMonth(month: YearMonth, categoryId: CategoryId? = null): Flow<List<Expense>> {

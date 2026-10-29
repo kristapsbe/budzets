@@ -63,7 +63,8 @@ class BackupRepository(
                 monthClosures = dao.monthClosures().map { it.toBackup(closureCategories[it.month to it.revision].orEmpty()) },
             )
         }
-        return BackupCodec.encode(data, clock.instant(), appVersion)
+        // Off the main thread: with years of data the file is a few MB of JSON and a checksum.
+        return withContext(Dispatchers.Default) { BackupCodec.encode(data, clock.instant(), appVersion) }
     }
 
     /**
@@ -79,7 +80,7 @@ class BackupRepository(
     /** Puts back the data from before the last restore. False if there is nothing to undo. */
     suspend fun undoRestore(): Boolean {
         val bytes = withContext(Dispatchers.IO) { if (safetyCopy.exists()) AtomicFile(safetyCopy).readFully() else null }
-        val backup = bytes?.let { (BackupCodec.decode(it) as? Outcome.Ok)?.value }
+        val backup = bytes?.let { withContext(Dispatchers.Default) { (BackupCodec.decode(it) as? Outcome.Ok)?.value } }
         if (backup == null) {
             settings.recordRestore(null)
             return false

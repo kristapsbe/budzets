@@ -22,6 +22,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -69,6 +70,21 @@ class WidgetRefresherTest : ViewModelTest() {
         awaitUpdates(6)
         settle()
         assertEquals(6, updates.get())
+    }
+
+    @Test
+    fun `settings other than the currency don't refresh the widget`() = runTest {
+        WidgetRefresher(db, settings, scope, startupRefreshDelayMillis = 0) { updates.incrementAndGet() }.start()
+        awaitUpdates(1) // start-up refresh
+        settle()
+
+        settings.recordBackupSuccess(Instant.parse("2026-04-02T10:00:00Z"))
+        settings.recordRestore(Instant.parse("2026-04-02T11:00:00Z"))
+        settle()
+        assertEquals(1, updates.get())
+
+        settings.setCurrency(CurrencySpec.of("USD"))
+        awaitUpdates(2)
     }
 
     @Test

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.canSwitchCurrency
@@ -20,14 +21,18 @@ class SettingsRepository(
     /** Whether stored amounts exist whose meaning depends on the currency's minor unit. */
     private val hasMonetaryData: suspend () -> Boolean,
 ) {
+    // Every edit re-emits all of DataStore, so each value drops repeats: recording a backup must not
+    // look like a currency change (which would, for one, refresh the widget).
     val currency: Flow<CurrencySpec> = dataStore.data.map { prefs ->
         prefs[CURRENCY]?.let { runCatching { CurrencySpec.of(it) }.getOrNull() } ?: CurrencySpec.DEFAULT
-    }
+    }.distinctUntilChanged()
 
-    val lastBackupAt: Flow<Instant?> = dataStore.data.map { prefs -> prefs[LAST_BACKUP_AT]?.let(Instant::ofEpochMilli) }
+    val lastBackupAt: Flow<Instant?> =
+        dataStore.data.map { prefs -> prefs[LAST_BACKUP_AT]?.let(Instant::ofEpochMilli) }.distinctUntilChanged()
 
     /** When the current data was put in place by a restore that can still be undone; null otherwise. */
-    val lastRestoreAt: Flow<Instant?> = dataStore.data.map { prefs -> prefs[LAST_RESTORE_AT]?.let(Instant::ofEpochMilli) }
+    val lastRestoreAt: Flow<Instant?> =
+        dataStore.data.map { prefs -> prefs[LAST_RESTORE_AT]?.let(Instant::ofEpochMilli) }.distinctUntilChanged()
 
     /** @return false if refused: amounts exist and the new currency has a different minor unit. */
     suspend fun setCurrency(to: CurrencySpec): Boolean {

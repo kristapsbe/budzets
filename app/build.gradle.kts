@@ -48,9 +48,9 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
+            // The app's own code too, not only the libraries (the default scope, "**").
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
         }
     }

@@ -841,6 +841,160 @@ start-up costs that apply to both builds.
     on-demand start works under R8. With the debug build, a change made while the app was stopped
     reached the widget after start.
 
+## Performance pass 2: runtime and power (2026-10-29)
+
+The first pass was about start-up. This one asked how the app behaves while it is used and
+what it costs in battery, and fixed what was cheap to fix.
+
+- **Already fine (no change):**
+  - Nothing polls, and there are no timers or infinite animations. The midnight alarm is `RTC`,
+    which doesn't wake the device. The widget's `updatePeriodMillis` is a daily fallback.
+  - Every screen collects with `collectAsStateWithLifecycle` and `WhileSubscribed(5_000)`, so
+    hidden tabs and a backgrounded app stop their queries after 5 s.
+  - Text fields keep their text in Compose state, so typing never waits for a flow.
+  - Lists are lazy and keyed, and formatters are remembered.
+  - Month spending is summed in SQL over the `expenseDate` index.
+  - Dark theme and dynamic colour are supported.
+  - The widget refreshes only after writes (500 ms debounce), once 3 s after start and at
+    midnight. Each refresh with no live session runs one Glance session. Glance 1.2's
+    `SessionWorker` keeps that WorkManager job alive for 45 s after the first composition, or 5 s
+    once the device is idle.
+- **Findings:**
+  1. R8 optimized only the libraries. `packageScope = setOf("androidx.**", "kotlin.**",
+     "kotlinx.**")` came with the project template. The app's own classes (1,419 of 6,114 in the
+     release dex) were kept unrenamed and unoptimized:
+     - every Compose lambda was a class of its own
+     - the Compose compiler's `sourceInformation*` and trace-check calls, which Compose's rules
+       remove only from code in scope, still ran on every recomposition
+  2. Backup and restore did the JSON work on the main thread. `BackupCodec.encode` (serialize,
+     pretty print, a compact copy for the checksum, SHA-256) and `BackupCodec.decode` ran on
+     `viewModelScope`'s dispatcher. Only the Room reads were off it.
+  3. All screen state was built on the main thread. Room runs queries on its own threads, but
+     `map`/`combine` run where the flow is collected, which is `viewModelScope`. That covers
+     entity mapping, budget resolution, summaries, ledger sums, close status, the unclosed-months
+     scan and the list building. After Save in Add expense, this work for Overview and Spending
+     landed on the main thread during the transition back.
+  4. Repeated emissions:
+     - Every DataStore edit re-emitted every setting. Recording a backup re-emitted the
+       currency, and `WidgetRefresher` (which watches `currency.drop(1)`) refreshed the widget
+       for nothing, one 45 s Glance job.
+     - `hasMonetaryData` re-emitted `true` on every expense, budget or ledger write. Overview
+       and Settings then rebuilt their state a second time.
+  5. The Spending list (day headers mixed with expense rows) and the Surplus history had no
+     `contentType`, so Compose couldn't reuse rows by kind while scrolling.
+- **Changes:**
+  - `app/build.gradle.kts`: `packageScope` removed, so R8 optimizes everything (the default
+    `"**"`). No new keep rules were needed:
+    - kotlinx-serialization's rules keep the route serializers that `hasRoute(KClass)` looks up
+    - Room's rules keep `BudzetsDatabase_Impl`
+    - manifest components are kept by name
+    - the committed Baseline Profile is in source names, and R8 rewrites it
+
+    Only 7 app classes keep their names: the Application, the two activities, the two receivers,
+    and the database class with its `_Impl`.
+  - `BackupRepository.export`, `undoRestore` and `SettingsViewModel.openBackup` encode and
+    decode on `Dispatchers.Default`.
+  - The six screen `uiState` chains (Overview, Spending, Budgets, Surplus, Month close,
+    Settings) end with `.flowOn(Dispatchers.Default)` before `stateIn`, so only the finished
+    state reaches the main thread. The editors' small `collect { reference = it }` blocks are
+    unchanged; they write Compose state.
+  - `SettingsRepository.currency`, `lastBackupAt`, `lastRestoreAt` and
+    `ExpenseRepository.hasMonetaryData` drop repeats (`distinctUntilChanged`). New
+    `WidgetRefresherTest` case: backup and restore markers don't refresh the widget, and a
+    currency change still does.
+  - `contentType` on Spending's day headers and expense rows, and on Surplus history rows.
+- **Considered, not done:**
+  - A composite `(expenseDate, createdAt)` index would avoid a small sort, but it needs a
+    migration, and a month is a few hundred rows at most.
+  - Skipping widget refreshes whose content didn't change would need the widget state computed
+    in the refresher, plus midnight handling.
+  - The start-up refresh runs one 45 s Glance session per cold start, also when the process was
+    started for the midnight alarm or the daily update; the second update then only recomposes
+    the live session. It could be skipped while the midnight alarm is still armed. That is a
+    behaviour change, left for the user to decide.
+  - `dayName()` builds a formatter per day header. The cost is negligible.
+- **How it was measured:**
+  - AVD `Medium_Phone_API_37.0` on an Apple M2 with `-gpu host`. `benchmarkRelease` APKs (R8,
+    debug-signed, so they install over each other and keep data and the widget) were compiled
+    with their profile (profileinstaller broadcast, then `compile -m speed-profile -f`).
+  - Seed: 6 categories, budgets from May, 713 expenses over May to October 2026. The backup test
+    used 5,000 expenses from May 2023 (a 1.9 MB file). The widget was on the home screen.
+  - Builds were installed alternately. Some runs also included "R8 only" and "code changes only"
+    builds.
+  - Scripts drove the app with `adb shell input`. Per-thread CPU came from `/proc/<pid>/task/*/stat`,
+    frames from `dumpsys gfxinfo`, and widget jobs from the `dumpsys jobscheduler` history.
+- **Results:**
+
+  | What | Before | After |
+  |---|---|---|
+  | Release APK | 6.78 MB | 4.84 MB |
+  | Dex | 5.65 MB, 6,114 classes (1,419 app) | 3.71 MB, 4,273 classes |
+  | Backup of 1.9 MB: slowest frame | 48–200 ms (150 ms typical on the first backup) | 19–65 ms (20 ms typical) |
+  | Backup: slow UI-thread frames | 1–3 per backup | 0 |
+  | Backup: time until the file is written | 230–380 ms | 230–320 ms |
+  | Widget jobs started by one backup | 1 (a 45 s Glance session) | 0 |
+
+  - **Cold start** (`am start -W`, 3 rounds of 10): median first frame 121 → 106 ms, content
+    155 → 148 ms. The drift between rounds was larger than that difference, and per round it
+    went both ways, so there is no measurable change on this emulator.
+  - **Frames and CPU while in use:** no measurable change.
+    - Add, save, back: 5.2% vs 5.5% janky frames (6 runs each). Main-thread CPU for 10 saves:
+      0.91 s vs 0.97 s, with ±15% between runs.
+    - The Spending scroll and the tab tour were within noise.
+  - **Where the CPU goes, per saved expense (about 23–25 ms):**
+    - about 60% RenderThread (transitions, keyboard, ripples)
+    - about 35% main thread
+    - about 1% (2 ms) for the app's own data work: Room, all flow computation and the widget
+
+    That small last share is why moving the screen state off the main thread can't show on this
+    hardware. No JIT thread ran in either build, so the R8-rewritten Baseline Profile still
+    covers the hot code (43,089 profile lines, against 47,454 before R8 merged classes).
+  - **Idle:** 0–10 ms of CPU per minute on Overview in the foreground, 20–30 ms per minute in the
+    background. No tab draws a frame at rest.
+  - **Battery stats for a scripted session** (cold start, two tab tours, a scroll, three
+    expenses): app CPU 4.14 s → 3.92 s. One widget job in each session, the start-up refresh.
+    Writes during a live session only recompose it.
+- **Also found, not changed (left for the user):**
+  - Navigation Compose 2.10 crossfades every screen change over 700 ms (`DefaultNavTransitions`),
+    where Material's fade-through takes 300 ms.
+  - A scratch build with fade-through (90 ms out, 210 ms in) cut 10 add/save round trips from
+    933 to 546 frames: −32% RenderThread CPU, −25% CPU in total.
+  - Tab switches didn't change: every tap's touch ripple keeps drawing for about 0.9 s
+    (53 frames, even on the already-selected tab). New tabs would still appear 0.4 s sooner.
+  - It is a visible design change, so it wasn't made here.
+- **Emulator notes:**
+  - On API 37 a force-stopped app's widget shows Glance's loading layout until the app runs
+    again. Both builds do this, so it isn't a regression. An ordinary process death doesn't.
+  - While a Glance session runs, `am kill` doesn't end the process. Wait about 50 s after the
+    last write to test a real cold start from the widget.
+  - With a widget on the home screen, `StartupBenchmark` can still fail with "must not be
+    running prior to cold start": the widget's WorkManager job restarts the process between
+    `killProcess()` and the launch. Run it without a widget.
+- **Macrobenchmark** (`StartupBenchmark`, fresh install, no widget, one pass of 10 cold starts
+  each):
+
+  | | Before | After |
+  |---|---|---|
+  | No profile: initial / full display | 240 / 529 ms | 219 / 514 ms |
+  | Baseline Profile: initial / full display | 249 / 482 ms | 263 / 511 ms |
+
+  The two modes moved in opposite directions, within this emulator's noise. Start-up is
+  unchanged.
+- **Verification:**
+  - 250 unit tests (one new), 3 full runs, no failures.
+  - Lint: 0 errors. The 2 warnings are the same as before (Gradle 9.8.2, `work-runtime` 2.12.0).
+  - Instrumented test passes. `StartupBenchmark` passes on `benchmarkRelease` (R8).
+  - Manual smoke test of the R8 build with 5,000 expenses: every passed:
+    - every tab
+    - category drill-down
+    - edit, swipe-delete and undo of an expense
+    - overall and category budget editors
+    - close, reopen and close again of a month
+    - Move surplus; boost and release
+    - backup, then restore and undo restore
+    - widget renders and updates after a write
+    - quick add from the widget on a real cold start (process killed, not force-stopped)
+
 ## Open questions
 
 None currently.
