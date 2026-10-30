@@ -88,7 +88,7 @@ class MonthCloseContentTest {
     fun `changed month shows only the difference and offers closing again`() {
         var closed = 0
         show(ready(MonthStatus.CHANGED, pendingFood = eur(-20)), MonthCloseActions(onCloseMonth = { closed++ }))
-        compose.onNodeWithText("Expenses or budgets changed since this month was closed. Closing it again records only the differences shown.")
+        compose.onNodeWithText("Expenses changed since this month was closed. Closing it again records only the differences shown.")
             .assertIsDisplayed()
         compose.onAllNodesWithText("−€20.00 debit")[0].assertIsDisplayed() // the line; the net change says the same
         compose.onNodeWithText("Total for this month after closing: €100.00").assertIsDisplayed()

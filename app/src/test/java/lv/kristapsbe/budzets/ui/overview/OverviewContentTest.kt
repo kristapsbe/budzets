@@ -144,4 +144,15 @@ class OverviewContentTest {
         show(ready(MonthSummary(april, null, false, emptyMap()), emptyList(), backupReminder = BackupReminder(null)))
         compose.onNodeWithText("No backup yet", substring = true).assertIsDisplayed()
     }
+
+    @Test
+    fun `a one-off boost is mentioned on its month, and a deleted category is marked`() {
+        val summary = MonthSummary(april, eur(100), false, emptyMap())
+        val deleted = CategoryRow(CategoryId("old"), "Old", true, CategorySummary(CategoryId("old"), null, Money.ZERO, eur(3)), isDeleted = true)
+        show(ready(summary, listOf(deleted)).copy(oneOffTotal = eur(200)))
+
+        compose.onNodeWithText("One-off boost this month: +€200.00, added to Unallocated surplus.").assertIsDisplayed()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Old (deleted)"))
+        compose.onNodeWithText("Old (deleted)").assertIsDisplayed()
+    }
 }

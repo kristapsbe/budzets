@@ -27,6 +27,15 @@ interface CategoryDao {
     @Query("SELECT COALESCE(MAX(sortOrder), -1) FROM categories")
     suspend fun maxSortOrder(): Int
 
+    @Query("SELECT EXISTS(SELECT 1 FROM categories WHERE deletedAt IS NULL)")
+    suspend fun hasCategories(): Boolean
+
+    @Query("SELECT id FROM categories WHERE deletedAt IS NOT NULL")
+    fun observeDeletedIds(): Flow<List<String>>
+
+    @Query("SELECT id FROM categories WHERE deletedAt IS NOT NULL")
+    suspend fun getDeletedIds(): List<String>
+
     @Insert
     suspend fun insert(category: CategoryEntity)
 
@@ -135,6 +144,16 @@ interface ExpenseDao {
     fun observeHasMonetaryData(): Flow<Boolean>
 }
 
+/** One line of a closed month's snapshot; the category columns are null if it has no categories. */
+data class ClosureSnapshotRow(
+    val overallBaseMinor: Long?,
+    val overallDerived: Boolean,
+    val categoryId: String?,
+    val baseMinor: Long?,
+    val boostMinor: Long?,
+    val spentMinor: Long?,
+)
+
 @Dao
 interface SurplusDao {
     @Query("SELECT * FROM surplus_ledger ORDER BY createdAt, rowid")
@@ -157,6 +176,9 @@ interface SurplusDao {
 
     @Query("SELECT * FROM boosts WHERE id = :id")
     suspend fun getBoost(id: String): BoostEntity?
+
+    @Query("SELECT * FROM boosts WHERE destinationCategoryId = :categoryId AND status = 'ACTIVE'")
+    suspend fun getActiveBoostsInto(categoryId: String): List<BoostEntity>
 
     @Insert
     suspend fun insertBoost(boost: BoostEntity)
@@ -191,6 +213,32 @@ interface SurplusDao {
         """
     )
     fun observeClosedMonths(): Flow<List<String>>
+
+    /**
+     * The snapshot of the closure in force for [month]; empty unless the month is closed. One
+     * query, so a close or reopen can never be seen half done.
+     */
+    @Query(
+        """
+        SELECT c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
+        FROM month_closures c
+        LEFT JOIN month_closure_categories r ON r.month = c.month AND r.revision = c.revision
+        WHERE c.month = :month AND c.reopenedAt IS NULL
+          AND c.revision = (SELECT MAX(revision) FROM month_closures WHERE month = c.month)
+        """
+    )
+    fun observeClosureSnapshot(month: String): Flow<List<ClosureSnapshotRow>>
+
+    @Query(
+        """
+        SELECT c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
+        FROM month_closures c
+        LEFT JOIN month_closure_categories r ON r.month = c.month AND r.revision = c.revision
+        WHERE c.month = :month AND c.reopenedAt IS NULL
+          AND c.revision = (SELECT MAX(revision) FROM month_closures WHERE month = c.month)
+        """
+    )
+    suspend fun getClosureSnapshot(month: String): List<ClosureSnapshotRow>
 
     @Insert
     suspend fun insertClosure(closure: MonthClosureEntity)

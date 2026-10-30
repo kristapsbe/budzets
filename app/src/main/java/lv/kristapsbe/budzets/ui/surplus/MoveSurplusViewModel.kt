@@ -104,7 +104,7 @@ class MoveSurplusViewModel(
             val sources = ref.balances.filterValues { it.isPositive }.keys.sortedWith(order)
                 .map { PocketChoice(it.label(byId), ref.balances.getValue(it)) }
             val month = YearMonth.now(clock)
-            val destinations = (ref.categories.filter { it.toRef().isActiveIn(month) }.map { SurplusPocket.Category(it.id) } + SurplusPocket.Unallocated)
+            val destinations = (ref.categories.filter { !it.isDeleted && it.toRef().isActiveIn(month) }.map { SurplusPocket.Category(it.id) } + SurplusPocket.Unallocated)
                 .filter { it != form.from }
                 .map { PocketChoice(it.label(byId), ref.balances[it] ?: Money.ZERO) }
             val parsed = AmountParser.parse(form.amountText, ref.currency)

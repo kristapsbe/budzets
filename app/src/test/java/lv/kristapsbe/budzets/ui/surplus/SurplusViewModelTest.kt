@@ -104,4 +104,65 @@ class SurplusViewModelTest : ViewModelTest() {
         assertEquals(listOf(HistoryKind.REOPEN, HistoryKind.CLOSE_CREDIT), state.history.map { it.kind })
         assertEquals(null, state.history.first().note)
     }
+
+    @Test
+    fun `a deleted category's money shows under Unallocated, and its history keeps its name`() = runTest {
+        val food = categories.create("Food")
+        val clothes = categories.create("Clothes")
+        val clothesPocket = SurplusPocket.Category(clothes.id)
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(monthlyMinor = 10_000), ym("2026-03"))
+        budgets.setTarget(BudgetScope.Category(clothes.id), BudgetTarget(monthlyMinor = 5_000), ym("2026-03"))
+        surplus.closeMonth(ym("2026-03")).ok()
+        surplus.deleteCategory(clothes.id)
+
+        val vm = surplusVm()
+        val state = vm.awaitReady { it.pockets.isNotEmpty() }
+        assertEquals(listOf(SurplusPocket.Category(food.id), SurplusPocket.Unallocated), state.pockets.map { it.label.pocket })
+        assertEquals(eur(50), state.pockets.last().breakdown.available)
+        assertEquals(eur(150), state.total)
+        val entry = state.history.single { it.pocket.pocket == clothesPocket }
+        assertTrue(entry.pocket.isDeleted)
+
+        vm.setFilter(SurplusPocket.Unallocated)
+        assertEquals(listOf(clothesPocket), vm.awaitReady { it.filter != null }.history.map { it.pocket.pocket })
+
+        // A filter saved before the delete lands on the pocket that took its money.
+        vm.setFilter(clothesPocket)
+        assertEquals(SurplusPocket.Unallocated, vm.awaitReady { it.filter != null }.filter)
+    }
+
+    @Test
+    fun `one-off boosts are listed until removed or their month closes, and stay in history`() = runTest {
+        val gift = surplus.addOneOff(ym("2026-04"), eur(200), "Gift").ok()
+        surplus.addOneOff(ym("2026-03"), eur(30)).ok()
+
+        val vm = surplusVm()
+        val state = vm.awaitReady { it.oneOffs.size == 2 }
+        assertEquals(listOf(ym("2026-03"), ym("2026-04")), state.oneOffs.map { it.month })
+        assertEquals(OneOffRow(gift.id, ym("2026-04"), eur(200), "Gift"), state.oneOffs.last())
+        assertEquals(eur(230), state.pockets.single().breakdown.oneOff)
+        assertEquals(eur(230), state.total)
+        assertTrue(state.hasAvailable)
+
+        vm.removeOneOff(gift.id)
+        assertEquals(SurplusMessage.ONE_OFF_REMOVED, vm.message.awaitFirst { it != null })
+        vm.messageShown(SurplusMessage.ONE_OFF_REMOVED)
+        assertEquals(1, vm.awaitReady { it.oneOffs.size == 1 }.oneOffs.size)
+
+        surplus.closeMonth(ym("2026-03")).ok()
+        val after = vm.awaitReady { it.oneOffs.isEmpty() }
+        assertEquals(listOf(HistoryKind.ONE_OFF_REMOVED, HistoryKind.ONE_OFF_ADDED, HistoryKind.ONE_OFF_ADDED), after.history.map { it.kind })
+        assertEquals(ym("2026-04"), after.history.first().month)
+    }
+
+    @Test
+    fun `removing a one-off boost whose money was used says so`() = runTest {
+        val food = categories.create("Food")
+        val gift = surplus.addOneOff(ym("2026-04"), eur(200)).ok()
+        surplus.transfer(SurplusPocket.Unallocated, SurplusPocket.Category(food.id), eur(150)).ok()
+
+        val vm = surplusVm()
+        vm.removeOneOff(gift.id)
+        assertEquals(SurplusMessage.ONE_OFF_USED, vm.message.awaitFirst { it != null })
+    }
 }

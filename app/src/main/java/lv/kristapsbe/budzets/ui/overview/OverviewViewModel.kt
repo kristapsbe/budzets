@@ -44,7 +44,7 @@ import java.time.YearMonth
 
 enum class CloseStatus { OPEN, CLOSED, CHANGED_SINCE_CLOSING }
 
-data class CategoryRow(val id: CategoryId, val name: String, val isArchived: Boolean, val summary: CategorySummary)
+data class CategoryRow(val id: CategoryId, val name: String, val isArchived: Boolean, val summary: CategorySummary, val isDeleted: Boolean = false)
 
 /** Q25: shown while there is data and no backup, or none for [DAYS] days. [daysSinceLast] is null if never. */
 data class BackupReminder(val daysSinceLast: Long?) {
@@ -79,6 +79,8 @@ sealed interface OverviewUiState {
         /** Past months and the current one can be closed (Q14); future ones can't. */
         val canClose: Boolean = false,
         val backupReminder: BackupReminder? = null,
+        /** One-off boosts added to this month. They're in the unallocated surplus, not its budget. */
+        val oneOffTotal: Money = Money.ZERO,
     ) : OverviewUiState {
 
         val hasBudget: Boolean get() = summary.overallEffective.isPositive
@@ -117,6 +119,7 @@ class OverviewViewModel(
         val status: CloseStatus,
         val closed: Set<YearMonth>,
         val totalSurplus: Money,
+        val oneOffTotal: Money,
     )
 
     private fun observeMonth(month: YearMonth) =
@@ -128,14 +131,15 @@ class OverviewViewModel(
                     surplus.hasChangesSinceClosing(ledger, summary) -> CloseStatus.CHANGED_SINCE_CLOSING
                     else -> CloseStatus.CLOSED
                 }
-                MonthFigures(summary, status, closed, SurplusLedger.balances(ledger).values.sumMoney())
+                val oneOffs = SurplusLedger.activeOneOffs(ledger).filter { it.targetMonth == month }
+                MonthFigures(summary, status, closed, SurplusLedger.balances(ledger).values.sumMoney(), oneOffs.map { it.amount }.sumMoney())
             },
             categories.categories,
             combine(settings.currency, settings.lastBackupAt, hasMonetaryData) { currency, lastBackup, hasData ->
                 currency to BackupReminder.due(lastBackup, hasData, clock.instant())
             },
             budgets.configs,
-        ) { (summary, status, closed, totalSurplus), allCategories, (currency, backupReminder), configs ->
+        ) { (summary, status, closed, totalSurplus, oneOffTotal), allCategories, (currency, backupReminder), configs ->
             val today = LocalDate.now(clock)
             OverviewUiState.Ready(
                 month = month,
@@ -143,31 +147,34 @@ class OverviewViewModel(
                 currency = currency,
                 summary = summary,
                 pace = PaceCalculator.pace(summary, today),
-                rows = rows(month, summary, allCategories),
+                rows = rows(month, summary, allCategories, isClosed = month in closed),
                 closeStatus = status,
                 totalSurplus = totalSurplus,
-                hasCategories = allCategories.isNotEmpty(),
+                hasCategories = allCategories.any { !it.isDeleted },
                 unclosedPastMonths = ClosingSchedule.unclosedBudgetedPastMonths(
                     configs, allCategories.map { it.toRef() }, closed, YearMonth.from(today),
                 ),
                 canClose = month <= YearMonth.from(today),
                 backupReminder = backupReminder,
+                oneOffTotal = oneOffTotal,
             ) as OverviewUiState
         }.catch { emit(OverviewUiState.Error(it.message)) }
 
     /**
      * Categories active in [month] (in display order, even without a budget), followed by any
-     * archived category that still has spending or a boost in the month.
+     * archived category that still has spending or a boost in the month. A closed month lists what
+     * it was closed with, however categories have been added, archived or deleted since.
      */
-    private fun rows(month: YearMonth, summary: MonthSummary, all: List<Category>): List<CategoryRow> {
-        val active = all.filter { it.toRef().isActiveIn(month) }
+    private fun rows(month: YearMonth, summary: MonthSummary, all: List<Category>, isClosed: Boolean): List<CategoryRow> {
+        val active = all.filter { if (isClosed) it.id in summary.categories else it.toRef().isActiveIn(month) }
         val activeIds = active.map { it.id }.toSet()
         val byId = all.associateBy { it.id }
         val activeRows = active.map { c ->
-            CategoryRow(c.id, c.name, false, summary.categories[c.id] ?: CategorySummary(c.id, null, Money.ZERO, Money.ZERO))
+            CategoryRow(c.id, c.name, false, summary.categories[c.id] ?: CategorySummary(c.id, null, Money.ZERO, Money.ZERO), isDeleted = !isClosed && c.isDeleted)
         }
         val otherRows = summary.categories.values.filter { it.categoryId !in activeIds }.map { s ->
-            CategoryRow(s.categoryId, byId[s.categoryId]?.name ?: "?", true, s)
+            val category = byId[s.categoryId]
+            CategoryRow(s.categoryId, category?.name ?: "?", true, s, isDeleted = category?.isDeleted == true)
         }
         return activeRows + otherRows
     }

@@ -241,6 +241,9 @@ private fun LineItem(line: CloseLine, money: MoneyFormatter, showPending: Boolea
             else -> stringResource(R.string.close_line_budget, money.format(s.base ?: Money.ZERO), money.format(s.spent))
         }
         Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (line.label.isDeleted) {
+            Text(stringResource(R.string.close_line_deleted), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         if (showPending && !line.pending.isZero) {
             Text(stringResource(R.string.close_line_total_after, money.format(line.effect)), style = MaterialTheme.typography.bodySmall)
         }

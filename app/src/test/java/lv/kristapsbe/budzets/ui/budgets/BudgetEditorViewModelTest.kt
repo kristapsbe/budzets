@@ -139,9 +139,9 @@ class BudgetEditorViewModelTest : ViewModelTest() {
         surplus.closeMonth(ym("2026-03")).ok()
 
         // From February, until the March version takes over: only February.
-        assertEquals(listOf(ym("2026-02")), editor(food.id, "2026-02").awaitEditing().closedMonthsAffected)
-        assertEquals(listOf(ym("2026-03")), editor(food.id, "2026-03").awaitEditing().closedMonthsAffected)
-        assertTrue(editor(food.id, "2026-04").awaitEditing().closedMonthsAffected.isEmpty())
+        assertEquals(listOf(ym("2026-02")), editor(food.id, "2026-02").awaitEditing().closedMonthsInRange)
+        assertEquals(listOf(ym("2026-03")), editor(food.id, "2026-03").awaitEditing().closedMonthsInRange)
+        assertTrue(editor(food.id, "2026-04").awaitEditing().closedMonthsInRange.isEmpty())
     }
 
     @Test

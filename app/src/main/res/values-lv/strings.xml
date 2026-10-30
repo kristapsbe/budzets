@@ -43,7 +43,8 @@
     <string name="month_changed_since_closing">Mainīts pēc mēneša noslēgšanas. Noslēdziet to vēlreiz, lai atjauninātu pārpalikumu.</string>
     <string name="categories_exceed_overall">Kategoriju budžetu summa ir %1$s, kas pārsniedz kopējo budžetu %2$s.</string>
     <string name="saved_surplus">Uzkrātais pārpalikums</string>
-    <string name="saved_surplus_hint">Neiztērētais budžets no noslēgtajiem mēnešiem. Tas nav bankas konta atlikums.</string>
+    <string name="saved_surplus_hint">Neiztērētais budžets no noslēgtajiem mēnešiem un vienreizējie papildinājumi. Tas nav bankas konta atlikums.</string>
+    <string name="overview_one_off">Šī mēneša vienreizējais papildinājums: +%1$s, pievienots nesadalītajam pārpalikumam.</string>
 
     <!-- Overview: categories -->
     <string name="categories">Kategorijas</string>
@@ -51,10 +52,11 @@
     <string name="category_no_budget">Bez budžeta · iztērēts %1$s</string>
     <string name="category_boost">+%1$s papildinājums</string>
     <string name="category_archived">%1$s (arhivēta)</string>
+    <string name="category_deleted_label">%1$s (dzēsta)</string>
 
     <!-- Overview: empty states -->
     <string name="empty_no_categories_title">Vēl nav kategoriju</string>
-    <string name="empty_no_categories_body">Kategorijas palīdz sakārtot izdevumus. Sāciet ar dažām biežāk lietotajām; vēlāk tās var pārdēvēt, pārkārtot vai arhivēt.</string>
+    <string name="empty_no_categories_body">Kategorijas palīdz sakārtot izdevumus. Sāciet ar dažām biežāk lietotajām; vēlāk tās var pārdēvēt, pārkārtot, arhivēt vai dzēst.</string>
     <string name="add_starter_categories">Pievienot sākuma kategorijas</string>
     <string name="empty_no_budget_title">Šim mēnesim nav budžeta</string>
     <string name="empty_no_budget_body">Iestatiet dienas vai nedēļas mērķi, un lietotne aprēķinās mēneša summu.</string>
@@ -125,7 +127,8 @@
     <string name="no_budget">Bez budžeta</string>
     <string name="category_budgets_of_overall">Kategoriju budžeti: %1$s no %2$s</string>
     <string name="budget_unallocated">Nav piešķirts nevienai kategorijai: %1$s. Noslēdzot mēnesi, šī summa kļūst par nesadalītu pārpalikumu.</string>
-    <string name="budgets_month_closed">%1$s ir noslēgts. Ja mainīsiet budžetu, mēnesis būs jānoslēdz vēlreiz.</string>
+    <string name="budgets_month_closed">%1$s ir noslēgts, tāpēc tā budžeti paliek nemainīgi. Izmaiņas sāksies no nākamā atvērtā mēneša. Lai mainītu šo mēnesi, atveriet to no jauna.</string>
+    <string name="closed_months_keep_budget">Noslēgtie mēneši saglabā savus budžetus: %1$s.</string>
     <string name="add_category">Pievienot kategoriju</string>
     <string name="rename_category">Pārdēvēt kategoriju</string>
     <string name="category_name">Nosaukums</string>
@@ -143,8 +146,7 @@
     <string name="archived_categories">Arhivētās</string>
     <string name="archived_from">Arhivēta no: %1$s</string>
     <string name="delete_category_title">Dzēst kategoriju „%1$s”?</string>
-    <string name="delete_category_body">Tiks izdzēsti arī tās budžeti. Kategoriju ar izdevumu vai pārpalikuma vēsturi var tikai paturēt arhīvā.</string>
-    <string name="category_delete_refused">Šai kategorijai ir izdevumu vai pārpalikuma vēsture, tāpēc to var tikai paturēt arhīvā.</string>
+    <string name="delete_category_body">Noslēgtajos mēnešos tā paliks tieši tāda pati. Tās izdevumi paliks nenoslēgtajos mēnešos, un saglabātais pārpalikums pāries uz sadaļu „Nesadalīts”. To nevar atsaukt.</string>
     <string name="category_deleted">Kategorija izdzēsta</string>
     <string name="action_failed">Neizdevās. Mēģiniet vēlreiz.</string>
 
@@ -185,11 +187,12 @@
     <string name="close_no_budget_warning">Šim mēnesim nav budžeta, tāpēc, to noslēdzot, visi tā izdevumi tiks reģistrēti kā parāds.</string>
     <string name="month_was_reopened">Šis mēnesis tika atvērts no jauna. Noslēdzot to, pārpalikums tiks reģistrēts vēlreiz.</string>
     <string name="month_closed_on">Noslēgts: %1$s. Pārpalikums ir reģistrēts zemāk.</string>
-    <string name="month_changed_review">Izdevumi vai budžeti ir mainījušies pēc mēneša noslēgšanas. Noslēdzot vēlreiz, tiks reģistrētas tikai šeit parādītās atšķirības.</string>
+    <string name="month_changed_review">Izdevumi ir mainījušies pēc mēneša noslēgšanas. Noslēdzot vēlreiz, tiks reģistrētas tikai šeit parādītās atšķirības.</string>
     <string name="close_line_budget">Budžets %1$s · iztērēts %2$s</string>
     <string name="close_line_budget_boost">Budžets %1$s + %2$s papildinājums · iztērēts %3$s</string>
     <string name="close_line_no_budget">Bez budžeta, tāpēc iztērētais %1$s tiek reģistrēts kā parāds</string>
     <string name="close_line_unallocated">Kopējais budžets, kas nav piešķirts nevienai kategorijai</string>
+    <string name="close_line_deleted">Šī kategorija ir dzēsta, tāpēc summa tiek uzskaitīta sadaļā „Nesadalīts”</string>
     <string name="close_line_total_after">Šī mēneša kopsumma pēc noslēgšanas: %1$s</string>
     <string name="amount_saved">+%1$s saglabāts</string>
     <string name="amount_debit">−%1$s parāds</string>
@@ -228,12 +231,18 @@
     <string name="breakdown_closing">Noslēgtie mēneši %1$s</string>
     <string name="breakdown_moved">Pārvietots %1$s</string>
     <string name="breakdown_boosts">Papildinājumi %1$s</string>
+    <string name="breakdown_one_off">Vienreizēji papildinājumi %1$s</string>
     <string name="pocket_negative_hint">Pārtērēts. To sedz vēlāks pārpalikums vai pārvietojums.</string>
     <string name="active_boosts">Aktīvie papildinājumi</string>
     <string name="boost_row">+%1$s: %2$s, %3$s</string>
     <string name="boost_from">No: %1$s</string>
     <string name="release_boost">Atcelt</string>
     <string name="boost_released">Papildinājums atcelts. Tā pārpalikums atkal ir pieejams.</string>
+    <string name="one_off_boosts">Vienreizēji papildinājumi</string>
+    <string name="one_off_row">+%1$s: %2$s</string>
+    <string name="one_off_remove">Noņemt</string>
+    <string name="one_off_removed">Vienreizējais papildinājums noņemts.</string>
+    <string name="one_off_already_used">Šī nauda jau ir pārvietota vai izmantota papildinājumam. Vispirms pārvietojiet to atpakaļ uz sadaļu „Nesadalīts”.</string>
     <string name="surplus_history">Vēsture</string>
     <string name="history_close_credit">Neiztērēts: %1$s</string>
     <string name="history_close_debit">Pārtērēts: %1$s</string>
@@ -243,6 +252,8 @@
     <string name="history_moved_in">Pārvietots no: %1$s</string>
     <string name="history_boost">Papildinājums: %1$s, %2$s</string>
     <string name="history_boost_released">Papildinājums atcelts: %1$s, %2$s</string>
+    <string name="history_one_off">Vienreizējs papildinājums: %1$s</string>
+    <string name="history_one_off_removed">Vienreizējais papildinājums noņemts: %1$s</string>
 
     <!-- Move surplus / boost -->
     <string name="move">Pārvietot</string>
@@ -259,6 +270,10 @@
     <string name="boost_from_pocket">Izmantot pārpalikumu no</string>
     <string name="boost_month_closed">%1$s ir noslēgts, tāpēc tā budžetu nevar papildināt.</string>
     <string name="boost_preview">Budžets (%1$s, %2$s): %3$s + %4$s = %5$s</string>
+    <string name="add_one_off_boost">Pievienot vienreizēju papildinājumu</string>
+    <string name="one_off_add">Pievienot</string>
+    <string name="one_off_explanation">Pievienojiet mēnesim papildu naudu, piemēram, dāvanu vai prēmiju. Vispirms tā nonāk nesadalītajā pārpalikumā. No turienes to var pārvietot vai ar to papildināt kategorijas budžetu.</string>
+    <string name="one_off_month_closed">%1$s ir noslēgts, tāpēc tam nevar pievienot vienreizēju papildinājumu.</string>
 
     <!-- Widget -->
     <string name="widget_label">Budzets: šis mēnesis</string>

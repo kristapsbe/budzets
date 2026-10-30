@@ -148,4 +148,17 @@ class MoveAndBoostViewModelTest : ViewModelTest() {
         assertFalse(state.missingSource)
         assertNull(state.amount)
     }
+
+    @Test
+    fun `a deleted category is never a destination, even while the current month is closed`() = runTest {
+        setUp()
+        expenses.add(eur(1), fun_.id, java.time.LocalDate.of(2026, 4, 2))
+        surplus.closeMonth(ym("2026-04")).ok() // from now on Fun stays in April
+        surplus.deleteCategory(fun_.id)
+
+        assertFalse(funPocket in move().awaitEditing().destinations.map { it.label.pocket })
+        val vm = boost()
+        vm.nextMonth()
+        assertFalse(funPocket in vm.awaitEditing { it.month == ym("2026-05") }.destinations.map { it.label.pocket })
+    }
 }

@@ -9,15 +9,18 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -28,7 +31,9 @@ import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.domain.calculation.BudgetPlanning
 import lv.kristapsbe.budzets.domain.calculation.BudgetResolver
+import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.MonthlyPlan
+import lv.kristapsbe.budzets.domain.calculation.MonthlyPlanRule
 import lv.kristapsbe.budzets.domain.model.BudgetConfig
 import lv.kristapsbe.budzets.domain.model.BudgetScope
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
@@ -36,6 +41,7 @@ import lv.kristapsbe.budzets.domain.model.Category
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
+import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
 import java.time.Clock
 import java.time.YearMonth
 
@@ -62,11 +68,13 @@ data class CategoryBudgetRow(
     val archivedFrom: YearMonth?,
     val canMoveUp: Boolean,
     val canMoveDown: Boolean,
+    /** Deleted, but still in the plan of this earlier open month. It can't be changed any more. */
+    val isDeleted: Boolean = false,
 )
 
 data class ArchivedRow(val id: CategoryId, val name: String, val archivedFrom: YearMonth)
 
-enum class BudgetsMessage { DELETE_REFUSED, DELETED, ACTION_FAILED }
+enum class BudgetsMessage { DELETED, ACTION_FAILED }
 
 sealed interface BudgetsUiState {
     data object Loading : BudgetsUiState
@@ -94,7 +102,7 @@ sealed interface BudgetsUiState {
 /**
  * Budgets for the selected month plus category management. Budget versions apply from the month
  * they're saved for (Q11), so the selected month ("YYYY-MM", in [SavedStateHandle]) is also the
- * month an edit starts from.
+ * month an edit starts from. A closed month is read-only and shows the budgets it was closed with.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BudgetsViewModel(
@@ -118,14 +126,48 @@ class BudgetsViewModel(
     val uiState: StateFlow<BudgetsUiState> =
         combine(selectedMonth, reload) { month, _ -> month?.let(YearMonth::parse) ?: YearMonth.now(clock) }
             .flatMapLatest { month ->
-                combine(budgets.configs, categories.categories, settings.currency, surplus.closedMonths) { configs, all, currency, closed ->
-                    ready(month, configs, all, currency, month in closed) as BudgetsUiState
-                }.catch { emit(BudgetsUiState.Error(it.message)) }
+                surplus.closedMonths.map { month in it }.distinctUntilChanged()
+                    .flatMapLatest { isClosed -> if (isClosed) observeClosed(month) else observeOpen(month) }
+                    .catch { emit(BudgetsUiState.Error(it.message)) }
             }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BudgetsUiState.Loading)
 
-    private fun ready(month: YearMonth, configs: List<BudgetConfig>, all: List<Category>, currency: CurrencySpec, isClosed: Boolean): BudgetsUiState.Ready {
+    private fun observeOpen(month: YearMonth): Flow<BudgetsUiState> =
+        combine(budgets.configs, categories.categories, settings.currency) { configs, all, currency -> open(month, configs, all, currency) }
+
+    private fun observeClosed(month: YearMonth): Flow<BudgetsUiState> =
+        combine(budgets.observeMonthSummary(month), categories.categories, settings.currency) { summary, all, currency -> closed(summary, all, currency) }
+
+    /**
+     * The snapshot keeps each budget's monthly amount but not its daily or weekly targets, so
+     * that's what a closed month shows. Categories added since aren't in it.
+     */
+    private fun closed(summary: MonthSummary, all: List<Category>, currency: CurrencySpec): BudgetsUiState.Ready {
+        val month = summary.month
+        fun line(base: Money?): BudgetLine {
+            val target = base?.let { BudgetTarget(monthlyMinor = it.minor) }
+            return BudgetLine(target?.let { MonthlyPlanRule.plan(it, month) }, target, since = null, nextChange = null)
+        }
+        return BudgetsUiState.Ready(
+            month = month,
+            isCurrentMonth = month == YearMonth.now(clock),
+            isClosed = true,
+            currency = currency,
+            overall = line(summary.overallBase.takeUnless { summary.overallDerived }),
+            overallBase = summary.overallBase,
+            overallDerived = summary.overallDerived,
+            categoryTotal = summary.categoryBaseTotal,
+            exceedsOverall = summary.categoryPlansExceedOverall,
+            unallocated = summary.unallocatedBase,
+            categories = all.filter { it.id in summary.categories }.map { c ->
+                CategoryBudgetRow(c.id, c.name, line(summary.categories.getValue(c.id).base), archivedFrom = null, canMoveUp = false, canMoveDown = false)
+            },
+            archived = emptyList(),
+        )
+    }
+
+    private fun open(month: YearMonth, configs: List<BudgetConfig>, all: List<Category>, currency: CurrencySpec): BudgetsUiState.Ready {
         val resolved = BudgetResolver.resolve(month, configs, all.map { it.toRef() })
 
         fun line(scope: BudgetScope, plan: MonthlyPlan?): BudgetLine {
@@ -149,9 +191,10 @@ class BudgetsViewModel(
                 archivedFrom = c.archivedFrom,
                 canMoveUp = index > 0,
                 canMoveDown = index >= 0 && index < movable.lastIndex,
+                isDeleted = c.isDeleted,
             )
         }
-        val archived = all.filter { !it.toRef().isActiveIn(month) }.map { ArchivedRow(it.id, it.name, it.archivedFrom!!) }
+        val archived = all.filter { !it.isDeleted && !it.toRef().isActiveIn(month) }.map { ArchivedRow(it.id, it.name, it.archivedFrom!!) }
         val categoryTotal = BudgetPlanning.categoryTotal(resolved)
         val unallocated = resolved.overallBase
             ?.takeIf { !resolved.overallDerived }
@@ -161,7 +204,7 @@ class BudgetsViewModel(
         return BudgetsUiState.Ready(
             month = month,
             isCurrentMonth = month == YearMonth.now(clock),
-            isClosed = isClosed,
+            isClosed = false,
             currency = currency,
             overall = line(BudgetScope.Overall, resolved.overallPlan),
             overallBase = resolved.overallBase,
@@ -183,8 +226,10 @@ class BudgetsViewModel(
     fun addCategory(name: String) = launchAction { categories.create(name) }
     fun renameCategory(id: CategoryId, name: String) = launchAction { categories.rename(id, name) }
 
-    /** Archived from the current month: earlier months keep the category in their plans. */
-    fun archive(id: CategoryId) = launchAction { categories.archive(id) }
+    /** Archived from the first open month: earlier months keep the category in their plans. */
+    fun archive(id: CategoryId) = launchAction {
+        categories.archive(id, ClosingSchedule.firstOpenMonth(YearMonth.now(clock), surplus.closedMonths.first()))
+    }
     fun unarchive(id: CategoryId) = launchAction { categories.unarchive(id) }
 
     /** Swaps [id] with its neighbour among the categories that aren't archived. */
@@ -198,9 +243,9 @@ class BudgetsViewModel(
         }
     }
 
-    /** Only a category with no history can be deleted; otherwise it must stay archived. */
     fun delete(id: CategoryId) = launchAction {
-        _message.value = if (categories.deleteIfUnused(id)) BudgetsMessage.DELETED else BudgetsMessage.DELETE_REFUSED
+        surplus.deleteCategory(id)
+        _message.value = BudgetsMessage.DELETED
     }
 
     fun messageShown(message: BudgetsMessage) {

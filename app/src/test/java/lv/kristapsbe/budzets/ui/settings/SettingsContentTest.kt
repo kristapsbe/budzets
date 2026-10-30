@@ -134,6 +134,6 @@ class SettingsContentTest {
         list.performScrollToNode(hasText("the highest monthly amount is used", substring = true))
         list.performScrollToNode(hasText("Your data stays on this phone", substring = true))
         list.performScrollToNode(hasText("Budzets 1.0"))
-        compose.onNodeWithText("Data version 2 · backup format 1").assertIsDisplayed()
+        compose.onNodeWithText("Data version 3 · backup format 2").assertIsDisplayed()
     }
 }

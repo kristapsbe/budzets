@@ -18,7 +18,7 @@ class CategoryRepository(
 ) {
     private val dao = db.categoryDao()
 
-    /** All categories, archived included, in display order. */
+    /** All categories, archived and deleted included, in display order. */
     val categories: Flow<List<Category>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }
 
     suspend fun get(id: CategoryId): Category? = dao.get(id.value)?.toDomain()
@@ -39,11 +39,12 @@ class CategoryRepository(
     }
 
     /**
-     * Creates editable starter categories, but only while no category exists.
+     * Creates editable starter categories, but only while there are no categories (deleted ones
+     * don't count).
      * @return false if categories already existed.
      */
     suspend fun createStarterCategories(names: List<String>): Boolean = db.withTransaction {
-        if (dao.maxSortOrder() >= 0) return@withTransaction false
+        if (dao.hasCategories()) return@withTransaction false
         names.forEach { create(it) }
         true
     }
@@ -62,15 +63,6 @@ class CategoryRepository(
         modify(id) { it.copy(archivedFrom = it.archivedFrom ?: fromMonth) }
 
     suspend fun unarchive(id: CategoryId) = modify(id) { it.copy(archivedFrom = null) }
-
-    /**
-     * Deletes a category only if nothing but its budget configs refers to it. Otherwise it
-     * must be archived.
-     * @return true if deleted.
-     */
-    suspend fun deleteIfUnused(id: CategoryId): Boolean = db.withTransaction {
-        if (dao.hasHistory(id.value)) false else dao.delete(id.value) > 0
-    }
 
     private suspend fun modify(id: CategoryId, change: (Category) -> Category) = db.withTransaction {
         val current = requireNotNull(dao.get(id.value)) { "Unknown category" }.toDomain()

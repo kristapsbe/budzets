@@ -44,6 +44,7 @@ import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
 import lv.kristapsbe.budzets.ui.surplus.BoostScreen
 import lv.kristapsbe.budzets.ui.surplus.MoveSurplusScreen
+import lv.kristapsbe.budzets.ui.surplus.OneOffBoostScreen
 import lv.kristapsbe.budzets.ui.settings.SettingsScreen
 import lv.kristapsbe.budzets.ui.surplus.SurplusScreen
 import lv.kristapsbe.budzets.ui.surplus.key
@@ -73,6 +74,9 @@ import kotlin.reflect.KClass
 
 /** Boosts a category's budget for a month with saved surplus. */
 @Serializable data class BoostRoute(val categoryId: String? = null, val month: String? = null)
+
+/** Adds money from outside the budget to a month, into the unallocated surplus. */
+@Serializable data object OneOffBoostRoute
 
 /** Edits [expenseId], or adds a new expense with [categoryId] preselected. */
 @Serializable data class ExpenseEditorRoute(val expenseId: String? = null, val categoryId: String? = null)
@@ -180,6 +184,7 @@ fun BudzetsApp(
                 SurplusScreen(
                     onMove = { navController.navigate(MoveSurplusRoute(it?.key())) },
                     onBoost = { navController.navigate(BoostRoute()) },
+                    onOneOff = { navController.navigate(OneOffBoostRoute) },
                 )
             }
             composable<MonthCloseRoute> {
@@ -190,6 +195,9 @@ fun BudzetsApp(
             }
             composable<BoostRoute> {
                 BoostScreen(onClose = { navController.popBackStack<BoostRoute>(inclusive = true) })
+            }
+            composable<OneOffBoostRoute> {
+                OneOffBoostScreen(onClose = { navController.popBackStack<OneOffBoostRoute>(inclusive = true) })
             }
             composable<SettingsRoute> { SettingsScreen() }
             composable<ExpenseEditorRoute> {

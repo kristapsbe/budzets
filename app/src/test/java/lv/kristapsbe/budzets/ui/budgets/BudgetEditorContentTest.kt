@@ -58,7 +58,7 @@ class BudgetEditorContentTest {
         clearsBudget = draft?.isConfigured == false,
         errors = errors,
         nextChange = next,
-        closedMonthsAffected = closed,
+        closedMonthsInRange = closed,
         categoryTotal = eur(700),
         overallBase = eur(600),
         overallDerived = false,
@@ -115,7 +115,7 @@ class BudgetEditorContentTest {
         compose.onNodeWithText("Applies from January 2026 until May 2026, when a later change takes over.").assertIsDisplayed()
         compose.onNodeWithText("Category budgets would add up to €700.00, more than the overall budget of €600.00.")
             .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Already closed: January 2026. After saving, close it again to update its surplus.")
+        compose.onNodeWithText("Closed months keep their budgets: January 2026.")
             .performScrollTo().assertIsDisplayed()
     }
 

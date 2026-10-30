@@ -50,17 +50,6 @@ class CategoryAndExpenseRepositoryTest : DbTest() {
     }
 
     @Test
-    fun `category with history cannot be deleted, unused one can`() = runTest {
-        val used = categories.create("Used")
-        val unused = categories.create("Unused")
-        expenses.add(eur(1), used.id, LocalDate.of(2026, 4, 1))
-
-        assertFalse(categories.deleteIfUnused(used.id))
-        assertTrue(categories.deleteIfUnused(unused.id))
-        assertEquals(listOf("Used"), categories.categories.first().map { it.name })
-    }
-
-    @Test
     fun `foreign keys are enforced`() = runTest {
         assertThrows(SQLiteConstraintException::class.java) {
             kotlinx.coroutines.runBlocking { expenses.add(eur(1), CategoryId("missing"), LocalDate.of(2026, 4, 1)) }

@@ -61,15 +61,35 @@ class BackupCodecTest {
     private fun JsonObject.withData(edit: (JsonObject) -> JsonObject) = JsonObject(this + ("data" to edit(getValue("data").jsonObject)))
 
     @Test
+    fun `a version 1 file still reads`() {
+        val v1 = edited({ root ->
+            val categories = root.getValue("data").jsonObject.getValue("categories").jsonArray.map { JsonObject(it.jsonObject - "deletedAt") }
+            JsonObject(root.withData { JsonObject(it + ("categories" to JsonArray(categories))) } + ("schemaVersion" to JsonPrimitive(1)))
+        })
+        val backup = ok(decode(v1))
+        assertEquals(1, backup.schemaVersion)
+        assertEquals(valid, backup.data)
+    }
+
+    @Test
+    fun `deletedAt round-trips, and a deleted category must have left plans`() {
+        val deleted = valid.copy(categories = valid.categories + BackupCategory("gone", "Gone", null, 2, "2026-04", t, t, deletedAt = t))
+        assertEquals(deleted, ok(decode(encode(deleted))).data)
+
+        val inPlans = valid.copy(categories = valid.categories + BackupCategory("gone", "Gone", null, 2, null, t, t, deletedAt = t))
+        assertEquals(BackupProblem.DAMAGED, failure(decode(encode(inPlans))).problem)
+    }
+
+    @Test
     fun `a backup reads back exactly`() {
         val backup = ok(decode(encode()))
         assertEquals(valid, backup.data)
         assertEquals(createdAt, backup.createdAt)
         assertEquals("1.0", backup.appVersion)
-        assertEquals(1, backup.schemaVersion)
+        assertEquals(BackupCodec.SCHEMA_VERSION, backup.schemaVersion)
         val text = encode().decodeToString()
         assertTrue(text.contains("\"format\": \"budzets-backup\""))
-        assertTrue(text.contains("\"schemaVersion\": 1"))
+        assertTrue(text.contains("\"schemaVersion\": ${BackupCodec.SCHEMA_VERSION}"))
     }
 
     @Test
@@ -97,7 +117,7 @@ class BackupCodecTest {
 
     @Test
     fun `a newer format is refused, an impossible one is damaged`() {
-        assertEquals(BackupProblem.TOO_NEW, failure(decode(edited({ JsonObject(it + ("schemaVersion" to JsonPrimitive(2))) }))).problem)
+        assertEquals(BackupProblem.TOO_NEW, failure(decode(edited({ JsonObject(it + ("schemaVersion" to JsonPrimitive(BackupCodec.SCHEMA_VERSION + 1))) }))).problem)
         assertEquals(BackupProblem.DAMAGED, failure(decode(edited({ JsonObject(it + ("schemaVersion" to JsonPrimitive(0))) }))).problem)
         assertEquals(BackupProblem.DAMAGED, failure(decode(edited({ JsonObject(it - "schemaVersion") }))).problem)
     }

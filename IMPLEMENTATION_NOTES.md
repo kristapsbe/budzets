@@ -92,7 +92,8 @@ AGP built-in Kotlin.
 - **Q3 — Changes in a closed month:** allowed. `MonthFinalizer.hasChangesSinceClosing`
   detects drift, and closing again posts only per-pocket deltas (`ADJUSTMENT_*`) with
   `revision + 1`. Reopen posts reversing adjustments. It is refused if any pocket would end
-  below zero (surplus already moved or reserved).
+  below zero (surplus already moved or reserved). Since Q27 this covers expenses only: budget
+  and category changes no longer reach a closed month.
 - **Q4 — Boosts:** one boost = one source pocket (category or Unallocated). Allowed for the
   current month and future months that aren't closed. Unspent boost money is part of the
   destination category's remaining, so it becomes that category's surplus at close.
@@ -289,9 +290,10 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
 - **Q11 — Effective month:** a budget change applies from the month shown in the Budgets tab
   (default: the current month) until a later scheduled change, which stays in force. Past
   and future months can be edited. In a closed month the editor shows the "close it again"
-  hint (Q3).
+  hint (Q3). *Superseded in part by Q27: a closed month can't be edited.*
 - **Q12 — Category management:** lives in the Budgets tab: add, rename, archive and
-  unarchive, move up and down, and delete only when the category has no history.
+  unarchive, move up and down, and delete only when the category has no history. *Delete is
+  superseded by Q28.*
 - **Q13 — Monthly target:** budgets can also take a monthly amount. The plan is the **highest**
   of the configured monthly equivalents (daily × N, weekly × N ÷ 7, monthly), never their sum.
 
@@ -1135,6 +1137,66 @@ from how a debug build runs its first frame, and a release build stays far below
     Settings; the app's own language can be set with `cmd locale set-app-locales`.
   - `am kill` leaves the process alive while a Glance session runs, so check `pidof` before
     calling a process dead.
+
+## Closed months, deleting categories, one-off boosts (2026-10-30)
+
+- **The finding:** closed months weren't frozen. `BudgetRepository.summarize` always re-resolved a
+  month from live configs, and `MonthClosure.snapshot` was written but never read for its budgets.
+  A budget saved from a closed or earlier month changed that month and marked it "changed since
+  closing". Archiving during an early-closed month dropped the category from it, unarchiving put
+  it back, and a new category appeared as a row and a filter chip in every past month.
+- **Q27 — Closed months:** a closed month reads its budgets from its snapshot, so budget and
+  category changes can't reach it. Spending and boosts stay live, so a corrected expense is still
+  flagged and closing again still works (Q3). The Budgets tab is read-only for a closed month,
+  and showing a monthly amount only, because the snapshot keeps no daily or weekly targets. To
+  change one, reopen it.
+- **Q28 — Deleting a category:** available on every category in an open month. Without history the
+  row goes, as before. With history a hidden row stays, because closed months, old expenses and
+  the ledger name it and every reference is RESTRICT. Expenses in open months stay and count,
+  marked "(deleted)". Its surplus merges into Unallocated, debts included. Archive stays as the
+  undoable option. Delete can't be undone.
+- **Q29 — One-off boost:** money from outside the budget, added to a month. It lands in
+  Unallocated at once and changes no budget figure until it's moved or used for a boost.
+  We chose this over raising the month's overall budget, because that money couldn't have been
+  given to a category until the month closed.
+- **Q30 — Which months can take one:** any month that isn't closed. It can be removed until that
+  month closes, as long as Unallocated still holds the money.
+- **Implementation:**
+  - `SurplusDao.observeClosureSnapshot` is one joined query rather than the existing mapper over
+    two flows (a deviation from the plan), so a close or reopen is never seen half done.
+  - A deleted category's pocket merges into Unallocated only when balances are read
+    (`SurplusLedger.merged`). Closes, re-closes and reopens still post to its own pocket, so what
+    a month recorded never drifts and `MonthFinalizer` needed no change beyond `reopen`'s shortfall
+    check. Two alternatives were rejected. A transfer at delete time would leave a closed month's
+    credit on an empty pocket, so reopening it would be refused forever. Redirecting closes to
+    Unallocated would make every closed month with that category show as changed.
+  - Archive and delete start at `ClosingSchedule.firstOpenMonth`, not the current month, so a
+    category stays in a month closed early if that month is reopened.
+  - One-off boosts are ledger entries (`ONE_OFF_CREDIT`, `ONE_OFF_REVERSAL`), so no new table.
+  - `OneOffBoostRoute` is a plain object, not the planned route with a month: nothing passes one.
+  - Database v3 adds `categories.deletedAt`. Backup format 2 adds it to categories, along with the
+    new ledger types. Version 1 files still restore. Older apps report a v2 file as too new.
+- **Behaviour to know:**
+  - Reopening puts a month back on live budgets. A budget saved from an earlier open month after
+    closing shows up then. In testing, September reopened at the new €1,500 and closed again at
+    +€1,010 instead of +€510.
+  - A month already "changed since closing" because of a budget edit goes back to Closed with its
+    closing figures. Nothing was posted for that drift, so the ledger stays correct.
+  - Deleting mid-month drops the category's budget from that open month, as Archive does. With an
+    overall budget the amount joins "not assigned to a category"; without one the total falls.
+  - A closed month no longer lists a category that had no budget and no spending when it closed,
+    because the snapshot doesn't hold one. That is what keeps later categories out of it.
+- **Verified:** 325 tests ×3 (68 more than before), lint 0 errors. On the emulator, a v2 database with September
+  closed by the old build upgraded in place. September's Overview, month review, Budgets and
+  Spending were then identical, line by line, after changing the overall and a category budget
+  from August, adding a category, archiving one and deleting one with history. Also: one-off add,
+  remove and closed-month refusal, boosting from it, closing October with spending on a deleted
+  category (figures checked by hand), reopening and re-closing September, and backup, wipe and
+  restore. The new screens in Latvian at 360 dp. `benchmarkRelease`: one-off, delete, backup and
+  the widget, no crashes. The new Latvian strings need the same native speaker's read.
+- **Emulator notes:** a scrolled list leaves the month row under the app bar, where a tap lands on
+  the bar. Scroll to the top before tapping "Next month" in a script. The AVD had no app installed
+  at the start, only `lv.kristapsbe.budzets.test`. It was left that way.
 
 ## Open questions
 

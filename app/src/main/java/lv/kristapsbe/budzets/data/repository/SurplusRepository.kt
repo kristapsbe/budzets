@@ -14,13 +14,16 @@ import lv.kristapsbe.budzets.data.local.toYearMonth
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.model.BoostId
 import lv.kristapsbe.budzets.domain.model.CategoryId
+import lv.kristapsbe.budzets.domain.model.LedgerEntryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.surplus.Boost
 import lv.kristapsbe.budzets.domain.surplus.CloseReview
+import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
 import lv.kristapsbe.budzets.domain.surplus.ClosureError
 import lv.kristapsbe.budzets.domain.surplus.LedgerEntry
+import lv.kristapsbe.budzets.domain.surplus.LedgerEntryType
 import lv.kristapsbe.budzets.domain.surplus.MonthClosure
 import lv.kristapsbe.budzets.domain.surplus.MonthFinalizer
 import lv.kristapsbe.budzets.domain.surplus.SurplusError
@@ -50,11 +53,18 @@ class SurplusRepository(
     newId: () -> String,
 ) {
     private val dao = db.surplusDao()
+    private val categoryDao = db.categoryDao()
     private val operations = SurplusOperations(newId) { clock.instant() }
     private val finalizer = MonthFinalizer(newId) { clock.instant() }
 
+    /** Every entry on the pocket it was posted to; see [SurplusLedger.merged] for balances. */
     val ledger: Flow<List<LedgerEntry>> = dao.observeLedger().map { rows -> rows.map { it.toDomain() } }
-    val balances: Flow<Map<SurplusPocket, Money>> = ledger.map(SurplusLedger::balances)
+
+    /** Per pocket, with deleted categories' money counted as Unallocated. */
+    val balances: Flow<Map<SurplusPocket, Money>> =
+        combine(ledger, categoryDao.observeDeletedIds()) { entries, deleted ->
+            SurplusLedger.balances(SurplusLedger.merged(entries, deleted.map(::CategoryId).toSet()))
+        }
     val boosts: Flow<List<Boost>> = dao.observeBoosts().map { rows -> rows.map { it.toDomain() } }
     val closedMonths: Flow<Set<YearMonth>> = dao.observeClosedMonths().map { rows -> rows.map { it.toYearMonth() }.toSet() }
 
@@ -64,7 +74,7 @@ class SurplusRepository(
         amount: Money,
         note: String? = null,
     ): Outcome<List<LedgerEntry>, SurplusError> = db.withTransaction {
-        val result = operations.transfer(loadLedger(), from, to, amount, note)
+        val result = operations.transfer(loadMergedLedger(), from, to, amount, note)
         if (result is Outcome.Ok) dao.insertEntries(result.value.map { it.toEntity() })
         result
     }
@@ -77,7 +87,7 @@ class SurplusRepository(
         note: String? = null,
     ): Outcome<Boost, SurplusError> = db.withTransaction {
         val result = operations.allocateBoost(
-            loadLedger(), source, destination, month, amount, YearMonth.now(clock), loadClosedMonths(), note,
+            loadMergedLedger(), source, destination, month, amount, YearMonth.now(clock), loadClosedMonths(), note,
         )
         when (result) {
             is Outcome.Ok -> {
@@ -91,7 +101,11 @@ class SurplusRepository(
 
     suspend fun releaseBoost(id: BoostId): Outcome<Boost, SurplusError> = db.withTransaction {
         val boost = requireNotNull(dao.getBoost(id.value)) { "Unknown boost" }.toDomain()
-        when (val result = operations.releaseBoost(boost, loadClosedMonths())) {
+        release(boost, loadClosedMonths())
+    }
+
+    private suspend fun release(boost: Boost, closedMonths: Set<YearMonth>): Outcome<Boost, SurplusError> =
+        when (val result = operations.releaseBoost(boost, closedMonths)) {
             is Outcome.Ok -> {
                 dao.insertEntries(listOf(result.value.entry.toEntity()))
                 dao.updateBoost(result.value.boost.toEntity())
@@ -99,6 +113,47 @@ class SurplusRepository(
             }
             is Outcome.Err -> result
         }
+
+    /** Adds money from outside the budget to [month], into the unallocated pocket. */
+    suspend fun addOneOff(month: YearMonth, amount: Money, note: String? = null): Outcome<LedgerEntry, SurplusError> = db.withTransaction {
+        val result = operations.addOneOff(month, amount, loadClosedMonths(), note)
+        if (result is Outcome.Ok) dao.insertEntries(listOf(result.value.toEntity()))
+        result
+    }
+
+    /** Takes a one-off boost out again; [id] is its credit entry. */
+    suspend fun removeOneOff(id: LedgerEntryId): Outcome<LedgerEntry, SurplusError> = db.withTransaction {
+        val entries = loadMergedLedger()
+        val credit = requireNotNull(entries.firstOrNull { it.id == id && it.type == LedgerEntryType.ONE_OFF_CREDIT }) { "Unknown one-off boost" }
+        val result = operations.removeOneOff(entries, credit, loadClosedMonths())
+        if (result is Outcome.Ok) dao.insertEntries(listOf(result.value.toEntity()))
+        result
+    }
+
+    /**
+     * Deletes a category. Without history it is simply removed. With history its row stays, hidden,
+     * because closed months, old expenses and the ledger still name it. It leaves plans from the
+     * first open month, its boosts for open months are released, and its surplus pocket counts as
+     * Unallocated from now on. Closed months are untouched: they read their own snapshot.
+     */
+    suspend fun deleteCategory(id: CategoryId): Unit = db.withTransaction {
+        if (!categoryDao.hasHistory(id.value)) {
+            categoryDao.delete(id.value)
+            return@withTransaction
+        }
+        val closed = loadClosedMonths()
+        dao.getActiveBoostsInto(id.value).map { it.toDomain() }
+            .filter { it.targetMonth !in closed }
+            .forEach { release(it, closed) }
+        val category = requireNotNull(categoryDao.get(id.value)) { "Unknown category" }.toDomain()
+        val now = clock.instant()
+        categoryDao.update(
+            category.copy(
+                archivedFrom = category.archivedFrom ?: ClosingSchedule.firstOpenMonth(YearMonth.now(clock), closed),
+                deletedAt = now,
+                updatedAt = now,
+            ).toEntity(),
+        )
     }
 
     suspend fun latestClosure(month: YearMonth): MonthClosure? = db.withTransaction {
@@ -148,7 +203,7 @@ class SurplusRepository(
 
     suspend fun reopenMonth(month: YearMonth): Outcome<MonthClosure, ClosureError> = db.withTransaction {
         val latest = latestClosure(month) ?: return@withTransaction Outcome.Err(ClosureError.NotClosed)
-        when (val result = finalizer.reopen(loadLedger(), latest)) {
+        when (val result = finalizer.reopen(loadLedger(), latest, loadDeleted())) {
             is Outcome.Ok -> {
                 dao.insertEntries(result.value.entries.map { it.toEntity() })
                 dao.updateClosure(result.value.closure.toEntity())
@@ -159,6 +214,11 @@ class SurplusRepository(
     }
 
     private suspend fun loadLedger(): List<LedgerEntry> = dao.getLedger().map { it.toDomain() }
+
+    private suspend fun loadDeleted(): Set<CategoryId> = categoryDao.getDeletedIds().map(::CategoryId).toSet()
+
+    /** What balance checks read; closing and reviewing a month use [loadLedger]. */
+    private suspend fun loadMergedLedger(): List<LedgerEntry> = SurplusLedger.merged(loadLedger(), loadDeleted())
 
     private suspend fun loadClosedMonths(): Set<YearMonth> = dao.getClosedMonths().map { it.toYearMonth() }.toSet()
 }

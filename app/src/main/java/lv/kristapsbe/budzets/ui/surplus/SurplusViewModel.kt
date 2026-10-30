@@ -35,6 +35,7 @@ import lv.kristapsbe.budzets.domain.surplus.LedgerEntry
 import lv.kristapsbe.budzets.domain.surplus.LedgerEntryType
 import lv.kristapsbe.budzets.domain.surplus.MonthFinalizer
 import lv.kristapsbe.budzets.domain.surplus.PocketBreakdown
+import lv.kristapsbe.budzets.domain.surplus.SurplusError
 import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import java.time.Clock
 import java.time.LocalDate
@@ -52,9 +53,12 @@ data class BoostRow(
     val canRelease: Boolean,
 )
 
+/** A one-off boost for a month that isn't closed; [id] is its credit entry. */
+data class OneOffRow(val id: LedgerEntryId, val month: YearMonth, val amount: Money, val note: String?)
+
 /** What a ledger entry was, in the user's terms. */
 enum class HistoryKind {
-    CLOSE_CREDIT, CLOSE_DEBIT, RECLOSE_ADJUSTMENT, REOPEN, MOVED_OUT, MOVED_IN, BOOST_RESERVED, BOOST_RELEASED
+    CLOSE_CREDIT, CLOSE_DEBIT, RECLOSE_ADJUSTMENT, REOPEN, MOVED_OUT, MOVED_IN, BOOST_RESERVED, BOOST_RELEASED, ONE_OFF_ADDED, ONE_OFF_REMOVED
 }
 
 data class HistoryRow(
@@ -64,7 +68,7 @@ data class HistoryRow(
     val pocket: PocketLabel,
     /** Signed: what the entry did to [pocket]'s balance. */
     val amount: Money,
-    /** The month a closing entry came from, or the month a boost applies to. */
+    /** The month a closing entry came from, or the month a boost or one-off boost applies to. */
     val month: YearMonth?,
     /** The other side of a transfer, or the boosted category. */
     val counterpart: PocketLabel?,
@@ -79,6 +83,7 @@ sealed interface SurplusUiState {
         val total: Money,
         val pockets: List<PocketRow>,
         val boosts: List<BoostRow>,
+        val oneOffs: List<OneOffRow> = emptyList(),
         /** Newest first; only [filter]'s pocket when one is selected. */
         val history: List<HistoryRow>,
         val filter: SurplusPocket?,
@@ -87,10 +92,11 @@ sealed interface SurplusUiState {
     ) : SurplusUiState
 }
 
-enum class SurplusMessage { BOOST_RELEASED, FAILED }
+enum class SurplusMessage { BOOST_RELEASED, ONE_OFF_REMOVED, ONE_OFF_USED, FAILED }
 
 /**
- * Saved surplus per pocket, active boosts and the ledger history. The history filter (a pocket
+ * Saved surplus per pocket, active boosts and the ledger history. Deleted categories' money counts
+ * as Unallocated, while their history rows keep the category's name. The history filter (a pocket
  * key) lives in [SavedStateHandle].
  */
 class SurplusViewModel(
@@ -114,8 +120,9 @@ class SurplusViewModel(
                 val (all, currency) = meta
                 val byId = all.associateBy { it.id }
                 val order = pocketOrder(all)
-                val breakdown = SurplusLedger.breakdown(ledger)
-                val filter = key?.let(::pocketFromKey)
+                val deleted = all.filter { it.isDeleted }.map { it.id }.toSet()
+                val breakdown = SurplusLedger.breakdown(SurplusLedger.merged(ledger, deleted))
+                val filter = key?.let(::pocketFromKey)?.let { SurplusLedger.effectivePocket(it, deleted) }
                 SurplusUiState.Ready(
                     currency = currency,
                     total = breakdown.values.fold(Money.ZERO) { acc, b -> acc + b.available },
@@ -123,7 +130,10 @@ class SurplusViewModel(
                     boosts = boosts.filter { it.status == BoostStatus.ACTIVE }.sortedBy { it.targetMonth }.map { b ->
                         BoostRow(b.id, b.targetMonth, SurplusPocket.Category(b.destination).label(byId), b.source.label(byId), b.amount, b.targetMonth !in closed)
                     },
-                    history = history(ledger, boosts, byId, filter),
+                    oneOffs = SurplusLedger.activeOneOffs(ledger).filter { it.targetMonth !in closed }.sortedBy { it.targetMonth }.map {
+                        OneOffRow(it.id, requireNotNull(it.targetMonth), it.amount, it.note)
+                    },
+                    history = history(ledger, boosts, byId, filter, deleted),
                     filter = filter,
                     hasAvailable = breakdown.values.any { it.available.isPositive },
                 ) as SurplusUiState
@@ -137,12 +147,13 @@ class SurplusViewModel(
         boosts: List<Boost>,
         byId: Map<CategoryId, Category>,
         filter: SurplusPocket?,
+        deleted: Set<CategoryId>,
     ): List<HistoryRow> {
         val entries = ledger.associateBy { it.id }
         val boostById = boosts.associateBy { it.id }
         val zone = clock.zone
         return ledger.asReversed()
-            .filter { filter == null || it.pocket == filter }
+            .filter { filter == null || SurplusLedger.effectivePocket(it.pocket, deleted) == filter }
             .map { e ->
                 val kind = when (e.type) {
                     LedgerEntryType.FINALIZE_CREDIT -> HistoryKind.CLOSE_CREDIT
@@ -153,6 +164,8 @@ class SurplusViewModel(
                     LedgerEntryType.TRANSFER_IN -> HistoryKind.MOVED_IN
                     LedgerEntryType.BOOST_RESERVE -> HistoryKind.BOOST_RESERVED
                     LedgerEntryType.BOOST_RELEASE -> HistoryKind.BOOST_RELEASED
+                    LedgerEntryType.ONE_OFF_CREDIT -> HistoryKind.ONE_OFF_ADDED
+                    LedgerEntryType.ONE_OFF_REVERSAL -> HistoryKind.ONE_OFF_REMOVED
                 }
                 val counterpart = when (kind) {
                     HistoryKind.MOVED_OUT, HistoryKind.MOVED_IN -> e.relatedEntryId?.let(entries::get)?.pocket?.label(byId)
@@ -182,6 +195,17 @@ class SurplusViewModel(
         viewModelScope.launch {
             val result = runCatching { surplus.releaseBoost(id) }.getOrNull()
             _message.value = if (result is Outcome.Ok) SurplusMessage.BOOST_RELEASED else SurplusMessage.FAILED
+        }
+    }
+
+    fun removeOneOff(id: LedgerEntryId) {
+        viewModelScope.launch {
+            val result = runCatching { surplus.removeOneOff(id) }.getOrNull()
+            _message.value = when {
+                result is Outcome.Ok -> SurplusMessage.ONE_OFF_REMOVED
+                (result as? Outcome.Err)?.error is SurplusError.InsufficientSurplus -> SurplusMessage.ONE_OFF_USED
+                else -> SurplusMessage.FAILED
+            }
         }
     }
 

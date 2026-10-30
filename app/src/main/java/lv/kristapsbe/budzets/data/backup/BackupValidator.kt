@@ -38,6 +38,8 @@ internal object BackupValidator {
             check(c.name.isNotBlank()) { "category ${c.id} has no name" }
             check(c.archivedFrom == null || isMonth(c.archivedFrom)) { "category ${c.id}: archivedFrom" }
             check(isInstant(c.createdAt) && isInstant(c.updatedAt)) { "category ${c.id}: timestamps" }
+            check(c.deletedAt == null || isInstant(c.deletedAt)) { "category ${c.id}: deletedAt" }
+            check(c.deletedAt == null || c.archivedFrom != null) { "category ${c.id}: deleted but still in plans" }
         }
         for (b in data.budgetConfigs) {
             check(b.categoryId == null || b.categoryId in categoryIds) { "budget ${b.id}: unknown category" }

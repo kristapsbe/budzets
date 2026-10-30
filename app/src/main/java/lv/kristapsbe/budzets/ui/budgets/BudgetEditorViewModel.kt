@@ -59,8 +59,8 @@ sealed interface BudgetEditorState {
         val errors: TargetErrors,
         /** When a later version takes over; this edit applies until then. */
         val nextChange: YearMonth?,
-        /** Closed months in the range this edit applies to (Q3: close them again). */
-        val closedMonthsAffected: List<YearMonth>,
+        /** Closed months within the range this edit covers. They keep the budgets they were closed with. */
+        val closedMonthsInRange: List<YearMonth>,
         /** With the draft applied to [month]. */
         val categoryTotal: Money,
         val overallBase: Money?,
@@ -135,7 +135,7 @@ class BudgetEditorViewModel(
                 clearsBudget = draft?.isConfigured == false,
                 errors = visibleErrors(parsed),
                 nextChange = nextChange,
-                closedMonthsAffected = ref.closedMonths.filter { it >= month && (nextChange == null || it < nextChange) }.sorted(),
+                closedMonthsInRange = ref.closedMonths.filter { it >= month && (nextChange == null || it < nextChange) }.sorted(),
                 categoryTotal = BudgetPlanning.categoryTotal(resolved),
                 overallBase = resolved.overallBase,
                 overallDerived = resolved.overallDerived,

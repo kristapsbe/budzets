@@ -214,7 +214,7 @@ class SettingsViewModel(
         return RestorePreview(
             createdAt = backup.createdAt,
             currency = backup.currency,
-            categories = data.categories.size,
+            categories = data.categories.count { it.deletedAt == null },
             expenses = data.expenses.size,
             closedMonths = closedMonths,
             firstExpense = dates.minOrNull(),

@@ -2,7 +2,8 @@
 
 An offline Android budgeting app. You log expenses, set daily, weekly or monthly targets
 overall and per category, and close each month to turn unspent budget into surplus. That surplus
-can be moved between categories or used to boost a later month. A home-screen widget shows the
+can be moved between categories or used to boost a later month, and one-off boosts add extra money
+to it. A home-screen widget shows the
 month at a glance, and backups are files you save yourself to Google Drive or the phone.
 
 - **Spec:** `PROJECT_PLAN.md`.
@@ -95,6 +96,19 @@ Start-up performance above):
 `AppContainer` creates the dependencies; there is no DI framework. Every write goes through
 Room, so the screens and the widget update from Room's invalidation without extra hooks.
 
+## Closed months and deleted categories
+
+- **A closed month keeps its budgets.** Changing a budget or adding, archiving or deleting a
+  category never reaches it. Its budgets are read-only; reopen the month to change them, which
+  puts it back on the budgets as they now stand. Correcting an expense in a closed month is still
+  allowed, and closing it again records the difference.
+- **Deleting a category** can't be undone. Closed months keep it as it was. Its expenses in open
+  months stay and count, marked "(deleted)". Its saved surplus, or debt, merges into Unallocated.
+  Archive is the reversible option.
+- **One-off boosts** add money from outside the budget to a month that isn't closed. The money goes
+  straight into the Unallocated surplus, and changes no budget until you move it or use it for a
+  boost.
+
 ## Data, backup and privacy
 
 - **No account and no server.** The app has no internet permission. All data is on the phone.
@@ -108,6 +122,7 @@ Room, so the screens and the widget update from Room's invalidation without extr
   - Restoring **replaces** all data; it never merges.
   - The previous data is kept privately on the phone, so *Undo restore* can put it back until
     the next restore.
+  - A backup from a newer app version is refused. Older backups still restore.
 - **Reminder:** Overview reminds you to back up when you have data and no backup in 30 days.
 - **Android's own backup:** Google's cloud backup carries nothing. A device-to-device transfer
   (setting up a new phone from the old one) carries the data over.

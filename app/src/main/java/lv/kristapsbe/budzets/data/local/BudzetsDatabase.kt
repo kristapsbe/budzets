@@ -41,7 +41,7 @@ abstract class BudzetsDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "budzets.db"
-        const val VERSION = 2
+        const val VERSION = 3
 
         /**
          * Never add a destructive-migration fallback. A missing migration must fail loudly
@@ -60,6 +60,13 @@ abstract class BudzetsDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2)
+        /** v2 → v3: categories with history can be deleted, which only hides them. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE categories ADD COLUMN deletedAt INTEGER")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

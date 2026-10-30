@@ -40,6 +40,12 @@ class WidgetStateTest {
     }
 
     @Test
+    fun `only deleted categories means not set up`() {
+        val deleted = category(FOOD, "Food").copy(archivedFrom = april, deletedAt = FIXED_NOW)
+        assertEquals(WidgetState.NotSetUp, build(MonthSummary(april, null, false, emptyMap()), cats = listOf(deleted)))
+    }
+
+    @Test
     fun `budgeted month - remaining, progress, status and days left`() {
         val summary = MonthSummary(april, eur(600), false, mapOf(FOOD to CategorySummary(FOOD, eur(300), Money.ZERO, eur(150))))
         val state = build(summary, mapOf(FOOD_POCKET to eur(80), SurplusPocket.Unallocated to eur(-30))) as WidgetState.Month

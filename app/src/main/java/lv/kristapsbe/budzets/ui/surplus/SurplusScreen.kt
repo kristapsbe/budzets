@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.BoostId
+import lv.kristapsbe.budzets.domain.model.LedgerEntryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
@@ -55,6 +56,7 @@ import java.util.Locale
 fun SurplusScreen(
     onMove: (SurplusPocket?) -> Unit,
     onBoost: () -> Unit,
+    onOneOff: () -> Unit,
     viewModel: SurplusViewModel = viewModel(factory = SurplusViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -62,6 +64,8 @@ fun SurplusScreen(
     val snackbar = remember { SnackbarHostState() }
     val texts = mapOf(
         SurplusMessage.BOOST_RELEASED to stringResource(R.string.boost_released),
+        SurplusMessage.ONE_OFF_REMOVED to stringResource(R.string.one_off_removed),
+        SurplusMessage.ONE_OFF_USED to stringResource(R.string.one_off_already_used),
         SurplusMessage.FAILED to stringResource(R.string.action_failed),
     )
     LaunchedEffect(message) {
@@ -72,7 +76,14 @@ fun SurplusScreen(
     }
     SurplusContent(
         state = state,
-        actions = SurplusActions(onMove = onMove, onBoost = onBoost, onFilter = viewModel::setFilter, onRelease = viewModel::releaseBoost),
+        actions = SurplusActions(
+            onMove = onMove,
+            onBoost = onBoost,
+            onOneOff = onOneOff,
+            onFilter = viewModel::setFilter,
+            onRelease = viewModel::releaseBoost,
+            onRemoveOneOff = viewModel::removeOneOff,
+        ),
         snackbarHostState = snackbar,
     )
 }
@@ -80,8 +91,10 @@ fun SurplusScreen(
 data class SurplusActions(
     val onMove: (SurplusPocket?) -> Unit = {},
     val onBoost: () -> Unit = {},
+    val onOneOff: () -> Unit = {},
     val onFilter: (SurplusPocket?) -> Unit = {},
     val onRelease: (BoostId) -> Unit = {},
+    val onRemoveOneOff: (LedgerEntryId) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -137,6 +150,12 @@ private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padd
                 }
             }
         }
+        // Always available: it's how money arrives before any month has been closed.
+        item(key = "one-off-action") {
+            OutlinedButton(onClick = actions.onOneOff, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Text(stringResource(R.string.add_one_off_boost))
+            }
+        }
 
         if (state.pockets.isEmpty()) {
             item(key = "empty") {
@@ -156,6 +175,11 @@ private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padd
         if (state.boosts.isNotEmpty()) {
             item(key = "boosts-header") { Header(stringResource(R.string.active_boosts)) }
             items(state.boosts, key = { "boost-${it.id.value}" }) { row -> BoostItem(row, money, locale, actions.onRelease) }
+        }
+
+        if (state.oneOffs.isNotEmpty()) {
+            item(key = "one-offs-header") { Header(stringResource(R.string.one_off_boosts)) }
+            items(state.oneOffs, key = { "one-off-${it.id.value}" }) { row -> OneOffItem(row, money, locale, actions.onRemoveOneOff) }
         }
 
         item(key = "history-header") { Header(stringResource(R.string.surplus_history)) }
@@ -187,6 +211,7 @@ private fun PocketItem(row: PocketRow, money: MoneyFormatter) {
         b.fromClosing.takeIf { !it.isZero }?.let { stringResource(R.string.breakdown_closing, signed(it, money)) },
         b.moved.takeIf { !it.isZero }?.let { stringResource(R.string.breakdown_moved, signed(it, money)) },
         b.boosts.takeIf { !it.isZero }?.let { stringResource(R.string.breakdown_boosts, signed(it, money)) },
+        b.oneOff.takeIf { !it.isZero }?.let { stringResource(R.string.breakdown_one_off, signed(it, money)) },
     )
     ListItem(
         headlineContent = { Text(row.label.text()) },
@@ -219,6 +244,15 @@ private fun BoostItem(row: BoostRow, money: MoneyFormatter, locale: Locale, onRe
 }
 
 @Composable
+private fun OneOffItem(row: OneOffRow, money: MoneyFormatter, locale: Locale, onRemove: (LedgerEntryId) -> Unit) {
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.one_off_row, money.format(row.amount), row.month.displayName(locale))) },
+        supportingContent = row.note?.let { { Text(it) } },
+        trailingContent = { TextButton(onClick = { onRemove(row.id) }) { Text(stringResource(R.string.one_off_remove)) } },
+    )
+}
+
+@Composable
 private fun HistoryItem(row: HistoryRow, money: MoneyFormatter, locale: Locale, showPocket: Boolean) {
     val month = row.month?.displayName(locale).orEmpty()
     val other = row.counterpart?.text().orEmpty()
@@ -231,6 +265,8 @@ private fun HistoryItem(row: HistoryRow, money: MoneyFormatter, locale: Locale, 
         HistoryKind.MOVED_IN -> stringResource(R.string.history_moved_in, other)
         HistoryKind.BOOST_RESERVED -> stringResource(R.string.history_boost, other, month)
         HistoryKind.BOOST_RELEASED -> stringResource(R.string.history_boost_released, other, month)
+        HistoryKind.ONE_OFF_ADDED -> stringResource(R.string.history_one_off, month)
+        HistoryKind.ONE_OFF_REMOVED -> stringResource(R.string.history_one_off_removed, month)
     }
     val details = listOfNotNull(
         row.date.dayName(locale, LocalDate.now().year, short = true),

@@ -47,7 +47,7 @@ data class BackupFailure(val problem: BackupProblem, val detail: String)
  */
 object BackupCodec {
     const val FORMAT = "budzets-backup"
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
 
     /** Years of daily expenses come to a few MB; anything far larger isn't ours. */
     const val MAX_BYTES = 64 * 1024 * 1024
@@ -93,8 +93,8 @@ object BackupCodec {
         val createdAt = root.string("createdAt")?.let(::parseInstant)
             ?: return fail(BackupProblem.DAMAGED, "createdAt missing or invalid")
 
-        // Version 1 is the only format so far. A later version keeps reading older ones by
-        // upgrading their `data` here before it is decoded.
+        // Version 1 decodes as it is: it only lacks what version 2 added, which has defaults. A
+        // later version keeps reading older ones by upgrading their `data` here before decoding.
         val data = try {
             compact.decodeFromJsonElement(BackupData.serializer(), dataJson)
         } catch (e: SerializationException) {

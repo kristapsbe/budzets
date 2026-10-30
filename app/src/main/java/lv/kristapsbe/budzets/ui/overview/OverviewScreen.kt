@@ -56,6 +56,7 @@ import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.categoryName
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
@@ -230,6 +231,9 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
                 }
             }
         }
+        if (state.oneOffTotal.isPositive) {
+            item { Banner(Icons.Filled.Info, stringResource(R.string.overview_one_off, money.format(state.oneOffTotal))) }
+        }
         if (state.summary.categoryPlansExceedOverall) {
             item {
                 Banner(
@@ -361,7 +365,7 @@ private fun CategoryRowItem(row: CategoryRow, money: MoneyFormatter, onClick: ()
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (row.isArchived) stringResource(R.string.category_archived, row.name) else row.name,
+                categoryName(row.name, row.isArchived, row.isDeleted),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )

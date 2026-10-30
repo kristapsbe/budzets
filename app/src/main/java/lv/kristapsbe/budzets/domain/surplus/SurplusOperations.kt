@@ -16,6 +16,7 @@ sealed interface SurplusError {
     data object MonthInPast : SurplusError
     data object MonthClosed : SurplusError
     data object AlreadyReleased : SurplusError
+    data object AlreadyRemoved : SurplusError
 }
 
 data class BoostAllocation(val boost: Boost, val entry: LedgerEntry)
@@ -95,6 +96,41 @@ class SurplusOperations(
             targetMonth = boost.targetMonth, relatedEntryId = boost.reserveEntryId, boostId = boost.id,
         )
         return Outcome.Ok(BoostRelease(boost.copy(status = BoostStatus.RELEASED, releasedAt = at), entry))
+    }
+
+    /**
+     * Adds money from outside the budget to [month]. It goes straight into the unallocated pocket,
+     * so it can be moved or used for a boost at once, and changes no budget until it is. Any month
+     * that isn't closed can take one.
+     */
+    fun addOneOff(
+        month: YearMonth,
+        amount: Money,
+        closedMonths: Set<YearMonth>,
+        note: String? = null,
+    ): Outcome<LedgerEntry, SurplusError> {
+        if (!amount.isPositive) return Outcome.Err(SurplusError.NotPositive)
+        if (month in closedMonths) return Outcome.Err(SurplusError.MonthClosed)
+        val entry = LedgerEntry(
+            LedgerEntryId(newId()), LedgerEntryType.ONE_OFF_CREDIT, SurplusPocket.Unallocated, amount, now(),
+            targetMonth = month, note = note,
+        )
+        return Outcome.Ok(entry)
+    }
+
+    /** Takes a one-off boost back out, while its month is open and its money hasn't been used. */
+    fun removeOneOff(ledger: List<LedgerEntry>, credit: LedgerEntry, closedMonths: Set<YearMonth>): Outcome<LedgerEntry, SurplusError> {
+        if (ledger.any { it.type == LedgerEntryType.ONE_OFF_REVERSAL && it.relatedEntryId == credit.id }) {
+            return Outcome.Err(SurplusError.AlreadyRemoved)
+        }
+        if (credit.targetMonth in closedMonths) return Outcome.Err(SurplusError.MonthClosed)
+        checkAvailable(ledger, credit.pocket, credit.amount)?.let { return Outcome.Err(it) }
+
+        val entry = LedgerEntry(
+            LedgerEntryId(newId()), LedgerEntryType.ONE_OFF_REVERSAL, credit.pocket, credit.amount, now(),
+            targetMonth = credit.targetMonth, relatedEntryId = credit.id,
+        )
+        return Outcome.Ok(entry)
     }
 
     private fun checkAvailable(ledger: List<LedgerEntry>, pocket: SurplusPocket, amount: Money): SurplusError? {

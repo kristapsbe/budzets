@@ -24,6 +24,7 @@ import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
+import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.domain.model.Category
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
@@ -41,6 +42,7 @@ data class ExpenseRow(
     val categoryName: String,
     val isArchivedCategory: Boolean,
     val note: String?,
+    val isDeletedCategory: Boolean = false,
 )
 
 data class DayGroup(val date: LocalDate, val total: Money, val rows: List<ExpenseRow>)
@@ -85,6 +87,7 @@ class TransactionsViewModel(
     private val expenses: ExpenseRepository,
     private val categories: CategoryRepository,
     private val settings: SettingsRepository,
+    private val surplus: SurplusRepository,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -108,11 +111,12 @@ class TransactionsViewModel(
     private fun observeMonth(month: YearMonth) =
         combine(
             expenses.observeMonth(month),
-            categories.categories,
+            combine(categories.categories, surplus.closedMonths, ::Pair),
             settings.currency,
             selectedCategory,
             query,
-        ) { monthExpenses, allCategories, currency, categoryId, text ->
+        ) { monthExpenses, (allCategories, closed), currency, categoryId, text ->
+            val isClosed = month in closed
             val today = LocalDate.now(clock)
             val selected = categoryId?.let(::CategoryId)
             val byId = allCategories.associateBy { it.id }
@@ -126,31 +130,33 @@ class TransactionsViewModel(
                 isCurrentMonth = month == YearMonth.from(today),
                 today = today,
                 currency = currency,
-                chips = chips(month, allCategories, monthExpenses, selected),
+                chips = chips(month, allCategories, monthExpenses, selected, isClosed),
                 selectedCategory = selected,
                 query = text,
                 days = shown.groupBy { it.date }.map { (date, dayExpenses) ->
-                    DayGroup(date, dayExpenses.map { it.amount }.sumMoney(), dayExpenses.map { it.toRow(byId) })
+                    DayGroup(date, dayExpenses.map { it.amount }.sumMoney(), dayExpenses.map { it.toRow(byId, isClosed) })
                 },
                 total = shown.map { it.amount }.sumMoney(),
                 count = shown.size,
-                hasCategories = allCategories.isNotEmpty(),
+                hasCategories = allCategories.any { !it.isDeleted },
             ) as TransactionsUiState
         }.catch { emit(TransactionsUiState.Error(it.message)) }
 
     /**
      * Categories active in [month] in display order, then archived ones that have spending in it.
-     * The selected category is always included so the active filter stays visible.
+     * The selected category is always included so the active filter stays visible. A closed month
+     * offers only what it has spending in, so categories added since don't appear in it.
      */
-    private fun chips(month: YearMonth, all: List<Category>, monthExpenses: List<Expense>, selected: CategoryId?): List<CategoryChip> {
+    private fun chips(month: YearMonth, all: List<Category>, monthExpenses: List<Expense>, selected: CategoryId?, isClosed: Boolean): List<CategoryChip> {
         val used = monthExpenses.map { it.categoryId }.toSet()
-        return all.filter { it.toRef().isActiveIn(month) || it.id in used || it.id == selected }
+        return all.filter { (!isClosed && it.toRef().isActiveIn(month)) || it.id in used || it.id == selected }
             .map { CategoryChip(it.id, it.name) }
     }
 
-    private fun Expense.toRow(byId: Map<CategoryId, Category>): ExpenseRow {
+    /** Rows of a closed month carry no archived or deleted mark: it shows what it was closed with. */
+    private fun Expense.toRow(byId: Map<CategoryId, Category>, isClosed: Boolean): ExpenseRow {
         val category = byId[categoryId]
-        return ExpenseRow(id, amount, category?.name ?: "?", category?.isArchived == true, note)
+        return ExpenseRow(id, amount, category?.name ?: "?", !isClosed && category?.isArchived == true, note, !isClosed && category?.isDeleted == true)
     }
 
     fun previousMonth() { savedState[KEY_MONTH] = month.minusMonths(1).toString() }
@@ -189,7 +195,7 @@ class TransactionsViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as BudzetsApplication).container
-                TransactionsViewModel(createSavedStateHandle(), container.expenses, container.categories, container.settings, container.clock)
+                TransactionsViewModel(createSavedStateHandle(), container.expenses, container.categories, container.settings, container.surplus, container.clock)
             }
         }
     }

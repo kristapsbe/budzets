@@ -131,8 +131,8 @@ class BackupRepository(
 private fun Long.iso(): String = Instant.ofEpochMilli(this).toString()
 private fun String.epochMillis(): Long = Instant.parse(this).toEpochMilli()
 
-private fun CategoryEntity.toBackup() = BackupCategory(id, name, iconKey, sortOrder, archivedFrom, createdAt.iso(), updatedAt.iso())
-private fun BackupCategory.toEntity() = CategoryEntity(id, name, iconKey, sortOrder, archivedFrom, createdAt.epochMillis(), updatedAt.epochMillis())
+private fun CategoryEntity.toBackup() = BackupCategory(id, name, iconKey, sortOrder, archivedFrom, createdAt.iso(), updatedAt.iso(), deletedAt?.iso())
+private fun BackupCategory.toEntity() = CategoryEntity(id, name, iconKey, sortOrder, archivedFrom, createdAt.epochMillis(), updatedAt.epochMillis(), deletedAt?.epochMillis())
 
 private fun BudgetConfigEntity.toBackup() = BackupBudgetConfig(
     id = id,

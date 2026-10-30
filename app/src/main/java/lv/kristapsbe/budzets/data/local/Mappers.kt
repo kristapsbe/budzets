@@ -1,5 +1,6 @@
 package lv.kristapsbe.budzets.data.local
 
+import lv.kristapsbe.budzets.data.local.dao.ClosureSnapshotRow
 import lv.kristapsbe.budzets.data.local.entity.BoostEntity
 import lv.kristapsbe.budzets.data.local.entity.BudgetConfigEntity
 import lv.kristapsbe.budzets.data.local.entity.CategoryEntity
@@ -50,6 +51,7 @@ internal fun CategoryEntity.toDomain() = Category(
     archivedFrom = archivedFrom?.toYearMonth(),
     createdAt = createdAt.toInstant(),
     updatedAt = updatedAt.toInstant(),
+    deletedAt = deletedAt?.toInstant(),
 )
 
 internal fun Category.toEntity() = CategoryEntity(
@@ -60,6 +62,7 @@ internal fun Category.toEntity() = CategoryEntity(
     archivedFrom = archivedFrom?.toDb(),
     createdAt = createdAt.toDb(),
     updatedAt = updatedAt.toDb(),
+    deletedAt = deletedAt?.toDb(),
 )
 
 internal fun BudgetConfigEntity.toDomain() = BudgetConfig(
@@ -163,6 +166,17 @@ internal fun MonthClosure.toCategoryRows() = snapshot.categories.values.map {
         boostMinor = it.boost.minor,
         spentMinor = it.spent.minor,
     )
+}
+
+/** The budgets a closed month keeps; null when [this] is empty, meaning the month isn't closed. */
+internal fun List<ClosureSnapshotRow>.toSnapshot(month: YearMonth): MonthSummary? {
+    val closure = firstOrNull() ?: return null
+    val categories = mapNotNull { row ->
+        row.categoryId?.let { CategoryId(it) }?.let { id ->
+            id to CategorySummary(id, row.baseMinor?.let(::Money), Money(row.boostMinor ?: 0), Money(row.spentMinor ?: 0))
+        }
+    }.toMap()
+    return MonthSummary(month, closure.overallBaseMinor?.let(::Money), closure.overallDerived, categories)
 }
 
 internal fun MonthClosureEntity.toDomain(rows: List<MonthClosureCategoryEntity>): MonthClosure {

@@ -62,10 +62,7 @@ object MonthSummaryCalculator {
         spending: Map<CategoryId, Money>,
     ): MonthSummary {
         val month = resolved.month
-        val boostByCategory = boosts
-            .filter { it.targetMonth == month && it.status == BoostStatus.ACTIVE }
-            .groupBy { it.destination }
-            .mapValues { (_, list) -> list.map { it.amount }.sumMoney() }
+        val boostByCategory = activeBoosts(boosts, month)
 
         val ids = LinkedHashSet<CategoryId>().apply {
             addAll(resolved.categoryPlans.keys)
@@ -82,4 +79,28 @@ object MonthSummaryCalculator {
         }
         return MonthSummary(month, resolved.overallBase, resolved.overallDerived, categories)
     }
+
+    /**
+     * A closed month: its budgets are those of [snapshot], so later budget and category changes
+     * don't reach it. Boosts and spending stay live, so a corrected expense still shows as a
+     * change since closing (Q3).
+     */
+    fun summarizeClosed(
+        snapshot: MonthSummary,
+        boosts: Iterable<Boost>,
+        spending: Map<CategoryId, Money>,
+    ): MonthSummary {
+        val plans = snapshot.categories.mapValues { (_, category) -> category.base }
+        val boostByCategory = activeBoosts(boosts, snapshot.month)
+        val categories = (plans.keys + boostByCategory.keys + spending.keys).associateWith { id ->
+            CategorySummary(id, plans[id], boostByCategory[id] ?: Money.ZERO, spending[id] ?: Money.ZERO)
+        }
+        return snapshot.copy(categories = categories)
+    }
+
+    private fun activeBoosts(boosts: Iterable<Boost>, month: YearMonth): Map<CategoryId, Money> =
+        boosts
+            .filter { it.targetMonth == month && it.status == BoostStatus.ACTIVE }
+            .groupBy { it.destination }
+            .mapValues { (_, list) -> list.map { it.amount }.sumMoney() }
 }

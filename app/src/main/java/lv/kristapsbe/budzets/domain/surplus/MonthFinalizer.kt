@@ -1,6 +1,7 @@
 package lv.kristapsbe.budzets.domain.surplus
 
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
+import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.LedgerEntryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
@@ -116,14 +117,17 @@ class MonthFinalizer(
 
     /**
      * Reverses a closed month's net ledger effect. Refused if any pocket would drop below zero
-     * because its surplus has already been moved or reserved.
+     * because its surplus has already been moved or reserved. The money of [deleted] categories
+     * counts as Unallocated for that check; the reversal itself goes on the pockets the closes
+     * posted to, so it cancels them exactly.
      */
-    fun reopen(ledger: List<LedgerEntry>, closure: MonthClosure): Outcome<ClosureResult, ClosureError> {
+    fun reopen(ledger: List<LedgerEntry>, closure: MonthClosure, deleted: Set<CategoryId> = emptySet()): Outcome<ClosureResult, ClosureError> {
         if (!closure.isClosed) return Outcome.Err(ClosureError.NotClosed)
 
         val net = SurplusLedger.closureNet(ledger, closure.month)
-        val balances = SurplusLedger.balances(ledger)
-        val shortfalls = net.filterValues { it.isPositive }
+        val merged = SurplusLedger.merged(ledger, deleted)
+        val balances = SurplusLedger.balances(merged)
+        val shortfalls = SurplusLedger.closureNet(merged, closure.month).filterValues { it.isPositive }
             .mapValues { (pocket, credit) -> (balances[pocket] ?: Money.ZERO) - credit }
             .filterValues { it.isNegative }
         if (shortfalls.isNotEmpty()) return Outcome.Err(ClosureError.WouldGoNegative(shortfalls))

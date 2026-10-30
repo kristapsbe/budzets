@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.categoryName
 import lv.kristapsbe.budzets.ui.components.FormSection
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.amountErrorText
@@ -202,7 +203,7 @@ private fun EditorForm(state: ExpenseEditorState.Editing, actions: EditorActions
                     FilterChip(
                         selected = selected,
                         onClick = { actions.onCategorySelect(option.id) },
-                        label = { Text(if (option.isArchived) stringResource(R.string.category_archived, option.name) else option.name) },
+                        label = { Text(categoryName(option.name, option.isArchived, option.isDeleted)) },
                         leadingIcon = if (selected) {
                             { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
                         } else null,

@@ -125,7 +125,7 @@ class BoostViewModel(
             val byId = ref.categories.associateBy { it.id }
             val sources = ref.balances.filterValues { it.isPositive }.keys.sortedWith(pocketOrder(ref.categories))
                 .map { PocketChoice(it.label(byId), ref.balances.getValue(it)) }
-            val destinations = ref.categories.filter { it.toRef().isActiveIn(month) }.map { c ->
+            val destinations = ref.categories.filter { !it.isDeleted && it.toRef().isActiveIn(month) }.map { c ->
                 PocketChoice(SurplusPocket.Category(c.id).label(byId), ref.balances[SurplusPocket.Category(c.id)] ?: Money.ZERO)
             }
             val parsed = AmountParser.parse(form.amountText, ref.currency)

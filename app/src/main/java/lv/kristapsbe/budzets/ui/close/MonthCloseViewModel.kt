@@ -43,7 +43,7 @@ enum class MonthStatus {
     OPEN,
     CLOSED,
 
-    /** Closed, but expenses or budgets changed since; closing again posts the difference. */
+    /** Closed, but its expenses changed since; closing again posts the difference. */
     CHANGED,
 }
 
@@ -123,12 +123,14 @@ class MonthCloseViewModel(
         val review = state.review
         val byId = all.associateBy { it.id }
         val pending = review.pending
+        val isClosed = state.latest?.isClosed == true
         val pockets = (review.summary.categories.keys.map { SurplusPocket.Category(it) } + review.target.keys + review.recorded.keys)
             .distinct()
             .sortedWith(pocketOrder(all))
         val lines = pockets.map { pocket ->
             CloseLine(
-                label = pocket.label(byId),
+                // A closed month reads as it was closed, whatever has happened to its categories since.
+                label = pocket.label(byId).let { if (isClosed) it.copy(isArchived = false, isDeleted = false) else it },
                 summary = (pocket as? SurplusPocket.Category)?.let { review.summary.categories[it.id] },
                 effect = review.target[pocket] ?: Money.ZERO,
                 pending = pending[pocket] ?: Money.ZERO,

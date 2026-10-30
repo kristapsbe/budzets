@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.map
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.data.local.categoryColumn
 import lv.kristapsbe.budzets.data.local.dao.CategorySpendRow
+import lv.kristapsbe.budzets.data.local.dao.ClosureSnapshotRow
 import lv.kristapsbe.budzets.data.local.dateRange
 import lv.kristapsbe.budzets.data.local.entity.BoostEntity
 import lv.kristapsbe.budzets.data.local.entity.BudgetConfigEntity
@@ -14,6 +15,7 @@ import lv.kristapsbe.budzets.data.local.entity.CategoryEntity
 import lv.kristapsbe.budzets.data.local.scopeKey
 import lv.kristapsbe.budzets.data.local.toDb
 import lv.kristapsbe.budzets.data.local.toDomain
+import lv.kristapsbe.budzets.data.local.toSnapshot
 import lv.kristapsbe.budzets.domain.calculation.BudgetResolver
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.MonthSummaryCalculator
@@ -39,7 +41,8 @@ class BudgetRepository(
 
     /**
      * Sets [scope]'s targets from [effectiveFrom] on, until a later version. Re-saving the same
-     * month updates that version in place. Earlier months keep their own versions.
+     * month updates that version in place. Earlier months keep their own versions, and closed
+     * months keep the budgets they were closed with.
      */
     suspend fun setTarget(scope: BudgetScope, target: BudgetTarget, effectiveFrom: YearMonth = YearMonth.now(clock)) =
         db.withTransaction {
@@ -71,7 +74,10 @@ class BudgetRepository(
             }
         }
 
-    /** Live summary of [month]; re-emits when categories, budgets, boosts or expenses change. */
+    /**
+     * Live summary of [month]; re-emits when categories, budgets, boosts or expenses change, or
+     * when the month is closed or reopened. A closed month keeps the budgets it was closed with.
+     */
     fun observeMonthSummary(month: YearMonth): Flow<MonthSummary> {
         val (from, to) = month.dateRange()
         return combine(
@@ -79,7 +85,8 @@ class BudgetRepository(
             configDao.observeAll(),
             surplusDao.observeBoostsFor(month.toDb()),
             expenseDao.observeSpending(from, to),
-        ) { categories, configs, boosts, spending -> summarize(month, categories, configs, boosts, spending) }
+            surplusDao.observeClosureSnapshot(month.toDb()),
+        ) { categories, configs, boosts, spending, closure -> summarize(month, categories, configs, boosts, spending, closure) }
     }
 
     /** One-shot summary read in a single transaction (consistent snapshot). */
@@ -91,6 +98,7 @@ class BudgetRepository(
             configDao.getAll(),
             surplusDao.getBoostsFor(month.toDb()),
             expenseDao.getSpending(from, to),
+            surplusDao.getClosureSnapshot(month.toDb()),
         )
     }
 
@@ -100,16 +108,16 @@ class BudgetRepository(
         configs: List<BudgetConfigEntity>,
         boosts: List<BoostEntity>,
         spending: List<CategorySpendRow>,
+        closure: List<ClosureSnapshotRow>,
     ): MonthSummary {
+        val boosted = boosts.map { it.toDomain() }
+        val spent = spending.associate { CategoryId(it.categoryId) to Money(it.totalMinor) }
+        closure.toSnapshot(month)?.let { return MonthSummaryCalculator.summarizeClosed(it, boosted, spent) }
         val resolved = BudgetResolver.resolve(
             month,
             configs.map { it.toDomain() },
             categories.map { it.toDomain().toRef() },
         )
-        return MonthSummaryCalculator.summarize(
-            resolved,
-            boosts.map { it.toDomain() },
-            spending.associate { CategoryId(it.categoryId) to Money(it.totalMinor) },
-        )
+        return MonthSummaryCalculator.summarize(resolved, boosted, spent)
     }
 }

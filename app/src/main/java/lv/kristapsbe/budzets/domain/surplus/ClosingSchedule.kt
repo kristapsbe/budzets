@@ -5,8 +5,15 @@ import lv.kristapsbe.budzets.domain.model.BudgetConfig
 import lv.kristapsbe.budzets.domain.model.CategoryRef
 import java.time.YearMonth
 
-/** Which months still need closing, for the overview's reminder (Q15). */
+/** Which months are open: the first one still open, and those the overview reminds about (Q15). */
 object ClosingSchedule {
+
+    /**
+     * The first month from [currentMonth] on that isn't closed. A category leaves plans from here
+     * rather than from [currentMonth], so one that was closed early keeps it if it's reopened.
+     */
+    fun firstOpenMonth(currentMonth: YearMonth, closedMonths: Set<YearMonth>): YearMonth =
+        generateSequence(currentMonth) { it.plusMonths(1) }.first { it !in closedMonths }
 
     /**
      * Past months (before [currentMonth]) that had a positive budget and aren't closed, newest

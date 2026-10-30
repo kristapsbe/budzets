@@ -118,20 +118,67 @@ class BudgetsViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `only a category without history can be deleted`() = runTest {
+    fun `deleting removes a category without history, and hides one with history`() = runTest {
         val used = categories.create("Used")
         val unused = categories.create("Unused")
         budgets.setTarget(BudgetScope.Category(unused.id), BudgetTarget(dailyMinor = 100)) // budgets alone don't count
         expenses.add(eur(1), used.id, LocalDate.of(2026, 4, 2))
 
-        vm.delete(used.id)
-        assertEquals(BudgetsMessage.DELETE_REFUSED, vm.message.awaitFirst { it != null })
-        vm.messageShown(BudgetsMessage.DELETE_REFUSED)
-
         vm.delete(unused.id)
         assertEquals(BudgetsMessage.DELETED, vm.message.awaitFirst { it != null })
+        vm.messageShown(BudgetsMessage.DELETED)
         assertEquals(listOf("Used"), categories.categories.first().map { it.name })
         assertTrue(budgets.configs.first().isEmpty())
+
+        vm.delete(used.id)
+        assertEquals(BudgetsMessage.DELETED, vm.message.awaitFirst { it != null })
+        val april = awaitReady { it.categories.isEmpty() }
+        assertTrue(april.archived.isEmpty())
+        assertFalse(april.hasCategories)
+        assertTrue(categories.categories.first().single().isDeleted)
+
+        // March is before it was deleted and isn't closed: still in its plan, but marked.
+        vm.previousMonth()
+        assertTrue(awaitReady { it.month == ym("2026-03") }.categories.single().isDeleted)
+    }
+
+    @Test
+    fun `a closed month is read-only and shows what it was closed with`() = runTest {
+        val food = categories.create("Food")
+        val fun_ = categories.create("Fun")
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(dailyMinor = 2_000), ym("2026-01"))
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(weeklyMinor = 7_000), ym("2026-01"))
+        surplus.closeMonth(ym("2026-03")).ok()
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 100_000), ym("2026-02"))
+        budgets.setTarget(BudgetScope.Category(fun_.id), BudgetTarget(monthlyMinor = 5_000), ym("2026-02"))
+        categories.create("New")
+
+        vm.previousMonth()
+        val march = awaitReady { it.month == ym("2026-03") }
+        assertTrue(march.isClosed)
+        assertEquals(eur(620), march.overall.plan!!.amount) // 31 × 20, not the later 1000
+        assertEquals(BudgetTarget(monthlyMinor = 62_000), march.overall.target)
+        assertNull(march.overall.since)
+        assertNull(march.overall.nextChange)
+        assertEquals(listOf("Food"), march.categories.map { it.name }) // not Fun or New
+        assertEquals(eur(310), march.categories.single().budget.plan!!.amount)
+        assertEquals(eur(310), march.unallocated)
+        assertTrue(march.archived.isEmpty())
+        assertFalse(march.categories.single().canMoveDown)
+
+        // The same month, reopened, reads the budgets as they now stand.
+        surplus.reopenMonth(ym("2026-03")).ok()
+        val reopened = awaitReady { !it.isClosed }
+        assertEquals(eur(1_000), reopened.overall.plan!!.amount)
+        assertEquals(listOf("Food", "Fun", "New"), reopened.categories.map { it.name })
+    }
+
+    @Test
+    fun `archiving starts at the first open month`() = runTest {
+        val food = categories.create("Food")
+        surplus.closeMonth(ym("2026-04")).ok() // the current month, closed early
+        vm.archive(food.id)
+        assertEquals(ym("2026-05"), categories.categories.awaitFirst { it.single().isArchived }.single().archivedFrom)
     }
 
     @Test

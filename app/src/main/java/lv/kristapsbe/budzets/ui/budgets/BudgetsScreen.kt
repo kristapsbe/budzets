@@ -91,7 +91,6 @@ fun BudgetsScreen(
     val starterNames = stringArrayResource(R.array.starter_categories).toList()
 
     val texts = mapOf(
-        BudgetsMessage.DELETE_REFUSED to stringResource(R.string.category_delete_refused),
         BudgetsMessage.DELETED to stringResource(R.string.category_deleted),
         BudgetsMessage.ACTION_FAILED to stringResource(R.string.action_failed),
     )
@@ -191,7 +190,8 @@ fun BudgetsContent(
     }
 
     deleteFor?.let { id ->
-        val name = ready?.archived?.firstOrNull { it.id.value == id }?.name.orEmpty()
+        val name = ready?.categories?.firstOrNull { it.id.value == id }?.name
+            ?: ready?.archived?.firstOrNull { it.id.value == id }?.name.orEmpty()
         AlertDialog(
             onDismissRequest = { deleteFor = null },
             title = { Text(stringResource(R.string.delete_category_title, name)) },
@@ -241,7 +241,9 @@ private fun ReadyList(
             }
         }
 
-        item(key = "overall") { OverallCard(state, money, locale, onClick = { actions.onEditBudget(null, state.month) }) }
+        item(key = "overall") {
+            OverallCard(state, money, locale, onClick = if (state.isClosed) null else { { actions.onEditBudget(null, state.month) } })
+        }
 
         if (state.exceedsOverall) {
             item(key = "exceeds") {
@@ -252,7 +254,7 @@ private fun ReadyList(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-        } else if (state.unallocated.isPositive) {
+        } else if (state.unallocated.isPositive && !state.isClosed) {
             item(key = "unallocated") {
                 Banner(
                     Icons.Filled.Info,
@@ -269,7 +271,7 @@ private fun ReadyList(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
-                if (state.hasCategories) {
+                if (state.hasCategories && !state.isClosed) {
                     TextButton(onClick = onAdd) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -279,7 +281,7 @@ private fun ReadyList(
             }
         }
 
-        if (!state.hasCategories) {
+        if (!state.hasCategories && !state.isClosed) {
             item(key = "empty") {
                 Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -295,17 +297,19 @@ private fun ReadyList(
         }
 
         items(state.categories, key = { it.id.value }) { row ->
+            val editable = !state.isClosed && !row.isDeleted
             CategoryRowItem(
                 row,
                 money,
                 locale,
-                onClick = { actions.onEditBudget(row.id, state.month) },
-                menu = buildList {
+                onClick = if (editable) { { actions.onEditBudget(row.id, state.month) } } else null,
+                menu = if (!editable) emptyList() else buildList {
                     add(MenuEntry(R.string.rename) { onRename(row.id) })
                     if (row.canMoveUp) add(MenuEntry(R.string.move_up) { actions.onMove(row.id, true) })
                     if (row.canMoveDown) add(MenuEntry(R.string.move_down) { actions.onMove(row.id, false) })
                     if (row.archivedFrom == null) add(MenuEntry(R.string.archive) { actions.onArchive(row.id) })
                     else add(MenuEntry(R.string.unarchive) { actions.onUnarchive(row.id) })
+                    add(MenuEntry(R.string.delete) { onDelete(row.id) })
                 },
             )
         }
@@ -338,9 +342,10 @@ private fun ReadyList(
 }
 
 @Composable
-private fun OverallCard(state: BudgetsUiState.Ready, money: MoneyFormatter, locale: Locale, onClick: () -> Unit) {
+private fun OverallCard(state: BudgetsUiState.Ready, money: MoneyFormatter, locale: Locale, onClick: (() -> Unit)?) {
     val overall = state.overall
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+    val content: @Composable () -> Unit = {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.overall_budget), style = MaterialTheme.typography.titleMedium)
             val plan = overall.plan
@@ -350,7 +355,10 @@ private fun OverallCard(state: BudgetsUiState.Ready, money: MoneyFormatter, loca
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                overall.target?.let { Text(targetSummary(it, money), style = MaterialTheme.typography.bodyMedium) }
+                // A monthly target alone would only repeat the line above.
+                overall.target?.takeUnless { it.dailyMinor == null && it.weeklyMinor == null }?.let {
+                    Text(targetSummary(it, money), style = MaterialTheme.typography.bodyMedium)
+                }
             } else {
                 Text(
                     if (state.overallDerived) {
@@ -371,27 +379,28 @@ private fun OverallCard(state: BudgetsUiState.Ready, money: MoneyFormatter, loca
             }
         }
     }
+    if (onClick != null) Card(onClick = onClick, modifier = modifier) { content() } else Card(modifier) { content() }
 }
 
 @Composable
-private fun CategoryRowItem(row: CategoryBudgetRow, money: MoneyFormatter, locale: Locale, onClick: () -> Unit, menu: List<MenuEntry>) {
+private fun CategoryRowItem(row: CategoryBudgetRow, money: MoneyFormatter, locale: Locale, onClick: (() -> Unit)?, menu: List<MenuEntry>) {
     val plan = row.budget.plan
     ListItem(
-        headlineContent = { Text(row.name) },
+        headlineContent = { Text(if (row.isDeleted) stringResource(R.string.category_deleted_label, row.name) else row.name) },
         supportingContent = {
             Column {
                 Text(row.budget.target?.let { targetSummary(it, money) } ?: stringResource(R.string.no_budget))
                 VersionNotes(row.budget, locale)
-                row.archivedFrom?.let { Text(stringResource(R.string.archived_from, it.displayName(locale))) }
+                row.archivedFrom?.takeUnless { row.isDeleted }?.let { Text(stringResource(R.string.archived_from, it.displayName(locale))) }
             }
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 plan?.let { Text(money.format(it.amount), style = MaterialTheme.typography.bodyLarge) }
-                OverflowMenu(row.name, menu)
+                if (menu.isNotEmpty()) OverflowMenu(row.name, menu)
             }
         },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
     )
 }
 

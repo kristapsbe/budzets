@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.BudgetScope
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
+import lv.kristapsbe.budzets.domain.ok
 import lv.kristapsbe.budzets.domain.ym
 import lv.kristapsbe.budzets.ui.ViewModelTest
 import org.junit.Assert.assertEquals
@@ -17,7 +18,7 @@ import java.time.LocalDate
 class TransactionsViewModelTest : ViewModelTest() {
 
     private fun transactions(vararg args: Pair<String, Any?>) =
-        TransactionsViewModel(SavedStateHandle(mapOf(*args)), expenses, categories, settings, clock)
+        TransactionsViewModel(SavedStateHandle(mapOf(*args)), expenses, categories, settings, surplus, clock)
 
     private suspend fun TransactionsViewModel.awaitReady(
         predicate: (TransactionsUiState.Ready) -> Boolean = { true },
@@ -152,5 +153,32 @@ class TransactionsViewModelTest : ViewModelTest() {
         assertEquals(second, vm.deleteEvent.value)
         vm.eventHandled(second)
         assertNull(vm.deleteEvent.value)
+    }
+
+    @Test
+    fun `a closed month offers only what it has spending in, with no marks`() = runTest {
+        val food = categories.create("Food")
+        val old = categories.create("Old")
+        expenses.add(eur(1), old.id, LocalDate.of(2026, 3, 2))
+        surplus.closeMonth(ym("2026-03")).ok()
+        categories.create("New")
+        surplus.deleteCategory(old.id)
+
+        val march = transactions("month" to "2026-03").awaitReady { it.count == 1 }
+        assertEquals(listOf(old.id), march.chips.map { it.id })
+        val row = march.days.single().rows.single()
+        assertEquals(false, row.isArchivedCategory)
+        assertEquals(false, row.isDeletedCategory)
+        assertTrue(food.id !in march.chips.map { it.id })
+    }
+
+    @Test
+    fun `a deleted category's expense in an open month is marked`() = runTest {
+        val old = categories.create("Old")
+        expenses.add(eur(1), old.id, LocalDate.of(2026, 4, 2))
+        surplus.deleteCategory(old.id)
+
+        val april = transactions().awaitReady { it.days.singleOrNull()?.rows?.single()?.isDeletedCategory == true }
+        assertEquals(false, april.hasCategories)
     }
 }

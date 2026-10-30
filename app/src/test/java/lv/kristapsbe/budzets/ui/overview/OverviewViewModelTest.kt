@@ -156,4 +156,45 @@ class OverviewViewModelTest : ViewModelTest() {
         settings.recordBackupSuccess(clock.instant())
         awaitReady { it.backupReminder == null }
     }
+
+    @Test
+    fun `a closed month lists what it was closed with, under plain names`() = runTest {
+        val food = categories.create("Food")
+        val old = categories.create("Old")
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(dailyMinor = 1_000), ym("2026-03"))
+        expenses.add(eur(3), old.id, LocalDate.of(2026, 3, 2))
+        surplus.closeMonth(ym("2026-03")).ok()
+        categories.create("New")
+        surplus.deleteCategory(old.id)
+
+        vm.previousMonth()
+        val march = awaitReady { it.month == ym("2026-03") }
+        assertEquals(CloseStatus.CLOSED, march.closeStatus)
+        assertEquals(listOf("Food", "Old"), march.rows.map { it.name })
+        assertTrue(march.rows.none { it.isArchived || it.isDeleted })
+    }
+
+    @Test
+    fun `a deleted category with spending in an open month is flagged, and doesn't count as a category`() = runTest {
+        val old = categories.create("Old")
+        expenses.add(eur(3), old.id, LocalDate.of(2026, 4, 1))
+        surplus.deleteCategory(old.id)
+
+        val april = awaitReady { it.rows.singleOrNull()?.isDeleted == true }
+        assertEquals(eur(3), april.rows.single().summary.spent)
+        assertFalse(april.hasCategories)
+    }
+
+    @Test
+    fun `one-off boosts show on their own month until removed`() = runTest {
+        val april = surplus.addOneOff(ym("2026-04"), eur(200)).ok()
+        surplus.addOneOff(ym("2026-04"), eur(50)).ok()
+        surplus.addOneOff(ym("2026-03"), eur(7)).ok()
+
+        val state = awaitReady { it.oneOffTotal == eur(250) }
+        assertEquals(eur(257), state.totalSurplus)
+
+        surplus.removeOneOff(april.id).ok()
+        awaitReady { it.oneOffTotal == eur(50) }
+    }
 }

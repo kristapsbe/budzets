@@ -209,4 +209,16 @@ class ExpenseEditorViewModelTest : ViewModelTest() {
         val form = restored.awaitEditing().form
         assertEquals(ExpenseForm("7.25", CategoryId(fun_.id.value), today.minusDays(1), "bus"), form)
     }
+
+    @Test
+    fun `a deleted category is offered only for an old expense that uses it`() = runTest {
+        categories.create("Food")
+        val old = categories.create("Old")
+        val expense = expenses.add(eur(5), old.id, LocalDate.of(2026, 3, 3))
+        surplus.deleteCategory(old.id)
+
+        assertEquals(listOf("Food"), editor().awaitEditing().categories.map { it.name })
+        val option = editor(ExpenseEditorViewModel.ARG_EXPENSE_ID to expense.id.value).awaitEditing().categories.last()
+        assertEquals(CategoryOption(old.id, "Old", isArchived = true, isDeleted = true), option)
+    }
 }

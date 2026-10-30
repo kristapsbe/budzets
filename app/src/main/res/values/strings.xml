@@ -37,7 +37,8 @@
     <string name="month_changed_since_closing">Changed since this month was closed. Close it again to update surplus.</string>
     <string name="categories_exceed_overall">Category budgets add up to %1$s, more than the overall budget of %2$s.</string>
     <string name="saved_surplus">Saved surplus</string>
-    <string name="saved_surplus_hint">Unspent budget from closed months. Not a bank balance.</string>
+    <string name="saved_surplus_hint">Unspent budget from closed months, plus one-off boosts. Not a bank balance.</string>
+    <string name="overview_one_off">One-off boost this month: +%1$s, added to Unallocated surplus.</string>
 
     <!-- Overview: categories -->
     <string name="categories">Categories</string>
@@ -45,10 +46,11 @@
     <string name="category_no_budget">No budget · %1$s spent</string>
     <string name="category_boost">+%1$s boost</string>
     <string name="category_archived">%1$s (archived)</string>
+    <string name="category_deleted_label">%1$s (deleted)</string>
 
     <!-- Overview: empty states -->
     <string name="empty_no_categories_title">No categories yet</string>
-    <string name="empty_no_categories_body">Categories organise your spending. Start with a few common ones; you can rename, reorder or archive them later.</string>
+    <string name="empty_no_categories_body">Categories organise your spending. Start with a few common ones; you can rename, reorder, archive or delete them later.</string>
     <string name="add_starter_categories">Add starter categories</string>
     <string name="empty_no_budget_title">No budget for this month</string>
     <string name="empty_no_budget_body">Set a daily or weekly target and the app works out the monthly amount.</string>
@@ -117,7 +119,8 @@
     <string name="no_budget">No budget</string>
     <string name="category_budgets_of_overall">Category budgets: %1$s of %2$s</string>
     <string name="budget_unallocated">%1$s isn’t assigned to a category. It becomes unallocated surplus when the month closes.</string>
-    <string name="budgets_month_closed">%1$s is closed. Budget changes here mean closing it again.</string>
+    <string name="budgets_month_closed">%1$s is closed, so its budgets stay as they were. Changes start from the next open month. To change this month, reopen it.</string>
+    <string name="closed_months_keep_budget">Closed months keep their budgets: %1$s.</string>
     <string name="add_category">Add category</string>
     <string name="rename_category">Rename category</string>
     <string name="category_name">Name</string>
@@ -134,8 +137,7 @@
     <string name="archived_categories">Archived</string>
     <string name="archived_from">Archived from %1$s</string>
     <string name="delete_category_title">Delete %1$s?</string>
-    <string name="delete_category_body">Its budgets are deleted too. A category with spending or surplus history can only stay archived.</string>
-    <string name="category_delete_refused">This category has spending or surplus history, so it can only stay archived.</string>
+    <string name="delete_category_body">Closed months keep it exactly as it was. Its spending stays in months that aren’t closed, and its saved surplus moves to Unallocated. This can’t be undone.</string>
     <string name="category_deleted">Category deleted</string>
     <string name="action_failed">Couldn’t do that. Try again.</string>
 
@@ -174,11 +176,12 @@
     <string name="close_no_budget_warning">This month has no budget, so closing it records all its spending as debits.</string>
     <string name="month_was_reopened">This month was reopened. Closing it records its surplus again.</string>
     <string name="month_closed_on">Closed on %1$s. Its surplus is recorded below.</string>
-    <string name="month_changed_review">Expenses or budgets changed since this month was closed. Closing it again records only the differences shown.</string>
+    <string name="month_changed_review">Expenses changed since this month was closed. Closing it again records only the differences shown.</string>
     <string name="close_line_budget">Budget %1$s · spent %2$s</string>
     <string name="close_line_budget_boost">Budget %1$s + %2$s boost · spent %3$s</string>
     <string name="close_line_no_budget">No budget, so its %1$s spending is recorded as a debit</string>
     <string name="close_line_unallocated">Overall budget not assigned to any category</string>
+    <string name="close_line_deleted">This category was deleted, so this counts under Unallocated</string>
     <string name="close_line_total_after">Total for this month after closing: %1$s</string>
     <string name="amount_saved">+%1$s saved</string>
     <string name="amount_debit">−%1$s debit</string>
@@ -216,12 +219,18 @@
     <string name="breakdown_closing">Closed months %1$s</string>
     <string name="breakdown_moved">Moved %1$s</string>
     <string name="breakdown_boosts">Boosts %1$s</string>
+    <string name="breakdown_one_off">One-off boosts %1$s</string>
     <string name="pocket_negative_hint">Overspent. Later surplus or a transfer in repays it.</string>
     <string name="active_boosts">Active boosts</string>
     <string name="boost_row">+%1$s for %2$s, %3$s</string>
     <string name="boost_from">From %1$s</string>
     <string name="release_boost">Release</string>
     <string name="boost_released">Boost released. Its surplus is available again.</string>
+    <string name="one_off_boosts">One-off boosts</string>
+    <string name="one_off_row">+%1$s for %2$s</string>
+    <string name="one_off_remove">Remove</string>
+    <string name="one_off_removed">One-off boost removed.</string>
+    <string name="one_off_already_used">Its money has already been moved or used for a boost. Move it back to Unallocated first.</string>
     <string name="surplus_history">History</string>
     <string name="history_close_credit">Unspent in %1$s</string>
     <string name="history_close_debit">Overspent in %1$s</string>
@@ -231,6 +240,8 @@
     <string name="history_moved_in">Moved from %1$s</string>
     <string name="history_boost">Boost for %1$s, %2$s</string>
     <string name="history_boost_released">Boost for %1$s, %2$s released</string>
+    <string name="history_one_off">One-off boost, %1$s</string>
+    <string name="history_one_off_removed">One-off boost removed, %1$s</string>
 
     <!-- Move surplus / boost -->
     <string name="move">Move</string>
@@ -248,6 +259,10 @@
     <string name="boost_from_pocket">Use surplus from</string>
     <string name="boost_month_closed">%1$s is closed, so its budget can’t be boosted.</string>
     <string name="boost_preview">Budget for %1$s in %2$s: %3$s + %4$s = %5$s</string>
+    <string name="add_one_off_boost">Add a one-off boost</string>
+    <string name="one_off_add">Add</string>
+    <string name="one_off_explanation">Add extra money to a month, such as a gift or a bonus. It goes into Unallocated surplus first. From there you can move it or boost a category’s budget.</string>
+    <string name="one_off_month_closed">%1$s is closed, so it can’t take a one-off boost.</string>
 
     <!-- Widget -->
     <string name="widget_label">Budzets: this month</string>

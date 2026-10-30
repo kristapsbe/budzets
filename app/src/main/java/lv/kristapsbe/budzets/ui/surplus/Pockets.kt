@@ -6,6 +6,7 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.Category
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
+import lv.kristapsbe.budzets.ui.components.categoryName
 
 private const val UNALLOCATED_KEY = "@unallocated"
 
@@ -19,10 +20,10 @@ fun pocketFromKey(key: String): SurplusPocket =
     if (key == UNALLOCATED_KEY) SurplusPocket.Unallocated else SurplusPocket.Category(CategoryId(key))
 
 /** A pocket as screens show it. [name] is null for the unallocated pocket (a localized label). */
-data class PocketLabel(val pocket: SurplusPocket, val name: String?, val isArchived: Boolean)
+data class PocketLabel(val pocket: SurplusPocket, val name: String?, val isArchived: Boolean, val isDeleted: Boolean = false)
 
 fun SurplusPocket.label(categories: Map<CategoryId, Category>): PocketLabel = when (this) {
-    is SurplusPocket.Category -> categories[id].let { PocketLabel(this, it?.name ?: "?", it?.isArchived == true) }
+    is SurplusPocket.Category -> categories[id].let { PocketLabel(this, it?.name ?: "?", it?.isArchived == true, it?.isDeleted == true) }
     SurplusPocket.Unallocated -> PocketLabel(this, null, false)
 }
 
@@ -33,8 +34,5 @@ fun pocketOrder(categories: List<Category>): Comparator<SurplusPocket> {
 }
 
 @Composable
-fun PocketLabel.text(): String = when {
-    name == null -> stringResource(R.string.pocket_unallocated)
-    isArchived -> stringResource(R.string.category_archived, name)
-    else -> name
-}
+fun PocketLabel.text(): String =
+    if (name == null) stringResource(R.string.pocket_unallocated) else categoryName(name, isArchived, isDeleted)

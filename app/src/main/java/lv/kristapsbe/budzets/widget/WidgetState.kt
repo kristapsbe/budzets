@@ -86,7 +86,7 @@ object WidgetStates {
         balances: Map<SurplusPocket, Money>,
         currency: CurrencySpec,
     ): WidgetState {
-        if (categories.isEmpty()) return WidgetState.NotSetUp
+        if (categories.all { it.isDeleted }) return WidgetState.NotSetUp
         val names = categories.associate { it.id to it.name }
         val pace = PaceCalculator.pace(summary, today)
         val worst = summary.categories.values

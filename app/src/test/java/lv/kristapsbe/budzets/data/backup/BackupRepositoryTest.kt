@@ -125,6 +125,25 @@ class BackupRepositoryTest : ViewModelTest() {
     }
 
     @Test
+    fun `a deleted category and a one-off boost survive a restore`() = runTest {
+        seedEverything()
+        val food = categories.categories.first().first { it.name == "Food" }
+        surplus.deleteCategory(food.id)
+        surplus.addOneOff(ym("2026-04"), eur(200), "Gift").ok()
+        val bytes = backups.export()
+
+        val clean = CleanInstall()
+        clean.backups.restore(decoded(bytes))
+
+        assertEquals(decoded(bytes).data, decoded(clean.backups.export()).data)
+        assertEquals(categories.categories.first(), clean.categories.categories.first())
+        assertEquals(surplus.balances.first(), clean.surplus.balances.first())
+        assertEquals(budgets.loadMonthSummary(ym("2026-03")), clean.budgets.loadMonthSummary(ym("2026-03")))
+        assertEquals(surplus.ledger.first(), clean.surplus.ledger.first())
+        clean.db.close()
+    }
+
+    @Test
     fun `restore replaces rather than merges, and undo puts the earlier data back`() = runTest {
         seedEverything()
         val backup = decoded(backups.export())

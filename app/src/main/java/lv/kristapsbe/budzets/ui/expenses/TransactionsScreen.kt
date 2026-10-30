@@ -71,6 +71,7 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
+import lv.kristapsbe.budzets.ui.components.categoryName
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
@@ -376,7 +377,7 @@ private fun SwipeToDeleteRow(row: ExpenseRow, money: MoneyFormatter, onOpen: () 
     ) {
         ListItem(
             headlineContent = {
-                Text(if (row.isArchivedCategory) stringResource(R.string.category_archived, row.categoryName) else row.categoryName)
+                Text(categoryName(row.categoryName, row.isArchivedCategory, row.isDeletedCategory))
             },
             supportingContent = row.note?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
             trailingContent = { Text(money.format(row.amount), style = MaterialTheme.typography.bodyLarge) },

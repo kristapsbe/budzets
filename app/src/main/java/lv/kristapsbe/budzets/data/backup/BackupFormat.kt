@@ -3,7 +3,7 @@ package lv.kristapsbe.budzets.data.backup
 import kotlinx.serialization.Serializable
 
 /*
- * Backup file format, version 1. A JSON object:
+ * Backup file format, version 2. A JSON object:
  *
  *   format         "budzets-backup", so other JSON files are recognised as "not a backup"
  *   schemaVersion  this format's version (not the database's); a reader refuses newer ones
@@ -16,6 +16,9 @@ import kotlinx.serialization.Serializable
  * and a null category on surplus rows meaning Unallocated. Instants are ISO-8601 here rather than
  * epoch milliseconds, so the file is readable. Rows are in insertion order, which keeps ties in
  * "newest first" lists the same after a restore. No credentials or device identifiers.
+ *
+ * Version 2 added `deletedAt` on categories and the ONE_OFF_* ledger types. A version 1 file is
+ * still valid: it has neither, and `deletedAt` defaults to null.
  */
 
 @Serializable
@@ -41,6 +44,7 @@ data class BackupCategory(
     val archivedFrom: String? = null,
     val createdAt: String,
     val updatedAt: String,
+    val deletedAt: String? = null,
 )
 
 /** A null [categoryId] is the overall budget. */

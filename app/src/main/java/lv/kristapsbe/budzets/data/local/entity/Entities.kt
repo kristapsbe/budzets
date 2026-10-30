@@ -13,8 +13,9 @@ import androidx.room.PrimaryKey
  * - instants: epoch milliseconds
  * - a null category column on surplus rows means the Unallocated pocket
  *
- * Categories are archived rather than deleted. Every reference to them is RESTRICT,
- * except budget configs, which cascade.
+ * A category with history is never really deleted: `deletedAt` hides it, because closed months,
+ * old expenses and the ledger still name it. Every reference to it is RESTRICT, except budget
+ * configs, which cascade when a category without history is removed.
  */
 
 @Entity(tableName = "categories")
@@ -26,6 +27,8 @@ data class CategoryEntity(
     val archivedFrom: String?,
     val createdAt: Long,
     val updatedAt: Long,
+    /** Added in schema v3 (last, matching `ALTER TABLE … ADD COLUMN`). */
+    val deletedAt: Long? = null,
 )
 
 @Entity(

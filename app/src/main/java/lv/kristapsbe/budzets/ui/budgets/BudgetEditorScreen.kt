@@ -157,8 +157,8 @@ private fun EditorForm(state: BudgetEditorState.Editing, actions: BudgetEditorAc
                 warning = true,
             )
         }
-        if (state.closedMonthsAffected.isNotEmpty()) {
-            Banner(Icons.Filled.Lock, stringResource(R.string.closed_month_edit_hint, state.closedMonthsAffected.joinToString { it.displayName(locale) }))
+        if (state.closedMonthsInRange.isNotEmpty()) {
+            Banner(Icons.Filled.Lock, stringResource(R.string.closed_months_keep_budget, state.closedMonthsInRange.joinToString { it.displayName(locale) }))
         }
         if (state.saveFailed) {
             Text(stringResource(R.string.save_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)

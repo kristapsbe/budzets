@@ -106,4 +106,34 @@ class MonthCloseViewModelTest : ViewModelTest() {
         assertFalse(future.canClose)
         assertFalse(future.hasBudget)
     }
+
+    @Test
+    fun `budget changes after closing leave the month as closed`() = runTest {
+        val (food, _) = setUpMarch()
+        surplus.closeMonth(ym("2026-03")).ok()
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 200_000), ym("2026-02"))
+        budgets.setTarget(BudgetScope.Category((food as SurplusPocket.Category).id), BudgetTarget(monthlyMinor = 90_000), ym("2026-02"))
+
+        val state = review("2026-03").awaitReady()
+        assertEquals(MonthStatus.CLOSED, state.status)
+        assertEquals(eur(570), state.netEffect)
+        assertTrue(state.lines.all { it.pending.isZero })
+    }
+
+    @Test
+    fun `a deleted category keeps its line, marked only while the month is open`() = runTest {
+        val (_, fun_) = setUpMarch()
+        surplus.deleteCategory((fun_ as SurplusPocket.Category).id)
+
+        val open = review("2026-03").awaitReady()
+        val line = open.lines.single { it.label.pocket == fun_ }
+        assertTrue(line.label.isDeleted)
+        assertEquals(eur(-30), line.effect)
+
+        surplus.closeMonth(ym("2026-03")).ok()
+        val closed = review("2026-03").awaitReady { it.status == MonthStatus.CLOSED }
+        val closedLine = closed.lines.single { it.label.pocket == fun_ }
+        assertFalse(closedLine.label.isDeleted)
+        assertEquals(eur(-30), closedLine.effect)
+    }
 }

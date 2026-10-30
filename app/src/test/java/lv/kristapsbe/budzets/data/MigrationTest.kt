@@ -95,4 +95,29 @@ class MigrationTest {
             db.close()
         }
     }
+
+    @Test
+    fun `v2 to v3 adds deletedAt and leaves every category in place`() = runTest {
+        val file = File(tmp.root, "budzets-v2.db")
+        createDatabase(file, version = 2) {
+            execSQL("INSERT INTO categories VALUES ('food', 'Food', NULL, 0, NULL, 1, 1)")
+            execSQL("INSERT INTO categories VALUES ('old', 'Old', NULL, 1, '2026-02', 1, 1)")
+            execSQL("INSERT INTO expenses VALUES ('e1', 1250, 'old', '2026-01-02', 'bread', 1, 1)")
+        }
+
+        val db = Room.databaseBuilder(ApplicationProvider.getApplicationContext(), BudzetsDatabase::class.java, file.absolutePath)
+            .addMigrations(*BudzetsDatabase.MIGRATIONS)
+            .build()
+        try {
+            val all = db.categoryDao().observeAll().first().map { it.toDomain() }
+            assertEquals(expectedColumns(3, "categories"), columns(db, "categories"))
+
+            assertEquals(listOf("Food", "Old"), all.map { it.name })
+            assertEquals(listOf(false, false), all.map { it.isDeleted })
+            assertEquals(ym("2026-02"), all[1].archivedFrom)
+            assertEquals("bread", db.expenseDao().get("e1")!!.note)
+        } finally {
+            db.close()
+        }
+    }
 }

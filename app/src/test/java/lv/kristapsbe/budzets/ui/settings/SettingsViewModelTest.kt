@@ -158,7 +158,7 @@ class SettingsViewModelTest : ViewModelTest() {
         val cases = mapOf(
             "hello".toByteArray() to SettingsMessage.NOT_A_BACKUP,
             good.decodeToString().replace("\"amountMinor\": 4000", "\"amountMinor\": 4001").toByteArray() to SettingsMessage.BACKUP_DAMAGED,
-            good.decodeToString().replace("\"schemaVersion\": 1", "\"schemaVersion\": 9").toByteArray() to SettingsMessage.BACKUP_TOO_NEW,
+            good.decodeToString().replace("\"schemaVersion\": ${BackupCodec.SCHEMA_VERSION}", "\"schemaVersion\": 9").toByteArray() to SettingsMessage.BACKUP_TOO_NEW,
             ByteArray(BackupCodec.MAX_BYTES + 10) to SettingsMessage.FILE_TOO_LARGE,
         )
         for ((bytes, expected) in cases) {

@@ -167,4 +167,66 @@ class SurplusContentTest {
         compose.onNodeWithText("Review & close").performClick()
         assertEquals(ym("2026-03"), reviewed)
     }
+
+    @Test
+    fun `surplus tab offers a one-off boost even with nothing saved yet`() {
+        var opened = 0
+        val empty = ready().copy(pockets = emptyList(), boosts = emptyList(), history = emptyList(), hasAvailable = false)
+        compose.setContent { BudzetsTheme { SurplusContent(empty, SurplusActions(onOneOff = { opened++ })) } }
+        compose.onNodeWithText("Add a one-off boost").performClick()
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun `one-off boosts are listed with a way to remove them, and in history and the breakdown`() {
+        var removed: LedgerEntryId? = null
+        val state = ready().copy(
+            pockets = listOf(PocketRow(unallocated, PocketBreakdown(oneOff = eur(200)))),
+            oneOffs = listOf(OneOffRow(LedgerEntryId("o1"), ym("2026-04"), eur(200), "Gift")),
+            history = listOf(
+                HistoryRow(LedgerEntryId("h1"), HistoryKind.ONE_OFF_REMOVED, LocalDate.of(2026, 4, 15), unallocated, eur(-5), ym("2026-03"), null, null),
+                HistoryRow(LedgerEntryId("h2"), HistoryKind.ONE_OFF_ADDED, LocalDate.of(2026, 4, 15), unallocated, eur(200), ym("2026-04"), null, "Gift"),
+            ),
+        )
+        compose.setContent { BudzetsTheme { SurplusContent(state, SurplusActions(onRemoveOneOff = { removed = it })) } }
+
+        compose.onNodeWithText("One-off boosts +€200.00").assertIsDisplayed()
+        val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        list.performScrollToNode(hasText("+€200.00 for April 2026"))
+        compose.onNodeWithText("Remove").performClick()
+        assertEquals(LedgerEntryId("o1"), removed)
+        list.performScrollToNode(hasText("One-off boost, April 2026"))
+        list.performScrollToNode(hasText("One-off boost removed, March 2026"))
+    }
+
+    @Test
+    fun `a deleted category's pocket is marked in history`() {
+        val clothes = PocketLabel(SurplusPocket.Category(CategoryId("clothes")), "Clothes", isArchived = true, isDeleted = true)
+        val state = ready().copy(
+            history = listOf(HistoryRow(LedgerEntryId("h1"), HistoryKind.CLOSE_CREDIT, LocalDate.of(2026, 4, 15), clothes, eur(5), ym("2026-03"), null, null)),
+        )
+        compose.setContent { BudzetsTheme { SurplusContent(state, SurplusActions()) } }
+        val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        list.performScrollToNode(hasText("Unspent in March 2026"))
+        compose.onNodeWithText("Clothes (deleted)", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `one-off boost editor explains itself, and refuses a closed month`() {
+        var typed = ""
+        val editing = OneOffBoostState.Editing(
+            currency = CurrencySpec.DEFAULT,
+            form = OneOffForm(),
+            month = ym("2026-04"),
+            isCurrentMonth = true,
+            monthClosed = true,
+            amountError = null,
+        )
+        compose.setContent { BudzetsTheme { OneOffBoostContent(editing, OneOffBoostActions(onAmountChange = { typed = it })) } }
+        compose.onNodeWithText("It goes into Unallocated surplus first.", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("April 2026 is closed, so it can’t take a one-off boost.").assertIsDisplayed()
+        compose.onNode(hasText("Add") and hasClickAction()).assertIsNotEnabled()
+        compose.onNodeWithTag(SURPLUS_AMOUNT_TAG).performScrollTo().performTextInput("7")
+        assertEquals("7", typed)
+    }
 }

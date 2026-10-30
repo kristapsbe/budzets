@@ -179,6 +179,54 @@ class BudgetsContentTest {
         compose.onNodeWithText("Add starter categories").performClick()
         assertEquals(true, starters)
     }
+
+    @Test
+    fun `a category can be deleted from its menu, and the dialog says what happens`() {
+        var deleted: CategoryId? = null
+        show(ready(), BudgetsActions(onDelete = { deleted = it }))
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("€10.00/day"))
+        compose.onNodeWithContentDescription("Actions for Food").performClick()
+        compose.onNodeWithText("Delete").performClick()
+
+        compose.onNodeWithText("Delete Food?").assertIsDisplayed()
+        compose.onNodeWithText("Closed months keep it exactly as it was.", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("This can’t be undone.", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(food, deleted)
+    }
+
+    @Test
+    fun `a closed month can't be edited`() {
+        var edits = 0
+        val state = ready().copy(isClosed = true, archived = emptyList(), unallocated = eur(300))
+        show(state, BudgetsActions(onEditBudget = { _, _ -> edits++ }))
+
+        compose.onNodeWithText("April 2026 is closed, so its budgets stay as they were. Changes start from the next open month. To change this month, reopen it.")
+            .assertIsDisplayed()
+        compose.onNodeWithText("Overall budget").performClick()
+        val list = compose.onNode(hasScrollToIndexAction())
+        list.performScrollToNode(hasText("€10.00/day"))
+        compose.onNodeWithText("€10.00/day").performClick()
+        assertEquals(0, edits)
+
+        compose.onNodeWithText("Add category").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Actions for Food").assertDoesNotExist()
+        compose.onNodeWithText("€300.00 isn’t assigned to a category.", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a deleted category in an earlier open month is marked and can't be changed`() {
+        var edits = 0
+        val row = CategoryBudgetRow(food, "Food", line(BudgetTarget(dailyMinor = 1_000)), april, canMoveUp = false, canMoveDown = false, isDeleted = true)
+        show(ready(categories = listOf(row)), BudgetsActions(onEditBudget = { _, _ -> edits++ }))
+
+        val list = compose.onNode(hasScrollToIndexAction())
+        list.performScrollToNode(hasText("Food (deleted)"))
+        compose.onNodeWithText("Food (deleted)").performClick()
+        assertEquals(0, edits)
+        compose.onNodeWithContentDescription("Actions for Food").assertDoesNotExist()
+        compose.onNodeWithText("Archived from April 2026").assertDoesNotExist()
+    }
 }
 
 private fun SemanticsNodeInteraction.assertTextSelection(expected: TextRange) {

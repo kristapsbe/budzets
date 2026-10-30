@@ -136,4 +136,52 @@ class SurplusFlowTest {
         compose.onNodeWithText("Close again").performClick()
         waitAndScrollTo("Month closed. Surplus has been recorded.")
     }
+
+    @Test
+    fun `a one-off boost lands in Unallocated, boosts a category, and a category with history can be deleted`() {
+        val month = YearMonth.now().displayName(Locale.US)
+
+        waitForText("Add starter categories")
+        compose.onNodeWithText("Add starter categories").performClick()
+        waitForText("Add expense")
+
+        // The money is usable at once, before any month has closed.
+        compose.onNodeWithText("Surplus").performClick()
+        waitForText("Add a one-off boost")
+        compose.onNodeWithText("Add a one-off boost").performClick()
+        waitForText("It goes into Unallocated surplus first.", substring = true)
+        compose.onNodeWithTag(SURPLUS_AMOUNT_TAG).performScrollTo().performTextInput("200")
+        compose.onNodeWithText("Add").performClick()
+        waitAndScrollTo("+€200.00 for $month")
+        scrollTo("One-off boost, $month")
+
+        // Boost Groceries from it.
+        compose.onNode(verticalList).performScrollToNode(hasText("Boost a budget"))
+        compose.onNodeWithText("Boost a budget").performClick()
+        waitForText("Use surplus from")
+        compose.onNodeWithText("Groceries").performScrollTo().performClick()
+        compose.onNodeWithTag(SURPLUS_AMOUNT_TAG).performScrollTo().performTextInput("150")
+        compose.onNodeWithText("Boost").performClick()
+        waitAndScrollTo("+€150.00 for Groceries, $month")
+
+        // Spend on Eating out, then delete it: the expense stays, marked.
+        compose.onNodeWithText("Overview").performClick()
+        waitForText("Add expense")
+        compose.onNodeWithText("Add expense").performClick()
+        waitFor(hasTestTag(AMOUNT_FIELD_TAG))
+        compose.onNodeWithTag(AMOUNT_FIELD_TAG).performTextInput("5")
+        compose.onNodeWithText("Eating out").performClick()
+        compose.onNodeWithText("Save").performClick()
+        waitForText("Budgets")
+        compose.onNodeWithText("Budgets").performClick()
+        waitAndScrollTo("Eating out")
+        compose.onNodeWithContentDescription("Actions for Eating out").performClick()
+        compose.onNodeWithText("Delete").performClick()
+        waitForText("Delete Eating out?")
+        compose.onNodeWithText("Delete").performClick()
+        waitForText("Category deleted")
+
+        compose.onNodeWithText("Overview").performClick()
+        waitAndScrollTo("Eating out (deleted)")
+    }
 }

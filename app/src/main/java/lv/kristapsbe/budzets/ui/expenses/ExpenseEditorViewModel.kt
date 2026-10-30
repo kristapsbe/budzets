@@ -44,7 +44,7 @@ data class ExpenseForm(
     fun toDraft() = ExpenseDraft(amountText, categoryId, date, note)
 }
 
-data class CategoryOption(val id: CategoryId, val name: String, val isArchived: Boolean)
+data class CategoryOption(val id: CategoryId, val name: String, val isArchived: Boolean, val isDeleted: Boolean = false)
 
 enum class EditorFailure { SAVE, DELETE }
 
@@ -162,9 +162,9 @@ class ExpenseEditorViewModel(
         savedState[KEY_INITIALIZED] = true
     }
 
-    /** Active categories, plus the selected one if it has been archived (an old expense being edited). */
+    /** Active categories, plus the selected one if it has been archived or deleted (an old expense being edited). */
     private fun options(all: List<Category>): List<CategoryOption> =
-        all.filter { !it.isArchived || it.id == form.categoryId }.map { CategoryOption(it.id, it.name, it.isArchived) }
+        all.filter { !it.isArchived || it.id == form.categoryId }.map { CategoryOption(it.id, it.name, it.isArchived, it.isDeleted) }
 
     /**
      * Before the first save attempt, only errors that typing more can't fix are shown (too many
