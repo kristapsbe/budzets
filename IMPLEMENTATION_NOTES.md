@@ -995,6 +995,66 @@ what it costs in battery, and fixed what was cheap to fix.
     - widget renders and updates after a write
     - quick add from the widget on a real cold start (process killed, not force-stopped)
 
+## Skipped-frames check (2026-10-30)
+
+The user saw `Skipped 33 frames!` in logcat on a debug build. No code changed: the message comes
+from how a debug build runs its first frame, and a release build stays far below it.
+
+- **The logged launch:** Android Studio's Run on a new DB, right after a build. First frame
+  +1.83 s, content +2.92 s, and `Skipped 33 frames` 33 ms after `Displayed`.
+- **What the message means here:** Choreographer logs lateness of 30 frames or more when a frame
+  starts. Frame 1 is not stuck on anything of its own; it waits for frame 0, whose composition,
+  measure and layout all run on the main thread. So the number is roughly frame 0's length. No
+  lock contention on the main thread, so `by lazy` isn't blocking it.
+- **Measured on seeded data** (6 categories, 713 expenses; AVD on an Apple M2; medians of 5–8 cold
+  starts). Lateness is `HandleInputStart - IntendedVsync` from `dumpsys gfxinfo framestats`, which
+  works below the log's threshold:
+
+  | Build | Frame 0, main thread | Worst lateness (max) | Content |
+  |---|---|---|---|
+  | Debug | 156 ms | 9.9 frames (10.4) | 709 ms |
+  | Debug, during a Gradle build | 166 ms | 10.8 frames (26.8) | 880 ms |
+  | Debug after `cmd package compile -m verify` | 80 ms | 5.5 frames (6.6) | 498 ms |
+  | Release, sideloaded, not compiled | 25 ms | 2.8 frames (6.8) | 262 ms |
+  | Release, Baseline Profile only | 16.5 ms | 2.4 frames (4.7) | 197 ms |
+
+- **Why debug is slow:**
+  - Debuggable apps skip dexopt at install (`status=run-from-apk`; the same `adb install` gives a
+    release build `status=verify`), so ART verifies classes at runtime on the main thread. That is
+    about half of frame 0.
+  - The rest is interpreted code without R8 or the profile.
+- **The 33:** not reproduced exactly in about 100 cold starts. Android Studio's sequence (install,
+  force-stop, start) on an idle Mac gives about 1 s to first frame. The launch overlapping the
+  start of a Gradle build took 1.81 s to first frame and 2.50 s to content, and the worst lateness
+  seen in a build was 26.8 frames. Load on the Mac and the post-install busy period fit, but the
+  log line itself didn't appear.
+- **Release has no hot spot:**
+  - First open of each screen, worst main-thread frame, Baseline Profile only: 3.7–13 ms, and
+    16–27 ms for whichever screen is the first navigation of the process. Spending's own cost is
+    9 ms.
+  - The profile journey runs without budgets or expenses, so `SummaryCard` and the budget rows
+    aren't in it. Overview's Ready frame was still 12.8 ms, against 11.4 ms with the runtime
+    profile merged, which is within noise.
+- **Considered, not done:**
+  - Moving Room and DataStore creation off the main thread: creating the ViewModel is about 4% of
+    frame 0 in debug.
+  - The nav graph is about 7% of frame 0 in debug, and it is already remembered.
+  - Composing the bottom bar in frame 0 (`currentBackStackEntryAsState()` is null then, so the bar
+    arrives in frame 1): this moves work into frame 0 rather than removing it, and would flash the
+    bar over Add expense on a quick-add launch.
+  - Extending the profile journey: no measurable gain here. Regenerating it uninstalls the app.
+- **For measuring performance:** use the `benchmarkRelease` variant. Debug numbers mostly measure
+  ART running unverified code.
+- **Emulator notes:**
+  - `adb install -r` over a foreground app makes the system relaunch it, so a following `am start`
+    only reaches the running activity and no `Displayed` is logged. Force-stop first, as Android
+    Studio does.
+  - `compile -m speed-profile` after some launches merges the runtime profile too. For the
+    Baseline Profile alone, run `pm art clear-app-profiles`, then the profileinstaller broadcast,
+    then compile, before the first launch.
+  - Android Studio's `traceconv` turns a Perfetto trace into text (`traceconv systrace`). Its
+    `trace-processor` binary is a server, not a SQL shell.
+
 ## Open questions
 
 None currently.
