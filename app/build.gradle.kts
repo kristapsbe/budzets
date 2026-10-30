@@ -61,6 +61,10 @@ android {
     buildFeatures {
         compose = true
     }
+    androidResources {
+        // Lists English and Latvian in Android 13+'s per-app language setting (Q26).
+        generateLocaleConfig = true
+    }
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {

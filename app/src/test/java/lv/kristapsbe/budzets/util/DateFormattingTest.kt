@@ -39,5 +39,6 @@ class DateFormattingTest {
         assertEquals("Tuesday, October 27", date.dayName(Locale.US, 2026))
         assertEquals("Tue, Oct 27", date.dayName(Locale.US, 2026, short = true))
         assertEquals("Tue, Oct 27, 2026", date.dayName(Locale.US, 2027, short = true))
+        assertEquals("otrdiena, 27. oktobris", date.dayName(Locale.forLanguageTag("lv-LV"), 2026))
     }
 }

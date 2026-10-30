@@ -46,10 +46,14 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- Target of the widget's midnight alarm only; nothing outside the app sends to it. -->
+        <!-- The widget's midnight alarm, and language changes: the widget's text is fixed when drawn. -->
         <receiver
             android:name=".widget.WidgetRefreshReceiver"
-            android:exported="false" />
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- WorkManager starts on demand (BudzetsApplication), not with every app start. -->
         <provider

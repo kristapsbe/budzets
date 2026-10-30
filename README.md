@@ -146,4 +146,6 @@ Room, so the screens and the widget update from Room's invalidation without extr
     opened again, because Android cancels the app's pending actions.
   - A widget showing the moment midnight passes keeps yesterday's "days left" until the next
     change.
-- **Language:** English only. All text is in `strings.xml`, ready for translation.
+- **Language:** English and Latvian. The app follows the device's language, and on Android 13+
+  Settings > Apps > Budzets > Language can override it. There is no language setting in the app.
+  Category names are the user's own data, so they don't change with the language.

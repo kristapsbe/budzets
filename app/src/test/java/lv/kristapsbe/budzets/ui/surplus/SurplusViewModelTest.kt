@@ -89,9 +89,9 @@ class SurplusViewModelTest : ViewModelTest() {
         val boost = vm.awaitReady { it.boosts.isNotEmpty() }.boosts.single()
         vm.releaseBoost(boost.id)
         assertEquals(SurplusMessage.BOOST_RELEASED, vm.message.awaitFirst { it != null })
-        val after = vm.awaitReady { it.boosts.isEmpty() }
+        // Boosts and ledger update separately, so wait for both; either alone can be seen first.
+        val after = vm.awaitReady { it.boosts.isEmpty() && it.history.first().kind == HistoryKind.BOOST_RELEASED }
         assertEquals(eur(100), after.pockets.single().breakdown.available)
-        assertEquals(HistoryKind.BOOST_RELEASED, after.history.first().kind)
     }
 
     @Test

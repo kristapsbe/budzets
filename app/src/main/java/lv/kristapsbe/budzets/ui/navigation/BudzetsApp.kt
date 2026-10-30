@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -23,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -108,7 +111,8 @@ fun BudzetsApp(
         bottomBar = {
             if (showBottomBar) {
                 // Five labels don't fit at the largest font sizes: then icons only, named for
-                // screen readers. Otherwise one line each, never broken mid-word.
+                // screen readers. Otherwise one line each, never broken mid-word, and a long one
+                // (Latvian's "Pārpalikums" on a narrow phone) shrinks rather than being cut off.
                 val iconsOnly = LocalDensity.current.fontScale >= ICONS_ONLY_FONT_SCALE
                 NavigationBar {
                     topLevelDestinations.forEach { dest ->
@@ -119,7 +123,15 @@ fun BudzetsApp(
                             onClick = { navController.navigateTopLevel(dest.route) },
                             icon = { Icon(dest.icon, contentDescription = if (iconsOnly) label else null) },
                             label = if (iconsOnly) null else {
-                                { Text(label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
+                                {
+                                    Text(
+                                        label,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
+                                        autoSize = TextAutoSize.StepBased(MIN_LABEL_FONT_SIZE, LocalTextStyle.current.fontSize, 0.5.sp),
+                                    )
+                                }
                             },
                         )
                     }
@@ -194,6 +206,8 @@ fun BudzetsApp(
         }
     }
 }
+
+private val MIN_LABEL_FONT_SIZE = 8.sp
 
 /** Switches tabs keeping one copy of each tab on the back stack, restoring its state. */
 private const val ICONS_ONLY_FONT_SCALE = 1.5f

@@ -1055,6 +1055,87 @@ from how a debug build runs its first frame, and a release build stays far below
   - Android Studio's `traceconv` turns a Perfetto trace into text (`traceconv systrace`). Its
     `trace-processor` binary is a server, not a SQL shell.
 
+## Latvian (2026-10-30)
+
+- **Q26 — Choosing the language:** the app follows the device, with no control inside it. Android
+  13+ gets the system's per-app setting from `generateLocaleConfig`. An in-app picker for every
+  version would have needed AppCompat, plus changes to `MainActivity` and the theme.
+- **Resources:** `values-lv/strings.xml` has every translatable string. Format-only strings are
+  `translatable="false"`. `res/resources.properties` tells AGP that `values/` is English. The
+  generated locale config lists exactly `en` and `lv`.
+- **Wording rules** (also at the top of the file):
+  - Months arrive as "Aprīlis 2026" and category names as typed, so both are always nominative.
+    Sentences that would need another case are reworded so the inserted text stands alone: after
+    a colon, in quotes, or as the subject. "Close %1$s" is "Noslēgt: %1$s", and "Delete %1$s?" is
+    "Dzēst kategoriju „%1$s”?".
+  - Amounts use a form that needs no agreement with the number: "Atlikums: %1$s".
+  - Plurals need `zero`, `one` and `other`. `one` also covers 21 and 31, and `zero` covers 0,
+    10–20 and 30, so every item keeps its number. October's "× 31 diena" uses `one`.
+  - Buttons use the infinitive and messages the formal address (Ievadiet).
+- **Terms:**
+
+  | English | Latvian |
+  |---|---|
+  | Overview | Pārskats |
+  | Spending | Izdevumi |
+  | Surplus | Pārpalikums |
+  | Boost | Papildinājums |
+  | Close / reopen a month | Noslēgt / atvērt no jauna |
+  | Debit (overspending) | Parāds |
+  | Backup / restore | Rezerves kopija / atjaunot |
+
+  "Atlikums" is kept for what is left this month. It is also the word for a bank balance, which
+  the app says surplus isn't.
+- **Which language a device gets** (measured on the emulator):
+
+  | Device languages | Text | Numbers and dates |
+  |---|---|---|
+  | `lv` | Latvian | Latvian |
+  | `en, lv` | English | English |
+  | `de` first, in any order | English | German |
+
+  `[de, lv]` doesn't reach Latvian: library resources ship German, so Android counts German as
+  supported and picks it, and the app's own strings fall back to English. The mix of English text
+  and German formats is how the app has always looked on a German device. `androidResources.localeFilters`
+  would change this, and it was left alone as nothing asked for it.
+- **Widget and language changes:** Android does send a widget update when the system language
+  changes, but it only worked with the process dead. Measured with the receiver disabled:
+
+  | Process when the language changes | Without `LOCALE_CHANGED` | With it and `languageChanges` |
+  |---|---|---|
+  | Dead | redraws | redraws |
+  | Cached, no session open | stale | redraws |
+  | Glance session open | stale, at least 147 s | redraws |
+
+  Cached processes last for hours, and a session is open for about 45 s after any app start, so
+  both are ordinary cases. Staleness otherwise lasted until the next data change or midnight;
+  opening the app doesn't help, because `WidgetRefresher.start()` does nothing in a live process.
+  `WidgetRefreshReceiver` now listens for `LOCALE_CHANGED`, which Android 13+ also sends for a
+  per-app change. A live session needs more than `updateAll`: its text is resolved while
+  composing, so `BudzetsWidget.languageChanges` keys the content and forces a new composition.
+- **Bottom bar:** at 360 dp, "Pārpalikums" was cut off at normal font size, and three labels were
+  at font scale 1.3. Labels now shrink to fit with `autoSize`, between 8 sp and the style's size,
+  so English keeps its size. The 8 sp floor is scaled by the font setting, and icons-only still
+  starts at 1.5. On `benchmarkRelease`, 28 interleaved cold starts each: frame 0 21.1 ms with
+  shrinking, 22.1 ms without; content 188 ms and 180 ms. That is within noise.
+- **Currency list:** sorted with `Collator` for the locale, because plain character order put
+  Č, Š and Ž after Z.
+- **Unrelated test fix:** `SurplusViewModelTest`, "releasing a boost…", failed 5 of 12 runs on
+  untouched `b915f2f`. `boosts` and `ledger` are separate Room flows under `combine`, so its
+  `boosts.isEmpty()` could match before the ledger updated. It now waits for both. Only the test
+  was wrong; the screen corrects itself on the next emission.
+- **Verified:** 257 tests ×3, lint 0 errors. On the emulator, every screen in Latvian with a real
+  system language change, starter categories, comma amounts, backup and restore dialogs, the date
+  picker and the widget; the per-app override both ways; `benchmarkRelease` in Latvian. APK about
+  18 KB larger. Not checked by a second reader: the translation was written by Claude Code and
+  needs a native speaker's read. `Journeys.kt` selects English text, so regenerate the Baseline
+  Profile on an English AVD.
+- **Emulator notes:**
+  - `settings put system system_locales` doesn't survive a reboot. Change the language through
+    Settings; the app's own language can be set with `cmd locale set-app-locales`.
+  - `am kill` leaves the process alive while a Glance session runs, so check `pidof` before
+    calling a process dead.
+
 ## Open questions
 
 None currently.

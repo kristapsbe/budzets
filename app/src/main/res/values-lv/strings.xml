@@ -1,0 +1,357 @@
+<resources>
+    <!--
+      Months arrive as "Aprīlis 2026" and category names as typed, so both are always nominative.
+      Word each template so the inserted text stands alone (after a colon, in quotes, or as the
+      subject), never where a sentence would need another case.
+      Plurals: "one" also covers 21, 31…, "zero" covers 0, 10–20, 30…, so every item keeps its number.
+    -->
+
+    <!-- Navigation -->
+    <string name="nav_overview">Pārskats</string>
+    <string name="nav_transactions">Izdevumi</string>
+    <string name="nav_budgets">Budžeti</string>
+    <string name="nav_surplus">Pārpalikums</string>
+    <string name="nav_settings">Iestatījumi</string>
+    <string name="add_expense">Pievienot izdevumu</string>
+
+    <!-- Overview: month selector -->
+    <string name="previous_month">Iepriekšējais mēnesis</string>
+    <string name="next_month">Nākamais mēnesis</string>
+    <string name="go_to_current_month">Pāriet uz šo mēnesi</string>
+
+    <!-- Overview: summary card -->
+    <string name="spent_of_budget">Iztērēts %1$s no %2$s</string>
+    <string name="remaining_amount">Atlikums: %1$s</string>
+    <string name="over_by_amount">Pārsniegts par %1$s</string>
+    <string name="base_budget">Pamatbudžets</string>
+    <string name="base_budget_derived">Pamatbudžets (kategoriju summa)</string>
+    <string name="surplus_boosts">Papildinājumi no pārpalikuma</string>
+    <string name="spent_amount">Iztērēts: %1$s</string>
+    <string name="pace_guide">Tempa orientieris: %1$s līdz šodienai</string>
+    <plurals name="days_left">
+        <item quantity="zero">Atlikušas %d dienas</item>
+        <item quantity="one">Atlikusi %d diena</item>
+        <item quantity="other">Atlikušas %d dienas</item>
+    </plurals>
+    <string name="status_on_track">Atbilst plānam</string>
+    <string name="status_watch">Uzmanīgi ar tēriņiem</string>
+    <string name="status_over">Budžets pārsniegts</string>
+    <string name="status_no_budget">Budžets nav iestatīts</string>
+
+    <!-- Overview: banners and shortcuts -->
+    <string name="month_closed">Mēnesis noslēgts. Pārpalikums ir reģistrēts.</string>
+    <string name="month_changed_since_closing">Mainīts pēc mēneša noslēgšanas. Noslēdziet to vēlreiz, lai atjauninātu pārpalikumu.</string>
+    <string name="categories_exceed_overall">Kategoriju budžetu summa ir %1$s, kas pārsniedz kopējo budžetu %2$s.</string>
+    <string name="saved_surplus">Uzkrātais pārpalikums</string>
+    <string name="saved_surplus_hint">Neiztērētais budžets no noslēgtajiem mēnešiem. Tas nav bankas konta atlikums.</string>
+
+    <!-- Overview: categories -->
+    <string name="categories">Kategorijas</string>
+    <string name="category_spent_of">%1$s no %2$s</string>
+    <string name="category_no_budget">Bez budžeta · iztērēts %1$s</string>
+    <string name="category_boost">+%1$s papildinājums</string>
+    <string name="category_archived">%1$s (arhivēta)</string>
+
+    <!-- Overview: empty states -->
+    <string name="empty_no_categories_title">Vēl nav kategoriju</string>
+    <string name="empty_no_categories_body">Kategorijas palīdz sakārtot izdevumus. Sāciet ar dažām biežāk lietotajām; vēlāk tās var pārdēvēt, pārkārtot vai arhivēt.</string>
+    <string name="add_starter_categories">Pievienot sākuma kategorijas</string>
+    <string name="empty_no_budget_title">Šim mēnesim nav budžeta</string>
+    <string name="empty_no_budget_body">Iestatiet dienas vai nedēļas mērķi, un lietotne aprēķinās mēneša summu.</string>
+    <string name="set_up_budgets">Iestatīt budžetus</string>
+    <string name="empty_no_spending">Šajā mēnesī nav reģistrētu izdevumu. Lai pievienotu pirkumu, izmantojiet „Pievienot izdevumu”.</string>
+    <string name="error_loading">Neizdevās ielādēt šo mēnesi.</string>
+    <string name="retry">Mēģināt vēlreiz</string>
+
+    <!-- Expense editor -->
+    <string name="edit_expense">Rediģēt izdevumu</string>
+    <string name="save">Saglabāt</string>
+    <string name="cancel">Atcelt</string>
+    <string name="delete">Dzēst</string>
+    <string name="close">Aizvērt</string>
+    <string name="amount">Summa</string>
+    <string name="category">Kategorija</string>
+    <string name="date">Datums</string>
+    <string name="note_optional">Piezīme (nav obligāta)</string>
+    <string name="today">Šodien</string>
+    <string name="yesterday">Vakar</string>
+    <string name="pick_date">Cits datums</string>
+    <string name="error_amount_empty">Ievadiet summu</string>
+    <string name="error_amount_not_number">Ievadiet skaitli, piemēram, 12,50</string>
+    <plurals name="error_amount_decimals">
+        <item quantity="zero">Izmantojiet ne vairāk kā %d decimālzīmes</item>
+        <item quantity="one">Izmantojiet ne vairāk kā %d decimālzīmi</item>
+        <item quantity="other">Izmantojiet ne vairāk kā %d decimālzīmes</item>
+    </plurals>
+    <string name="error_amount_whole">Ievadiet veselu summu bez decimāldaļas</string>
+    <string name="error_amount_not_positive">Summai jābūt lielākai par nulli</string>
+    <string name="error_amount_too_large">Šī summa ir pārāk liela</string>
+    <string name="error_category_missing">Izvēlieties kategoriju</string>
+    <string name="error_date_future">Datums nevar būt nākotnē</string>
+    <string name="closed_month_edit_hint">Jau noslēgts: %1$s. Pēc saglabāšanas noslēdziet to vēlreiz, lai atjauninātu pārpalikumu.</string>
+    <string name="save_failed">Neizdevās saglabāt. Mēģiniet vēlreiz.</string>
+    <string name="delete_failed">Neizdevās izdzēst. Mēģiniet vēlreiz.</string>
+    <string name="delete_expense_title">Dzēst šo izdevumu?</string>
+    <string name="delete_expense_body">Tas tiks noņemts no izdevumiem un mēneša kopsummām.</string>
+    <string name="expense_not_found">Šis izdevums vairs nepastāv.</string>
+
+    <!-- Spending -->
+    <string name="back">Atpakaļ</string>
+    <string name="search_notes">Meklēt piezīmēs</string>
+    <string name="close_search">Aizvērt meklēšanu</string>
+    <string name="all_categories">Visas</string>
+    <plurals name="expense_count">
+        <item quantity="zero">%d izdevumu</item>
+        <item quantity="one">%d izdevums</item>
+        <item quantity="other">%d izdevumi</item>
+    </plurals>
+    <string name="empty_month_spending">%1$s: izdevumu nav.</string>
+    <string name="empty_category_spending">%2$s: kategorijā „%1$s” izdevumu nav.</string>
+    <string name="empty_search">Nav piezīmju, kas atbilst „%1$s”.</string>
+    <string name="empty_spending_no_categories">Vispirms pievienojiet kategorijas sadaļā Pārskats.</string>
+    <string name="expense_deleted">Izdevums izdzēsts</string>
+    <string name="undo">Atsaukt</string>
+    <string name="restore_failed">Neizdevās atjaunot izdevumu.</string>
+
+    <!-- Budgets -->
+    <string name="overall_budget">Kopējais budžets</string>
+    <string name="overall_not_set">Nav iestatīts</string>
+    <string name="overall_not_set_derived">Nav iestatīts: kopējais plāns ir kategoriju budžetu summa, %1$s.</string>
+    <string name="budget_per_day">%1$s dienā</string>
+    <string name="budget_per_week">%1$s nedēļā</string>
+    <string name="budget_per_month">%1$s mēnesī</string>
+    <string name="budget_since">Kopš: %1$s</string>
+    <string name="budget_changes_in">Mainīsies: %1$s</string>
+    <string name="no_budget">Bez budžeta</string>
+    <string name="category_budgets_of_overall">Kategoriju budžeti: %1$s no %2$s</string>
+    <string name="budget_unallocated">Nav piešķirts nevienai kategorijai: %1$s. Noslēdzot mēnesi, šī summa kļūst par nesadalītu pārpalikumu.</string>
+    <string name="budgets_month_closed">%1$s ir noslēgts. Ja mainīsiet budžetu, mēnesis būs jānoslēdz vēlreiz.</string>
+    <string name="add_category">Pievienot kategoriju</string>
+    <string name="rename_category">Pārdēvēt kategoriju</string>
+    <string name="category_name">Nosaukums</string>
+    <plurals name="category_name_too_long">
+        <item quantity="zero">Izmantojiet ne vairāk kā %d rakstzīmes</item>
+        <item quantity="one">Izmantojiet ne vairāk kā %d rakstzīmi</item>
+        <item quantity="other">Izmantojiet ne vairāk kā %d rakstzīmes</item>
+    </plurals>
+    <string name="rename">Pārdēvēt</string>
+    <string name="move_up">Pārvietot uz augšu</string>
+    <string name="move_down">Pārvietot uz leju</string>
+    <string name="archive">Arhivēt</string>
+    <string name="unarchive">Atjaunot no arhīva</string>
+    <string name="category_actions">Darbības: %1$s</string>
+    <string name="archived_categories">Arhivētās</string>
+    <string name="archived_from">Arhivēta no: %1$s</string>
+    <string name="delete_category_title">Dzēst kategoriju „%1$s”?</string>
+    <string name="delete_category_body">Tiks izdzēsti arī tās budžeti. Kategoriju ar izdevumu vai pārpalikuma vēsturi var tikai paturēt arhīvā.</string>
+    <string name="category_delete_refused">Šai kategorijai ir izdevumu vai pārpalikuma vēsture, tāpēc to var tikai paturēt arhīvā.</string>
+    <string name="category_deleted">Kategorija izdzēsta</string>
+    <string name="action_failed">Neizdevās. Mēģiniet vēlreiz.</string>
+
+    <!-- Budget editor -->
+    <string name="category_budget_title">Budžets: %1$s</string>
+    <string name="category_not_found">Šī kategorija vairs nepastāv.</string>
+    <string name="applies_from">Spēkā no: %1$s.</string>
+    <string name="applies_from_until">Spēkā no: %1$s. Līdz: %2$s, kad stāsies spēkā vēlākas izmaiņas.</string>
+    <string name="targets_explanation">Iestatiet vienu vai vairākus mērķus. Ja lauku neizmantojat, atstājiet to tukšu.</string>
+    <string name="target_daily">Dienā</string>
+    <string name="target_weekly">Nedēļā</string>
+    <string name="target_monthly">Mēnesī</string>
+    <string name="target_not_set">Nav iestatīts</string>
+    <string name="clear_targets">Notīrīt visu</string>
+    <plurals name="equivalent_daily">
+        <item quantity="zero">%1$s dienā × %2$d dienas = %3$s</item>
+        <item quantity="one">%1$s dienā × %2$d diena = %3$s</item>
+        <item quantity="other">%1$s dienā × %2$d dienas = %3$s</item>
+    </plurals>
+    <plurals name="equivalent_weekly">
+        <item quantity="zero">%1$s nedēļā × %2$d dienas ÷ 7 = %3$s</item>
+        <item quantity="one">%1$s nedēļā × %2$d diena ÷ 7 = %3$s</item>
+        <item quantity="other">%1$s nedēļā × %2$d dienas ÷ 7 = %3$s</item>
+    </plurals>
+    <string name="equivalent_monthly">%1$s mēnesī</string>
+    <string name="monthly_plan_for">Plāns (%1$s): %2$s</string>
+    <string name="highest_rule">Tiek izmantots augstākais. Tie ir dažādi viena limita izteikšanas veidi, tāpēc tie netiek saskaitīti.</string>
+    <string name="sets_the_plan">Nosaka plānu</string>
+    <string name="no_budget_from">Bez budžeta no: %1$s.</string>
+    <string name="no_overall_budget_from">Bez kopējā budžeta no: %1$s. Kopējais plāns būs kategoriju budžetu summa.</string>
+    <string name="preview_fix_errors">Izlabojiet iezīmēto summu, lai redzētu plānu.</string>
+    <string name="categories_would_exceed_overall">Kategoriju budžetu summa būtu %1$s, kas pārsniedz kopējo budžetu %2$s.</string>
+
+    <!-- Month close -->
+    <string name="close_month_title">Noslēgt: %1$s</string>
+    <string name="close_explanation">Noslēdzot mēnesi, katras kategorijas neiztērētais budžets tiek saglabāts kā šīs kategorijas pārpalikums. Pārtēriņš tiek reģistrēts kā parāds pret kategorijas pārpalikumu, ko vēlāk sedz nākamais pārpalikums vai pārvietojums. Tas attiecas arī uz visiem izdevumiem kategorijās bez budžeta.</string>
+    <string name="close_early_note">%1$s vēl nav beidzies. Mēnesi var noslēgt jau tagad; vēlāk pievienotie izdevumi tiks ieskaitīti, noslēdzot to vēlreiz.</string>
+    <string name="close_no_budget_warning">Šim mēnesim nav budžeta, tāpēc, to noslēdzot, visi tā izdevumi tiks reģistrēti kā parāds.</string>
+    <string name="month_was_reopened">Šis mēnesis tika atvērts no jauna. Noslēdzot to, pārpalikums tiks reģistrēts vēlreiz.</string>
+    <string name="month_closed_on">Noslēgts: %1$s. Pārpalikums ir reģistrēts zemāk.</string>
+    <string name="month_changed_review">Izdevumi vai budžeti ir mainījušies pēc mēneša noslēgšanas. Noslēdzot vēlreiz, tiks reģistrētas tikai šeit parādītās atšķirības.</string>
+    <string name="close_line_budget">Budžets %1$s · iztērēts %2$s</string>
+    <string name="close_line_budget_boost">Budžets %1$s + %2$s papildinājums · iztērēts %3$s</string>
+    <string name="close_line_no_budget">Bez budžeta, tāpēc iztērētais %1$s tiek reģistrēts kā parāds</string>
+    <string name="close_line_unallocated">Kopējais budžets, kas nav piešķirts nevienai kategorijai</string>
+    <string name="close_line_total_after">Šī mēneša kopsumma pēc noslēgšanas: %1$s</string>
+    <string name="amount_saved">+%1$s saglabāts</string>
+    <string name="amount_debit">−%1$s parāds</string>
+    <string name="close_net">Mēneša neto pārpalikums</string>
+    <string name="close_net_change">Neto izmaiņas</string>
+    <string name="surplus_not_bank_balance">Pārpalikums ir budžeta rādītājs, nevis bankas konta atlikums.</string>
+    <string name="close_month_button">Noslēgt mēnesi</string>
+    <string name="close_again">Noslēgt vēlreiz</string>
+    <string name="close_future_month">Nākotnes mēnešus nevar noslēgt.</string>
+    <string name="reopen_month">Atvērt mēnesi no jauna</string>
+    <string name="reopen_confirm_title">Atvērt no jauna: %1$s?</string>
+    <string name="reopen_confirm_body">Tā pārpalikuma ieraksti tiks atcelti, tāpēc saglabātās summas samazināsies. Vēlāk mēnesi varēs noslēgt vēlreiz.</string>
+    <string name="month_reopened">Mēnesis atvērts no jauna</string>
+    <string name="reopen_refused_title">Šo mēnesi nevar atvērt no jauna</string>
+    <string name="reopen_refused_body">Daļa tā pārpalikuma jau ir pārvietota vai izmantota papildinājumam. Atverot mēnesi no jauna, paliktu:\n%1$s\nVispirms pārvietojiet pārpalikumu atpakaļ vai atceliet papildinājumu.</string>
+    <string name="pocket_would_be">%1$s: −%2$s</string>
+
+    <!-- Overview: closing -->
+    <string name="reminder_unclosed">%1$s vēl nav noslēgts.</string>
+    <plurals name="reminder_unclosed_more">
+        <item quantity="zero">%1$s un vēl %2$d iepriekšējie mēneši nav noslēgti.</item>
+        <item quantity="one">%1$s un vēl %2$d iepriekšējais mēnesis nav noslēgti.</item>
+        <item quantity="other">%1$s un vēl %2$d iepriekšējie mēneši nav noslēgti.</item>
+    </plurals>
+    <string name="month_not_closed">Šis mēnesis vēl nav noslēgts.</string>
+    <string name="review_and_close">Pārskatīt un noslēgt</string>
+    <string name="review_and_close_this_month">Pārskatīt un noslēgt šo mēnesi</string>
+    <string name="view_closing">Skatīt</string>
+
+    <!-- Surplus -->
+    <string name="pocket_unallocated">Nesadalīts</string>
+    <string name="move_surplus">Pārvietot pārpalikumu</string>
+    <string name="boost_a_budget">Papildināt budžetu</string>
+    <string name="surplus_empty">Pārpalikuma vēl nav. Kad noslēgsiet mēnesi, neiztērētais budžets tiks saglabāts šeit.</string>
+    <string name="surplus_by_category">Pa kategorijām</string>
+    <string name="breakdown_closing">Noslēgtie mēneši %1$s</string>
+    <string name="breakdown_moved">Pārvietots %1$s</string>
+    <string name="breakdown_boosts">Papildinājumi %1$s</string>
+    <string name="pocket_negative_hint">Pārtērēts. To sedz vēlāks pārpalikums vai pārvietojums.</string>
+    <string name="active_boosts">Aktīvie papildinājumi</string>
+    <string name="boost_row">+%1$s: %2$s, %3$s</string>
+    <string name="boost_from">No: %1$s</string>
+    <string name="release_boost">Atcelt</string>
+    <string name="boost_released">Papildinājums atcelts. Tā pārpalikums atkal ir pieejams.</string>
+    <string name="surplus_history">Vēsture</string>
+    <string name="history_close_credit">Neiztērēts: %1$s</string>
+    <string name="history_close_debit">Pārtērēts: %1$s</string>
+    <string name="history_reclose">%1$s: noslēgts vēlreiz</string>
+    <string name="history_reopen">%1$s: atvērts no jauna</string>
+    <string name="history_moved_out">Pārvietots uz: %1$s</string>
+    <string name="history_moved_in">Pārvietots no: %1$s</string>
+    <string name="history_boost">Papildinājums: %1$s, %2$s</string>
+    <string name="history_boost_released">Papildinājums atcelts: %1$s, %2$s</string>
+
+    <!-- Move surplus / boost -->
+    <string name="move">Pārvietot</string>
+    <string name="move_explanation">Pārvietojiet visu kategorijas saglabāto pārpalikumu vai tā daļu uz citu kategoriju. Pārvietošana nemaina neviena mēneša budžetu vai izdevumus.</string>
+    <string name="move_from">No</string>
+    <string name="move_to">Uz</string>
+    <string name="use_all">Viss (%1$s)</string>
+    <string name="error_more_than_available">Pieejams tikai %1$s</string>
+    <string name="error_choose_pocket">Izvēlieties vienu</string>
+    <string name="no_surplus_to_use">Nevienai kategorijai vēl nav izmantojama pārpalikuma.</string>
+    <string name="boost">Papildināt</string>
+    <string name="boost_explanation">Izmantojiet saglabāto pārpalikumu, lai palielinātu vienas kategorijas budžetu vienam mēnesim. Summa tiek rezervēta, tāpēc to nevar izmantot divreiz; lai to atgūtu, atceliet papildinājumu.</string>
+    <string name="boost_for">Kategorija</string>
+    <string name="boost_from_pocket">Izmantot pārpalikumu no</string>
+    <string name="boost_month_closed">%1$s ir noslēgts, tāpēc tā budžetu nevar papildināt.</string>
+    <string name="boost_preview">Budžets (%1$s, %2$s): %3$s + %4$s = %5$s</string>
+
+    <!-- Widget -->
+    <string name="widget_label">Budzets: šis mēnesis</string>
+    <string name="widget_description">Šī mēneša izdevumi salīdzinājumā ar budžetu</string>
+    <string name="widget_not_set_up">Atveriet Budzets, lai iestatītu kategorijas un budžetu.</string>
+    <string name="widget_top_over">%1$s: pārsniegts par %2$s</string>
+    <string name="widget_saved_surplus">Uzkrātais pārpalikums: %1$s</string>
+
+    <!-- Overview: backup reminder -->
+    <string name="reminder_backup_never">Rezerves kopijas vēl nav. Saglabājiet to Google Drive vai šajā tālrunī, ja nu tālrunis pazūd.</string>
+    <plurals name="reminder_backup_old">
+        <item quantity="zero">Pēdējā rezerves kopija izveidota pirms %d dienām.</item>
+        <item quantity="one">Pēdējā rezerves kopija izveidota pirms %d dienas.</item>
+        <item quantity="other">Pēdējā rezerves kopija izveidota pirms %d dienām.</item>
+    </plurals>
+    <string name="reminder_backup_action">Izveidot kopiju</string>
+
+    <!-- Settings -->
+    <string name="settings_backup">Rezerves kopija</string>
+    <string name="backup_explanation">Saglabājiet visu datu kopiju kā failu Google Drive vai šajā tālrunī. Budzets pats neko neaugšupielādē.</string>
+    <string name="backup_last">Pēdējā rezerves kopija: %1$s</string>
+    <string name="backup_never">Šajā tālrunī rezerves kopija vēl nav izveidota.</string>
+    <string name="backup_now">Izveidot kopiju</string>
+    <string name="restore_from_backup">Atjaunot</string>
+    <string name="busy_backing_up">Saglabā rezerves kopiju…</string>
+    <string name="busy_reading">Pārbauda rezerves kopiju…</string>
+    <string name="busy_restoring">Atjauno…</string>
+    <string name="busy_undoing">Atsauc atjaunošanu…</string>
+    <string name="restore_undo_note">Dati atjaunoti no rezerves kopijas: %1$s. Iepriekšējie dati glabājas šajā tālrunī līdz nākamajai atjaunošanai.</string>
+    <string name="undo_restore">Atsaukt atjaunošanu</string>
+    <string name="restore_confirm_title">Aizstāt visus datus?</string>
+    <string name="restore_confirm_created">Rezerves kopija no: %1$s</string>
+    <plurals name="restore_categories">
+        <item quantity="zero">%d kategoriju</item>
+        <item quantity="one">%d kategorija</item>
+        <item quantity="other">%d kategorijas</item>
+    </plurals>
+    <plurals name="restore_expenses">
+        <item quantity="zero">%d izdevumu</item>
+        <item quantity="one">%d izdevums</item>
+        <item quantity="other">%d izdevumi</item>
+    </plurals>
+    <plurals name="restore_closed_months">
+        <item quantity="zero">%d noslēgto mēnešu</item>
+        <item quantity="one">%d noslēgts mēnesis</item>
+        <item quantity="other">%d noslēgti mēneši</item>
+    </plurals>
+    <string name="restore_confirm_range">Izdevumi no %1$s līdz %2$s</string>
+    <string name="restore_confirm_one_day">Izdevumi: %1$s</string>
+    <string name="restore_confirm_currency">Valūta: %1$s</string>
+    <string name="restore_confirm_warning">Viss šajā tālrunī tiks aizstāts ar šo rezerves kopiju, nevis apvienots ar to. Pašreizējie dati paliek šajā tālrunī, tāpēc darbību var atsaukt sadaļā Iestatījumi.</string>
+    <string name="restore_confirm_button">Aizstāt datus</string>
+    <string name="undo_restore_title">Atsaukt atjaunošanu?</string>
+    <string name="undo_restore_text">Tiks atgriezti dati no laika pirms atjaunošanas (%1$s). Viss, kas pēc tam pievienots vai mainīts, tiks zaudēts.</string>
+    <string name="msg_backup_saved">Rezerves kopija saglabāta</string>
+    <string name="msg_backup_not_confirmed">Neizdevās pārbaudīt saglabāto failu. Mēģiniet vēlreiz vai izvēlieties citu vietu.</string>
+    <string name="msg_backup_failed">Neizdevās saglabāt rezerves kopiju. Pārbaudiet vietu un mēģiniet vēlreiz.</string>
+    <string name="msg_not_a_backup">Šis fails nav Budzets rezerves kopija.</string>
+    <string name="msg_backup_too_new">Šī rezerves kopija ir no jaunākas Budzets versijas. Lai to atjaunotu, atjauniniet lietotni.</string>
+    <string name="msg_backup_damaged">Šī rezerves kopija ir bojāta vai rediģēta, tāpēc to nevar atjaunot. Jūsu dati nav mainīti.</string>
+    <string name="msg_file_too_large">Šis fails ir pārāk liels, lai būtu Budzets rezerves kopija.</string>
+    <string name="msg_file_unreadable">Neizdevās atvērt šo failu.</string>
+    <string name="msg_restored">Rezerves kopija atjaunota</string>
+    <string name="msg_restore_failed">Atjaunošana neizdevās. Jūsu dati nav mainīti.</string>
+    <string name="msg_undone">Atjaunošana atsaukta</string>
+    <string name="msg_undo_failed">Neizdevās atsaukt atjaunošanu. Jūsu dati nav mainīti.</string>
+    <string name="msg_currency_refused">Šai valūtai ir cits decimālzīmju skaits nekā jūsu summām.</string>
+    <string name="settings_currency">Valūta</string>
+    <string name="choose_currency">Izvēlēties valūtu</string>
+    <string name="search_currencies">Meklēt</string>
+    <plurals name="currency_locked_note">
+        <item quantity="zero">Jūsu summas glabājas ar %1$d decimālzīmēm un nekad netiek konvertētas, tāpēc var izvēlēties tikai valūtas ar %1$d decimālzīmēm.</item>
+        <item quantity="one">Jūsu summas glabājas ar %1$d decimālzīmi un nekad netiek konvertētas, tāpēc var izvēlēties tikai valūtas ar %1$d decimālzīmi.</item>
+        <item quantity="other">Jūsu summas glabājas ar %1$d decimālzīmēm un nekad netiek konvertētas, tāpēc var izvēlēties tikai valūtas ar %1$d decimālzīmēm.</item>
+    </plurals>
+    <plurals name="currency_decimals">
+        <item quantity="zero">%d decimālzīmju</item>
+        <item quantity="one">%d decimālzīme</item>
+        <item quantity="other">%d decimālzīmes</item>
+    </plurals>
+    <string name="settings_how_budgets_work">Kā darbojas budžeti</string>
+    <string name="how_budgets_work_text">Iestatiet dienas, nedēļas vai mēneša mērķi. Dienas un nedēļas mērķi tiek pārrēķināti mēneša summā atbilstoši mēneša garumam; ja iestatīti vairāki, tiek izmantota lielākā mēneša summa. Noslēdzot mēnesi, neiztērētais budžets kļūst par pārpalikumu.</string>
+    <string name="settings_privacy">Privātums</string>
+    <string name="privacy_text">Jūsu dati paliek šajā tālrunī. Budzets neizmanto ne kontus, ne serveri, un Android rezerves kopēšana tos neietver. Vienīgās kopijas ir rezerves faili, ko saglabājat paši.</string>
+    <string name="settings_about">Par lietotni</string>
+    <string name="about_data_version">Datu versija %1$d · rezerves kopijas formāts %2$d</string>
+
+    <string-array name="starter_categories">
+        <item>Pārtika</item>
+        <item>Ēšana ārpus mājām</item>
+        <item>Transports</item>
+        <item>Mājoklis</item>
+        <item>Izklaide</item>
+        <item>Citi</item>
+    </string-array>
+</resources>

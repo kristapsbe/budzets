@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
@@ -110,9 +111,10 @@ object WidgetSchedule {
     )
 }
 
-/** The midnight alarm's target. */
+/** Redraws the widget for the midnight alarm and for a change of language. */
 class WidgetRefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_LOCALE_CHANGED) BudzetsWidget.languageChanges.update { it + 1 }
         val app = context.applicationContext as BudzetsApplication
         val pending = goAsync()
         app.container.appScope.launch {

@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +44,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.MainActivity
@@ -78,8 +80,17 @@ class BudzetsWidget : GlanceAppWidget() {
         val initial = states.first()
         provideContent {
             val state by states.collectAsState(initial)
-            GlanceTheme { WidgetContent(state) }
+            val language by languageChanges.collectAsState()
+            key(language) { GlanceTheme { WidgetContent(state) } }
         }
+    }
+
+    companion object {
+        /**
+         * Counts language changes. Text is resolved while composing, so a live session keeps the
+         * old language unless something makes it compose again.
+         */
+        val languageChanges = MutableStateFlow(0)
     }
 }
 
