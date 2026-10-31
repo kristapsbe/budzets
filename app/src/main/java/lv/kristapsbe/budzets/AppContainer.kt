@@ -16,6 +16,7 @@ import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.widget.WidgetRefresher
+import lv.kristapsbe.budzets.widget.WidgetSchedule
 import java.io.File
 import java.time.Clock
 import java.time.Instant
@@ -54,7 +55,9 @@ class AppContainer(context: Context) {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val widgetRefresher by lazy {
-        WidgetRefresher(database, settings, appScope) { WidgetRefresher.refreshAll(appContext, clock) }
+        WidgetRefresher(database, settings, appScope, needsStartupRefresh = { !WidgetSchedule.isArmed(appContext) }) {
+            WidgetRefresher.refreshAll(appContext, clock)
+        }
     }
 
     private companion object {

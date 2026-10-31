@@ -46,12 +46,17 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- The widget's midnight alarm, and language changes: the widget's text is fixed when drawn. -->
+        <!--
+          The widget's midnight alarm, plus language and time zone changes: its text is fixed when
+          drawn, and the alarm belongs to a zone. TIME_SET stays out: network time sync can send it
+          repeatedly, and each one would start the process.
+        -->
         <receiver
             android:name=".widget.WidgetRefreshReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.LOCALE_CHANGED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
 

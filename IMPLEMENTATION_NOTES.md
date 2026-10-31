@@ -462,6 +462,7 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   - `WidgetSchedule`: one inexact, non-waking alarm just after local midnight, so days left and
     the month roll over. Rescheduled on every refresh.
   - The daily `updatePeriodMillis` and the update Android sends after a reboot are fallbacks.
+    *`updatePeriodMillis` is 0 since "Widget pace and power".*
 - **Missing data:** no categories → "Open Budzets to set up categories and a budget."; no
   budget → spending only, "No budget set".
 - **Quick add:** the widget opens `MainActivity` with `ACTION_ADD_EXPENSE`. The activity is
@@ -851,6 +852,7 @@ what it costs in battery, and fixed what was cheap to fix.
 - **Already fine (no change):**
   - Nothing polls, and there are no timers or infinite animations. The midnight alarm is `RTC`,
     which doesn't wake the device. The widget's `updatePeriodMillis` is a daily fallback.
+    *Corrected later: that period is a wakeup alarm, so it's now 0 (see "Widget pace and power").*
   - Every screen collects with `collectAsStateWithLifecycle` and `WhileSubscribed(5_000)`, so
     hidden tabs and a backgrounded app stop their queries after 5 s.
   - Text fields keep their text in Compose state, so typing never waits for a flow.
@@ -1197,6 +1199,67 @@ from how a debug build runs its first frame, and a release build stays far below
 - **Emulator notes:** a scrolled list leaves the month row under the app bar, where a tap lands on
   the bar. Scroll to the top before tapping "Next month" in a script. The AVD had no app installed
   at the start, only `lv.kristapsbe.budzets.test`. It was left that way.
+
+## Widget pace and power (2026-10-31)
+
+- **The cost model:** an update with no live session starts a Glance session, which is a WorkManager
+  job. It stays open 45 s after drawing (5 s if the device is idle), for about 0.2 s of CPU. That
+  timeout is `@RestrictTo(LIBRARY_GROUP)`, so the only way to spend less is to start fewer sessions.
+- **Measured** on `benchmarkRelease`, API 37, same AVD and data before and after:
+
+  | | Before | After |
+  |---|---|---|
+  | Cold app open, nothing changed | 1 job, 45.5 s; 21 s wake lock charged | **no job** |
+  | Alarms that can wake the phone | 1 a day (`ELAPSED_WAKEUP`, after any reboot) | **0** |
+  | Allowed lateness of the midnight alarm | up to 1 h | 15 min |
+  | Save an expense → widget | 3.3 s, 1 job | 3.1–3.3 s, 1 job |
+  | Midnight, phone awake | updated 20 s after the alarm's time | within 18 s (same) |
+  | Waking from forced Doze | up to about 31 s | up to about 31 s (same) |
+  | 12 min idle, asleep then Doze | app absent from the stats | app absent from the stats |
+
+  The save times include going home and polling the screen. They're an upper bound, not the
+  update's own speed. An emulator can't give mAh, so these are counts and durations.
+- **Changes:**
+  - **Start-up refresh only when the alarm is lost.** It existed only to re-arm an alarm lost to a
+    force-stop, yet it ran a session on every cold start. `WidgetSchedule.isArmed` uses
+    `FLAG_NO_CREATE`: a force-stop clears the PendingIntent, so a missing one means the alarm is gone.
+    `cancel` now cancels the PendingIntent too, because it otherwise outlives the alarm.
+  - **`updatePeriodMillis="0"`.** The period is a wakeup alarm, the only thing that could wake the
+    phone for this app. A force-stopped app misses it anyway, and Android still sends an update when
+    a widget is added and after a reboot. `refreshAll` arms the alarm before `updateAll`, so a failed
+    update can't lose it.
+  - **`TIMEZONE_CHANGED`** re-arms the alarm for the new zone's midnight. `TIME_SET` stays out,
+    because network time sync can send it repeatedly and each one would start the process.
+  - **`setWindow`, 15 min, instead of `set`.** This is a judgement call, not a measured win. `set`
+    allows delivery 75% of the wait late, capped at exactly 1 h on API 37, but the alarm fired on
+    time in the one test. It stays because it costs nothing, is still non-waking, and API 28–30
+    (which the app supports) couldn't be measured. It didn't change the delay after a wake.
+- **Not changed:**
+  - Session length: shortening it needs restricted API that can break on any Glance update.
+  - Holding updates until the app closes: the 45 s session would start just as you leave, so
+    screen-off time would go up.
+  - Skipping sessions when the shown state is unchanged: most writes change it, so this only adds
+    queries.
+- **Behaviour to know:**
+  - The delay after a wake belongs to Android, which holds a non-waking alarm. Delivery ranged from
+    instant to about 31 s on both builds. Once delivered, the widget updates within 0.3 s.
+  - A crash within 500 ms of saving leaves the widget stale until the next change or midnight.
+    Before, the next app start would have fixed it.
+- **Verified:** 329 tests ×3, lint 0 errors. On the device: force-stop clears the alarm, and opening
+  the app re-arms it with one session. A time zone change moved it from 00:01 Riga to 00:01 Tokyo. A
+  reboot restored it with no wakeup alarm. Removing the last widget cancels it, and adding a first
+  one with the process alive draws, re-arms and still takes saves. No crashes.
+- **Emulator notes:**
+  - An emulator run from Android Studio closes with the IDE. Don't drive one that's running: it may
+    be in use. A throwaway AVD works alongside it (`ANDROID_AVD_HOME` pointing at a scratch folder,
+    with a copy of `config.ini`, `-port 5556`, and `-s emulator-5556` on every adb call).
+  - That second emulator crashed seconds after the IDE closed, in its gRPC layer, right after
+    logging that netsim had gone. Netsim is shared, so it can't be assumed to survive the other one.
+  - A leftover `hardware-qemu.ini.lock` from a dead process doesn't stop an AVD from booting.
+  - `cmd alarm set-time` and `set-timezone` work from the shell without root, with `auto_time` off.
+  - Don't change the date while a session is alive: it keeps its own "today", so nothing redraws.
+  - Glance skips a redraw when nothing changed, so `AppWidgetServiceImpl`'s "Trying to notify widget
+    update" line can't prove an alarm didn't arrive. Check `dumpsys alarm` for that.
 
 ## Open questions
 

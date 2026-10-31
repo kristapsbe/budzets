@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Default 3×2; resizable down to 2×1 (remaining + bar) and up to wide layouts.
-  updatePeriodMillis is a daily fallback only: changes and the midnight alarm drive updates.
+  updatePeriodMillis is 0: a period is an alarm that wakes the device. Changes and the non-waking
+  midnight alarm drive updates, and Android still sends one when a widget is added and after a reboot.
   targetCell* are for Android 12+; older launchers size from minWidth/minHeight.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
@@ -15,6 +16,6 @@
     android:targetCellWidth="3"
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="86400000"
+    android:updatePeriodMillis="0"
     android:widgetCategory="home_screen"
     tools:ignore="UnusedAttribute" />

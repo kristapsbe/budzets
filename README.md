@@ -157,10 +157,12 @@ Room, so the screens and the widget update from Room's invalidation without extr
 - **Restore and currency:** a restore sets the currency just after replacing the data, not in
   the same transaction.
 - **Widget:**
-  - After *Force stop* in Android settings, the widget's buttons do nothing until the app is
-    opened again, because Android cancels the app's pending actions.
+  - After *Force stop* in Android settings, the widget's buttons do nothing and the day stops
+    rolling over until the app is opened again, because Android cancels the app's pending actions.
   - A widget showing the moment midnight passes keeps yesterday's "days left" until the next
     change.
+  - Nothing the widget does wakes the phone. Overnight it keeps yesterday's "days left" until the
+    phone wakes, then catches up within about 30 s.
 - **Language:** English and Latvian. The app follows the device's language, and on Android 13+
   Settings > Apps > Budzets > Language can override it. There is no language setting in the app.
   Category names are the user's own data, so they don't change with the language.

@@ -88,9 +88,19 @@ class WidgetRefresherTest : ViewModelTest() {
     }
 
     @Test
+    fun `a normal start draws nothing, but a write still refreshes`() = runTest {
+        WidgetRefresher(db, settings, scope, 200L, needsStartupRefresh = { false }) { updates.incrementAndGet() }.start()
+        settle()
+        assertEquals(0, updates.get())
+
+        categories.create("Food")
+        awaitUpdates(1)
+    }
+
+    @Test
     fun `the start-up refresh waits, a write doesn't`() = runTest {
         val startupDelay = 2_000L
-        WidgetRefresher(db, settings, scope, startupDelay) { updates.incrementAndGet() }.start()
+        WidgetRefresher(db, settings, scope, startupDelay, needsStartupRefresh = { true }) { updates.incrementAndGet() }.start()
         withContext(Dispatchers.Default) { delay(300) } // let it subscribe
         val written = System.nanoTime()
         categories.create("Food")
