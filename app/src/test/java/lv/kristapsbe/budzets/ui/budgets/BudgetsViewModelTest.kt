@@ -1,7 +1,10 @@
 package lv.kristapsbe.budzets.ui.budgets
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import lv.kristapsbe.budzets.domain.calculation.TargetKind
 import lv.kristapsbe.budzets.domain.eur
@@ -18,7 +21,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
+import java.util.concurrent.CopyOnWriteArrayList
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class BudgetsViewModelTest : ViewModelTest() {
 
     private lateinit var vm: BudgetsViewModel
@@ -94,6 +99,83 @@ class BudgetsViewModelTest : ViewModelTest() {
         vm.renameCategory(travel, "Trips")
         vm.move(travel, up = true)
         assertEquals(listOf("Food", "Trips", "Fun"), awaitReady { it.categories.getOrNull(1)?.name == "Trips" }.categories.map { it.name })
+    }
+
+    @Test
+    fun `a drag's order is saved, with archived and deleted categories after it`() = runTest {
+        val food = categories.create("Food")
+        val old = categories.create("Old")
+        val fun_ = categories.create("Fun")
+        val gone = categories.create("Gone")
+        val travel = categories.create("Travel")
+        expenses.add(eur(1), gone.id, LocalDate.of(2026, 4, 2))
+        categories.archive(old.id, ym("2026-04"))
+        surplus.deleteCategory(gone.id)
+        val ready = awaitReady { r -> r.categories.size == 3 && r.archived.size == 1 }
+        assertEquals(listOf(food.id, fun_.id, travel.id), ready.categories.filter { it.canMove }.map { it.id })
+
+        vm.reorder(listOf(travel.id, food.id, fun_.id))
+        val moved = awaitReady { it.categories.first().id == travel.id }
+        assertEquals(listOf("Travel", "Food", "Fun"), moved.categories.map { it.name })
+        assertEquals(listOf(true, true, true), moved.categories.map { it.canMove })
+        assertEquals(listOf("Travel", "Food", "Fun", "Old", "Gone"), categories.categories.first().map { it.name })
+    }
+
+    @Test
+    fun `a lone category can't be dragged`() = runTest {
+        categories.create("Food")
+        assertFalse(awaitReady { it.categories.size == 1 }.categories.single().canMove)
+    }
+
+    @Test
+    fun `a closed month's categories can't be dragged`() = runTest {
+        val food = categories.create("Food")
+        categories.create("Fun")
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(monthlyMinor = 10_000), ym("2026-03"))
+        surplus.closeMonth(ym("2026-03")).ok()
+
+        vm.previousMonth()
+        val march = awaitReady { it.month == ym("2026-03") && it.isClosed }
+        assertTrue(march.categories.none { it.canMove })
+    }
+
+    @Test
+    fun `a page shows its own month without moving the selection`() = runTest {
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 50_000), ym("2026-06"))
+
+        val june = vm.stateFor(ym("2026-06")).awaitFirst { it is BudgetsUiState.Ready } as BudgetsUiState.Ready
+        assertEquals(ym("2026-06"), june.month)
+        assertEquals(eur(500), june.overall.plan!!.amount)
+        assertEquals(ym("2026-04"), vm.selectedMonth.value)
+        assertEquals(ym("2026-04"), awaitReady().month)
+    }
+
+    @Test
+    fun `selecting a month is kept, and the current one follows the date`() = runTest {
+        val handle = SavedStateHandle()
+        val paged = BudgetsViewModel(handle, budgets, categories, surplus, settings, clock)
+
+        paged.selectMonth(ym("2026-07"))
+        assertEquals("2026-07", handle.get<String>("month"))
+        assertEquals(ym("2026-07"), paged.selectedMonth.awaitFirst { it == ym("2026-07") })
+        paged.uiState.awaitFirst { it is BudgetsUiState.Ready && it.month == ym("2026-07") }
+
+        paged.selectMonth(ym("2026-04"))
+        assertNull(handle.get<String>("month"))
+        assertEquals(ym("2026-04"), paged.selectedMonth.awaitFirst { it == ym("2026-04") })
+    }
+
+    @Test
+    fun `changing month keeps the old one until the new one has loaded`() = runTest {
+        val seen = CopyOnWriteArrayList<BudgetsUiState>()
+        val watcher = launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect { seen += it } }
+        awaitReady()
+        vm.nextMonth()
+        awaitReady { it.month == ym("2026-05") }
+        watcher.cancel()
+
+        // Loading only at the very start: later it would hide the add button for a moment.
+        assertFalse(seen.dropWhile { it is BudgetsUiState.Loading }.any { it is BudgetsUiState.Loading })
     }
 
     @Test

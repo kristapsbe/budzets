@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
@@ -42,6 +43,7 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
+import lv.kristapsbe.budzets.ui.components.MonthStates
 import java.time.Clock
 import java.time.YearMonth
 
@@ -70,7 +72,10 @@ data class CategoryBudgetRow(
     val canMoveDown: Boolean,
     /** Deleted, but still in the plan of this earlier open month. It can't be changed any more. */
     val isDeleted: Boolean = false,
-)
+) {
+    /** Whether it can be dragged, or dropped on: categories that aren't archived, when there are two. */
+    val canMove: Boolean get() = canMoveUp || canMoveDown
+}
 
 data class ArchivedRow(val id: CategoryId, val name: String, val archivedFrom: YearMonth)
 
@@ -114,7 +119,7 @@ class BudgetsViewModel(
     private val clock: Clock,
 ) : ViewModel() {
 
-    private val selectedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
+    private val savedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
     private val reload = MutableStateFlow(0)
 
     private val _message = MutableStateFlow<BudgetsMessage?>(null)
@@ -123,15 +128,27 @@ class BudgetsViewModel(
 
     private val month: YearMonth get() = savedState.get<String>(KEY_MONTH)?.let(YearMonth::parse) ?: YearMonth.now(clock)
 
+    /** The month on screen, known at once, before its budgets have loaded. */
+    val selectedMonth: StateFlow<YearMonth> =
+        savedMonth.map { it?.let(YearMonth::parse) ?: YearMonth.now(clock) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, month)
+
+    private val months = MonthStates<BudgetsUiState>(viewModelScope, BudgetsUiState.Loading) { month ->
+        reload.flatMapLatest { observeMonth(month) }.flowOn(Dispatchers.Default)
+    }
+
+    /** The state of any month, for its page in the month pager. */
+    fun stateFor(month: YearMonth): StateFlow<BudgetsUiState> = months[month]
+
+    /** The selected month's state. It keeps the previous month until the new one has loaded. */
     val uiState: StateFlow<BudgetsUiState> =
-        combine(selectedMonth, reload) { month, _ -> month?.let(YearMonth::parse) ?: YearMonth.now(clock) }
-            .flatMapLatest { month ->
-                surplus.closedMonths.map { month in it }.distinctUntilChanged()
-                    .flatMapLatest { isClosed -> if (isClosed) observeClosed(month) else observeOpen(month) }
-                    .catch { emit(BudgetsUiState.Error(it.message)) }
-            }
-            .flowOn(Dispatchers.Default)
+        selectedMonth.flatMapLatest { month -> stateFor(month).filterNot { it is BudgetsUiState.Loading } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BudgetsUiState.Loading)
+
+    private fun observeMonth(month: YearMonth): Flow<BudgetsUiState> =
+        surplus.closedMonths.map { month in it }.distinctUntilChanged()
+            .flatMapLatest { isClosed -> if (isClosed) observeClosed(month) else observeOpen(month) }
+            .catch { emit(BudgetsUiState.Error(it.message)) }
 
     private fun observeOpen(month: YearMonth): Flow<BudgetsUiState> =
         combine(budgets.configs, categories.categories, settings.currency) { configs, all, currency -> open(month, configs, all, currency) }
@@ -220,6 +237,10 @@ class BudgetsViewModel(
     fun previousMonth() { savedState[KEY_MONTH] = month.minusMonths(1).toString() }
     fun nextMonth() { savedState[KEY_MONTH] = month.plusMonths(1).toString() }
     fun goToCurrentMonth() { savedState[KEY_MONTH] = null }
+
+    /** From a swipe. The current month is stored as null, so it goes on following the date. */
+    fun selectMonth(month: YearMonth) { savedState[KEY_MONTH] = month.takeUnless { it == YearMonth.now(clock) }?.toString() }
+
     fun retry() = reload.update { it + 1 }
 
     fun addStarterCategories(names: List<String>) = launchAction { categories.createStarterCategories(names) }
@@ -242,6 +263,9 @@ class BudgetsViewModel(
             categories.reorder(order)
         }
     }
+
+    /** Saves the order left by a drag, of the categories that can move. Any others stay after them. */
+    fun reorder(order: List<CategoryId>) = launchAction { categories.reorder(order) }
 
     fun delete(id: CategoryId) = launchAction {
         surplus.deleteCategory(id)

@@ -74,6 +74,15 @@ android {
     }
 }
 
+androidComponents {
+    // The Baseline Profile plugin copies release into this variant and turns off isMinifyEnabled,
+    // which doesn't reach the optimization block. Left on, the profile records obfuscated names
+    // that match nothing in a real release build.
+    finalizeDsl { android ->
+        android.buildTypes.getByName("nonMinifiedRelease").optimization.enable = false
+    }
+}
+
 room {
     // Exported schemas are committed and used by migration tests.
     schemaDirectory("$projectDir/schemas")
@@ -94,6 +103,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.reorderable)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.room.runtime)

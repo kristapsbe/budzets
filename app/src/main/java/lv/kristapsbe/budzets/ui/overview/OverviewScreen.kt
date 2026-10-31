@@ -51,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.CategoryId
@@ -58,6 +60,7 @@ import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
 import lv.kristapsbe.budzets.ui.components.categoryName
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
+import lv.kristapsbe.budzets.ui.components.MonthPager
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -74,15 +77,19 @@ fun OverviewScreen(
     viewModel: OverviewViewModel = viewModel(factory = OverviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val month by viewModel.selectedMonth.collectAsStateWithLifecycle()
     // Marks the app as fully drawn once the numbers are on screen, for startup measurements.
     ReportDrawnWhen { state !is OverviewUiState.Loading }
     val starterNames = stringArrayResource(R.array.starter_categories).toList()
     OverviewContent(
         state = state,
+        month = month,
+        pageState = viewModel::stateFor,
         actions = OverviewActions(
             onPreviousMonth = viewModel::previousMonth,
             onNextMonth = viewModel::nextMonth,
             onCurrentMonth = viewModel::goToCurrentMonth,
+            onSelectMonth = viewModel::selectMonth,
             onRetry = viewModel::retry,
             onAddExpense = onAddExpense,
             onAddStarterCategories = { viewModel.addStarterCategories(starterNames) },
@@ -99,6 +106,7 @@ data class OverviewActions(
     val onPreviousMonth: () -> Unit = {},
     val onNextMonth: () -> Unit = {},
     val onCurrentMonth: () -> Unit = {},
+    val onSelectMonth: (YearMonth) -> Unit = {},
     val onRetry: () -> Unit = {},
     val onAddExpense: () -> Unit = {},
     val onAddStarterCategories: () -> Unit = {},
@@ -109,9 +117,19 @@ data class OverviewActions(
     val onOpenSettings: () -> Unit = {},
 )
 
+/**
+ * @param state the selected month, for what surrounds the pages.
+ * @param month the selected month, known before its state is.
+ * @param pageState each page's state.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OverviewContent(state: OverviewUiState, actions: OverviewActions) {
+fun OverviewContent(
+    state: OverviewUiState,
+    actions: OverviewActions,
+    month: YearMonth = (state as? OverviewUiState.Ready)?.month ?: YearMonth.now(),
+    pageState: (YearMonth) -> StateFlow<OverviewUiState> = { MutableStateFlow(state) },
+) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_overview)) }) },
         floatingActionButton = {
@@ -126,18 +144,20 @@ fun OverviewContent(state: OverviewUiState, actions: OverviewActions) {
             }
         },
     ) { padding ->
-        when (state) {
-            OverviewUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is OverviewUiState.Error -> Column(
-                Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
+        MonthPager(month, actions.onSelectMonth, pageState, OverviewUiState.Loading, Modifier.fillMaxSize()) { page ->
+            when (page) {
+                OverviewUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
+                is OverviewUiState.Error -> Column(
+                    Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
+                }
+                is OverviewUiState.Ready -> ReadyContent(page, actions, padding)
             }
-            is OverviewUiState.Ready -> ReadyContent(state, actions, padding)
         }
     }
 }

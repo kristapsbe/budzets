@@ -1,6 +1,7 @@
 package lv.kristapsbe.budzets.ui
 
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.SemanticsMatcher.Companion.keyIsDefined
 import lv.kristapsbe.budzets.MainActivity
 import lv.kristapsbe.budzets.ui.budgets.CATEGORY_NAME_FIELD_TAG
 import lv.kristapsbe.budzets.ui.budgets.DAILY_FIELD_TAG
@@ -30,6 +32,9 @@ class BudgetFlowTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+
+    /** The list inside a month page: the pager around it can scroll to an index too. */
+    private val verticalList = hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
 
     private fun waitFor(matcher: SemanticsMatcher) =
         compose.waitUntil(5_000) { compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
@@ -55,7 +60,7 @@ class BudgetFlowTest {
         waitForText("$base/month")
 
         // A category budget above the overall: warned while typing, and after saving.
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Groceries"))
+        compose.onNode(verticalList).performScrollToNode(hasText("Groceries"))
         compose.onNodeWithText("Groceries").performClick()
         waitFor(hasTestTag(MONTHLY_FIELD_TAG))
         compose.onNodeWithTag(MONTHLY_FIELD_TAG).performTextInput("1000")
@@ -63,13 +68,13 @@ class BudgetFlowTest {
         compose.onNodeWithText("Save").performClick()
         waitForText("€1,000.00") // the Groceries row, still scrolled into view
         val exceeds = "Category budgets add up to €1,000.00, more than the overall budget of $base."
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(exceeds))
+        compose.onNode(verticalList).performScrollToNode(hasText(exceeds))
 
         // Category management lives here too.
         compose.onNodeWithText("Add category").performClick()
         compose.onNodeWithTag(CATEGORY_NAME_FIELD_TAG).performTextInput("Pets")
         compose.onNodeWithText("Save").performClick()
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Pets"))
+        compose.onNode(verticalList).performScrollToNode(hasText("Pets"))
 
         // The overview uses the same budgets.
         compose.onNodeWithText("Overview").performClick()

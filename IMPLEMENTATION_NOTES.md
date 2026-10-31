@@ -1261,6 +1261,92 @@ from how a debug build runs its first frame, and a release build stays far below
   - Glance skips a redraw when nothing changed, so `AppWidgetServiceImpl`'s "Trying to notify widget
     update" line can't prove an alarm didn't arrive. Check `dumpsys alarm` for that.
 
+## Month swiping, dragging and swiping categories (2026-10-31)
+
+- **Q31 — Who gets a sideways swipe:** a row takes a swipe left. A swipe right on a row goes to the
+  previous month, and everywhere else both directions change month. So a long Spending list can
+  go back a month from anywhere, but going forward needs a day header or the month row.
+- **Q32 — Month swipe:** a true pager, with the neighbouring month's real figures under the finger,
+  on Overview, Spending (with its category drill-down) and Budgets. Not the Boost and One-off forms.
+- **Q33 — Dragging categories:** long-press, with no handle. When the hold registers, the row wiggles
+  once and keeps a border until it's let go. Budgets tab only, where categories are managed (Q13).
+- **Decided along the way:**
+  - A category swipe still shows the confirm dialog: deleting can't be undone (Q28), and a stray
+    month swipe can land on a row. Expenses stay immediate with Undo.
+  - Row swipes are stricter than Material's on both lists: past 40% of the row, or a fling of at
+    least 1000 dp/s after 56 dp, where Material takes 56 dp or 125 dp/s. **This changes how expense
+    swipes feel.**
+  - "Move up" and "Move down" stay in the menu. They're TalkBack's way to reorder.
+  - The chip row keeps its own swipes. Left to the pager's defaults, flinging past the end of the
+    chips moved seven months in eight flings.
+- **Implementation:**
+  - `MonthPager` pages are absolute months. The ViewModel's month is the source of truth: arrows
+    change it and the pager follows, a swipe moves the pager and reports where it stopped.
+  - `MonthStates` keeps one `stateIn` per month, because a page's figures have to survive a rotation
+    or an editor for the list to restore its scroll position. `uiState` stays for the top bar, FAB
+    and dialogs, and skips Loading so they don't flicker.
+  - `beyondViewportPageCount = 0`: only the visible page is live, so at rest this does the same
+    database work as before.
+  - `SwipeToDelete` replaces `SwipeToDismissBox`, which claims a drag in both directions even with
+    one turned off, so a swipe right could never reach the pager.
+  - `sh.calvin.reorderable:reorderable:3.1.0` (2026-04-20, Apache-2.0, pure Compose) does the drag.
+    It's the first third-party UI library here. It handles auto-scroll at the edges and the
+    first-visible-item jump, and the app declares no permissions, so it can't reach the network.
+- **Deviations from the plan:**
+  - Arrows jump rather than slide. Touching a pager while it slides stops it and swallows the tap,
+    and the arrow has moved away: 3 quick taps moved 2 months, 14 moved 2. The pager now waits for
+    the month to load and then jumps, so no empty page shows and an arrow is always under the
+    finger. 6 taps at 11 a second land, on a debug build. At 16 a second some are lost.
+  - The click stayed on `ListItem` rather than moving to a wrapping `Box`. `ListItem` merges its own
+    semantics, so TalkBack would have had a button with no name beside a name it couldn't press. The
+    wiggle's layer therefore also turns the touched area, which is harmless: pointer deltas are
+    measured in one transform, and nothing checks bounds once the drag has started.
+  - `settledPage` isn't what it sounds like: it changes when a drag hands over to its fling, before
+    the pager stops. Reporting from it lost every swipe, so `MonthPager` watches for idle itself.
+  - A month that's been left starts at the top of its list, so its name shows. `rememberLazyListState`
+    inside a pager would otherwise bring it back scrolled, with no month in sight.
+- **Found while verifying — the profile was mostly dead:** `release` enables R8 through the
+  `optimization` block, and the Baseline Profile plugin's `isMinifyEnabled = false` doesn't reach
+  that block, so `nonMinifiedRelease` was minified. **8,444 of the committed profile's 12,229 rules
+  named obfuscated classes that match nothing in a release.** `build.gradle.kts` now turns it off in
+  `finalizeDsl`. The regenerated profile has 23,883 rules, all with real names. Check the rule count
+  and for names like `ao0` after regenerating.
+- **Measured** on `benchmarkRelease`, AVD `Medium_Phone_API_37.0` on an M2 with `-gpu host`, 16
+  categories and 77 expenses, each build compiled with its own profile:
+
+  | Interleaved cold starts, 36 each | Before | After |
+  |---|---|---|
+  | Initial display, median / P90 | 140.0 / 169 ms | 131.5 / 147 ms |
+  | Full display, median / P90 | 187.5 / 226 ms | 178.5 / 199 ms |
+  | APK | 4.93 MB | 5.18 MB |
+
+  These combine the new code and the repaired profile, so they don't price the pager alone.
+
+  | `StartupBenchmark` on the new build, 10 each | No profile | Baseline Profile |
+  |---|---|---|
+  | Initial display | 226.7 ms | 190.5 ms |
+  | Full display | 494.8 ms | 380.7 ms |
+  | Frame CPU P50 / P90 / P99 | 2.7 / 17.3 / 78.8 ms | 3.2 / 17.6 / 90.1 ms |
+
+  12 month swipes: Overview 3.19% janky of 439 frames, P99 20 ms; Spending 3.06% of 425, P99 21 ms.
+  A never-visited month after a cold start had its figures in the first screenshot of a drag.
+- **Verified:** 367 tests ×3 (38 more than before), lint 0 errors, `StartupBenchmark` passes. On the
+  device: both swipe directions on all three tabs and in the drill-down, including from a scrolled
+  list; chips; arrows and far jumps; delete, Undo and Cancel; a hold with and without moving
+  (measured: no border at 250 ms, ±0.95° tilt, settling to 0°); auto-scroll at both edges; the order
+  after a force-stop, on Overview and in the chips; closed, archived and deleted rows; rotation,
+  returning from an editor, and "Don't keep activities"; Latvian at 360 dp. The three gestures again
+  on R8. No crashes.
+- **Not verified:** TalkBack can't be exercised on the AVD. The pager reports a page count of 120,000
+  to accessibility services, which may be announced oddly. A real phone's feel, especially of the
+  wiggle at full speed: it was only measured here, not watched.
+- **Emulator notes:**
+  - `-read-only` discards everything on exit, so the app and data on the AVD stay as they were.
+  - A chain of `adb shell input tap` with no sleep fires about 16 taps a second, faster than anyone
+    can. Don't read lost taps from that as a bug without measuring by spacing.
+  - zsh doesn't split unquoted variables, and `timeout` isn't installed.
+  - `Medium_Phone_API_37.0`'s long-press timeout is 400 ms.
+
 ## Open questions
 
 None currently.

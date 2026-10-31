@@ -1,5 +1,7 @@
 package lv.kristapsbe.budzets.ui.overview
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher.Companion.keyIsDefined
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
@@ -8,6 +10,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import lv.kristapsbe.budzets.domain.calculation.CategorySummary
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
@@ -16,6 +21,7 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.ym
+import lv.kristapsbe.budzets.ui.components.awaitEquals
 import lv.kristapsbe.budzets.ui.theme.BudzetsTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -25,6 +31,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
+import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-rUS")
@@ -33,6 +40,9 @@ class OverviewContentTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    /** The list inside a month page: the pager around it can scroll to an index too. */
+    private val verticalList = hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
 
     private val food = CategoryId("food")
     private val fun_ = CategoryId("fun")
@@ -98,12 +108,30 @@ class OverviewContentTest {
         compose.onNodeWithText("Saved surplus").assertIsDisplayed()
 
         // Category rows are below the fold on a small screen: scroll like a user would.
-        val list = compose.onNode(hasScrollToIndexAction())
+        val list = compose.onNode(verticalList)
         list.performScrollToNode(hasText("Over by €5.00"))
         compose.onNodeWithText("Over by €5.00").assertIsDisplayed()
         compose.onNodeWithText("+€50.00 boost").assertIsDisplayed()
         list.performScrollToNode(hasText("€60.00 left"))
         compose.onNodeWithText("€60.00 left").assertIsDisplayed()
+    }
+
+    @Test
+    fun `swiping changes month, category rows included`() {
+        val food = CategoryId("food")
+        val row = CategorySummary(food, eur(100), Money.ZERO, eur(40))
+        val summary = MonthSummary(april, eur(600), false, mapOf(food to row))
+        val months = mutableListOf<YearMonth>()
+        show(ready(summary, listOf(CategoryRow(food, "Food", false, row))), OverviewActions(onSelectMonth = { months += it }))
+
+        compose.onNodeWithText("April 2026").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.awaitEquals(listOf(ym("2026-05"))) { months.toList() }
+
+        compose.onNode(verticalList).performScrollToNode(hasText("€60.00 left"))
+        compose.onNodeWithText("€60.00 left").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        compose.awaitEquals(listOf(ym("2026-05"), ym("2026-04"))) { months.toList() }
     }
 
     @Test
@@ -152,7 +180,7 @@ class OverviewContentTest {
         show(ready(summary, listOf(deleted)).copy(oneOffTotal = eur(200)))
 
         compose.onNodeWithText("One-off boost this month: +€200.00, added to Unallocated surplus.").assertIsDisplayed()
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Old (deleted)"))
+        compose.onNode(verticalList).performScrollToNode(hasText("Old (deleted)"))
         compose.onNodeWithText("Old (deleted)").assertIsDisplayed()
     }
 }

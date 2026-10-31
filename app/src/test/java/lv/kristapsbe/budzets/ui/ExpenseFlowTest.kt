@@ -1,6 +1,7 @@
 package lv.kristapsbe.budzets.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.SemanticsMatcher.Companion.keyIsDefined
 import lv.kristapsbe.budzets.MainActivity
 import lv.kristapsbe.budzets.ui.expenses.AMOUNT_FIELD_TAG
 import org.junit.Rule
@@ -37,6 +39,9 @@ class ExpenseFlowTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+
+    /** The list inside a month page: the pager around it can scroll to an index too. */
+    private val verticalList = hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
 
     private fun waitFor(matcher: SemanticsMatcher) =
         compose.waitUntil(5_000) { compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
@@ -90,7 +95,7 @@ class ExpenseFlowTest {
         // The overview agrees, and a category opens its own spending list.
         compose.onNodeWithText("Overview").performClick()
         waitForText("€25.00 spent")
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("No budget · €25.00 spent"))
+        compose.onNode(verticalList).performScrollToNode(hasText("No budget · €25.00 spent"))
         compose.onNodeWithText("No budget · €25.00 spent").performClick()
         waitForText("€25.00 spent · 2 expenses")
         compose.onNodeWithContentDescription("Back").performClick()

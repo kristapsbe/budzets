@@ -18,11 +18,13 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.domain.ym
+import lv.kristapsbe.budzets.ui.components.awaitEquals
 import lv.kristapsbe.budzets.ui.theme.BudzetsTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -32,6 +34,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
+import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "en-rUS")
@@ -122,6 +125,32 @@ class TransactionsContentTest {
         compose.onNode(hasText("€3.00") and hasClickAction()).performTouchInput { swipeLeft() }
         compose.waitForIdle()
         assertEquals(listOf(ExpenseId("a"), ExpenseId("c")), deleted)
+    }
+
+    @Test
+    fun `an expense takes a swipe left, and a swipe right changes month`() {
+        val deleted = mutableListOf<ExpenseId>()
+        val months = mutableListOf<YearMonth>()
+        show(ready(sample), TransactionsActions(onDelete = { deleted += it }, onSelectMonth = { months += it }))
+
+        compose.onNode(hasText("€3.00") and hasClickAction()).performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        assertEquals(emptyList<ExpenseId>(), deleted)
+        compose.awaitEquals(listOf(ym("2026-03"))) { months.toList() }
+    }
+
+    @Test
+    fun `flicking the filter chips never changes month`() {
+        val months = mutableListOf<YearMonth>()
+        show(ready(sample), TransactionsActions(onSelectMonth = { months += it }))
+
+        repeat(4) {
+            compose.onNodeWithText("All").performTouchInput { swipeLeft() }
+            compose.waitForIdle()
+            compose.onNodeWithText("All").performTouchInput { swipeRight() }
+            compose.waitForIdle()
+        }
+        assertEquals(emptyList<YearMonth>(), months)
     }
 
     @Test

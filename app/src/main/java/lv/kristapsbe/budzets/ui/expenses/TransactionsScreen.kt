@@ -1,6 +1,5 @@
 package lv.kristapsbe.budzets.ui.expenses
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,10 +35,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxDefaults
-import androidx.compose.material3.SwipeToDismissBoxState
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -55,6 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -64,19 +62,25 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.categoryName
+import lv.kristapsbe.budzets.ui.components.MonthPager
 import lv.kristapsbe.budzets.ui.components.MonthSelector
+import lv.kristapsbe.budzets.ui.components.SwipeToDelete
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
 import lv.kristapsbe.budzets.util.displayName
 import java.time.LocalDate
+import java.time.YearMonth
 import java.util.Locale
 
 /** @param onBack shown as an up arrow when this is a drill-down rather than the Spending tab. */
@@ -88,6 +92,7 @@ fun TransactionsScreen(
     viewModel: TransactionsViewModel = viewModel(factory = TransactionsViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val month by viewModel.selectedMonth.collectAsStateWithLifecycle()
     val deleteEvent by viewModel.deleteEvent.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
@@ -113,10 +118,13 @@ fun TransactionsScreen(
         state = state,
         snackbarHostState = snackbar,
         onBack = onBack,
+        month = month,
+        pageState = viewModel::stateFor,
         actions = TransactionsActions(
             onPreviousMonth = viewModel::previousMonth,
             onNextMonth = viewModel::nextMonth,
             onCurrentMonth = viewModel::goToCurrentMonth,
+            onSelectMonth = viewModel::selectMonth,
             onSelectCategory = viewModel::selectCategory,
             onQueryChange = viewModel::setQuery,
             onRetry = viewModel::retry,
@@ -131,6 +139,7 @@ data class TransactionsActions(
     val onPreviousMonth: () -> Unit = {},
     val onNextMonth: () -> Unit = {},
     val onCurrentMonth: () -> Unit = {},
+    val onSelectMonth: (YearMonth) -> Unit = {},
     val onSelectCategory: (CategoryId?) -> Unit = {},
     val onQueryChange: (String) -> Unit = {},
     val onRetry: () -> Unit = {},
@@ -139,6 +148,11 @@ data class TransactionsActions(
     val onDelete: (ExpenseId) -> Unit = {},
 )
 
+/**
+ * @param state the selected month, for what surrounds the pages.
+ * @param month the selected month, known before its state is.
+ * @param pageState each page's state.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsContent(
@@ -146,6 +160,8 @@ fun TransactionsContent(
     actions: TransactionsActions,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onBack: (() -> Unit)? = null,
+    month: YearMonth = (state as? TransactionsUiState.Ready)?.month ?: YearMonth.now(),
+    pageState: (YearMonth) -> StateFlow<TransactionsUiState> = { MutableStateFlow(state) },
 ) {
     val ready = state as? TransactionsUiState.Ready
     // The field's text is local so typing stays synchronous; the ViewModel only gets the filter.
@@ -189,26 +205,28 @@ fun TransactionsContent(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        when (state) {
-            TransactionsUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is TransactionsUiState.Error -> Column(
-                Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
+        MonthPager(month, actions.onSelectMonth, pageState, TransactionsUiState.Loading, Modifier.fillMaxSize()) { page ->
+            when (page) {
+                TransactionsUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
+                is TransactionsUiState.Error -> Column(
+                    Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
+                }
+                is TransactionsUiState.Ready -> ReadyList(
+                    state = page,
+                    actions = actions,
+                    padding = padding,
+                    search = if (searchOpen) query else null,
+                    onSearchChange = { query = it; actions.onQueryChange(it) },
+                    focusSearch = focusSearch,
+                    onSearchFocused = { focusSearch = false },
+                )
             }
-            is TransactionsUiState.Ready -> ReadyList(
-                state = state,
-                actions = actions,
-                padding = padding,
-                search = if (searchOpen) query else null,
-                onSearchChange = { query = it; actions.onQueryChange(it) },
-                focusSearch = focusSearch,
-                onSearchFocused = { focusSearch = false },
-            )
         }
     }
 }
@@ -249,6 +267,7 @@ private fun ReadyList(
         if (state.hasCategories) {
             item(key = "filters") {
                 LazyRow(
+                    modifier = Modifier.nestedScroll(KeepSwipes),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -351,30 +370,22 @@ private fun DayHeader(day: DayGroup, today: LocalDate, money: MoneyFormatter, lo
     }
 }
 
+/**
+ * For the filter chips: what's left of a swipe at the end of the row stops here. It would otherwise
+ * carry on into the month pager, so flicking through the chips could change month.
+ */
+private val KeepSwipes = object : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+}
+
 /** Swipe toward the start to delete; TalkBack gets the same as a "Delete" custom action. */
 @Composable
 private fun SwipeToDeleteRow(row: ExpenseRow, money: MoneyFormatter, onOpen: () -> Unit, onDelete: () -> Unit) {
-    val threshold = SwipeToDismissBoxDefaults.positionalThreshold
-    // Plain remember, not the saveable default: a restored (undone) row must come back settled,
-    // not with a saved "dismissed" state that would delete it again.
-    val dismissState = remember(row.id) { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, threshold) }
     val currentOnDelete by rememberUpdatedState(onDelete)
     val deleteLabel = stringResource(R.string.delete)
 
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        onDismiss = { currentOnDelete() },
-        backgroundContent = {
-            Row(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            }
-        },
-    ) {
+    SwipeToDelete(onDelete = onDelete) {
         ListItem(
             headlineContent = {
                 Text(categoryName(row.categoryName, row.isArchivedCategory, row.isDeletedCategory))

@@ -15,8 +15,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -32,6 +34,7 @@ import lv.kristapsbe.budzets.domain.model.Expense
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.sumMoney
+import lv.kristapsbe.budzets.ui.components.MonthStates
 import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
@@ -91,7 +94,7 @@ class TransactionsViewModel(
     private val clock: Clock,
 ) : ViewModel() {
 
-    private val selectedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
+    private val savedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
     private val selectedCategory = savedState.getStateFlow<String?>(KEY_CATEGORY, null)
     private val query = savedState.getStateFlow(KEY_QUERY, "")
     private val reload = MutableStateFlow(0)
@@ -102,10 +105,21 @@ class TransactionsViewModel(
 
     private val month: YearMonth get() = savedState.get<String>(KEY_MONTH)?.let(YearMonth::parse) ?: YearMonth.now(clock)
 
+    /** The month on screen, known at once, before its expenses have loaded. */
+    val selectedMonth: StateFlow<YearMonth> =
+        savedMonth.map { it?.let(YearMonth::parse) ?: YearMonth.now(clock) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, month)
+
+    private val months = MonthStates<TransactionsUiState>(viewModelScope, TransactionsUiState.Loading) { month ->
+        reload.flatMapLatest { observeMonth(month) }.flowOn(Dispatchers.Default)
+    }
+
+    /** The state of any month, for its page in the month pager. */
+    fun stateFor(month: YearMonth): StateFlow<TransactionsUiState> = months[month]
+
+    /** The selected month's state. It keeps the previous month until the new one has loaded. */
     val uiState: StateFlow<TransactionsUiState> =
-        combine(selectedMonth, reload) { month, _ -> month?.let(YearMonth::parse) ?: YearMonth.now(clock) }
-            .flatMapLatest { month -> observeMonth(month) }
-            .flowOn(Dispatchers.Default)
+        selectedMonth.flatMapLatest { month -> stateFor(month).filterNot { it is TransactionsUiState.Loading } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TransactionsUiState.Loading)
 
     private fun observeMonth(month: YearMonth) =
@@ -162,6 +176,10 @@ class TransactionsViewModel(
     fun previousMonth() { savedState[KEY_MONTH] = month.minusMonths(1).toString() }
     fun nextMonth() { savedState[KEY_MONTH] = month.plusMonths(1).toString() }
     fun goToCurrentMonth() { savedState[KEY_MONTH] = null }
+
+    /** From a swipe. The current month is stored as null, so it goes on following the date. */
+    fun selectMonth(month: YearMonth) { savedState[KEY_MONTH] = month.takeUnless { it == YearMonth.now(clock) }?.toString() }
+
     fun selectCategory(id: CategoryId?) { savedState[KEY_CATEGORY] = id?.value }
     fun setQuery(text: String) { savedState[KEY_QUERY] = text }
     fun retry() = reload.update { it + 1 }

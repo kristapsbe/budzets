@@ -8,6 +8,7 @@ import java.util.regex.Pattern
 
 internal const val PACKAGE_NAME = "lv.kristapsbe.budzets"
 private const val TIMEOUT_MILLIS = 5_000L
+private const val SWIPE_STEPS = 12
 
 /** Overview has loaded: its numbers or, on a fresh install, the starter-categories card. */
 fun MacrobenchmarkScope.waitForOverview() {
@@ -16,7 +17,7 @@ fun MacrobenchmarkScope.waitForOverview() {
 
 /**
  * The common path through the app, for the profile: Overview (with starter categories on a fresh
- * install), a scroll, every tab, and Add expense. Finds things by their English labels.
+ * install), a scroll, a month swipe, every tab, and Add expense. Finds things by their English labels.
  */
 fun MacrobenchmarkScope.browseApp() {
     waitForOverview()
@@ -25,6 +26,7 @@ fun MacrobenchmarkScope.browseApp() {
         device.wait(Until.hasObject(By.text("Add expense")), TIMEOUT_MILLIS)
     }
     scrollOverview()
+    swipeMonths()
     for (tab in listOf("Spending", "Budgets", "Surplus", "Settings", "Overview")) {
         openTab(tab)
     }
@@ -40,6 +42,17 @@ fun MacrobenchmarkScope.scrollOverview() {
         list.fling(Direction.DOWN)
         list.fling(Direction.UP)
     }
+    device.waitForIdle()
+}
+
+/** To the next month and back, staying clear of the edges, where the system takes a swipe as Back. */
+fun MacrobenchmarkScope.swipeMonths() {
+    val middle = device.displayHeight / 2
+    val right = device.displayWidth * 8 / 10
+    val left = device.displayWidth * 2 / 10
+    device.swipe(right, middle, left, middle, SWIPE_STEPS)
+    device.waitForIdle()
+    device.swipe(left, middle, right, middle, SWIPE_STEPS)
     device.waitForIdle()
 }
 

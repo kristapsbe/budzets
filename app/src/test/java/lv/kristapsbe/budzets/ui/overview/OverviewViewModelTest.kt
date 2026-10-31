@@ -32,6 +32,24 @@ class OverviewViewModelTest : ViewModelTest() {
         vm.uiState.awaitFirst { it is OverviewUiState.Ready && predicate(it) } as OverviewUiState.Ready
 
     @Test
+    fun `a page shows its own month, and selecting one moves the rest`() = runTest {
+        val handle = SavedStateHandle()
+        val paged = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
+        val may = ym("2026-05")
+
+        val page = paged.stateFor(may).awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
+        assertEquals(may, page.month)
+        assertEquals(ym("2026-04"), paged.selectedMonth.value)
+
+        paged.selectMonth(may)
+        assertEquals("2026-05", handle.get<String>("month"))
+        assertEquals(may, (paged.uiState.awaitFirst { it is OverviewUiState.Ready && it.month == may } as OverviewUiState.Ready).month)
+
+        paged.selectMonth(ym("2026-04"))
+        assertNull(handle.get<String>("month")) // the current month goes on following the date
+    }
+
+    @Test
     fun `first launch - empty but usable`() = runTest {
         val state = awaitReady()
         assertEquals(ym("2026-04"), state.month)

@@ -1,21 +1,29 @@
 package lv.kristapsbe.budzets.ui.budgets
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.SemanticsMatcher.Companion.keyIsDefined
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
 import lv.kristapsbe.budzets.domain.calculation.MonthlyPlanRule
 import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
@@ -23,6 +31,7 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.ym
+import lv.kristapsbe.budzets.ui.components.awaitEquals
 import lv.kristapsbe.budzets.ui.theme.BudzetsTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -42,6 +51,10 @@ class BudgetsContentTest {
     val compose = createComposeRule()
 
     private val april = ym("2026-04")
+
+    /** The list inside a month page: the pager around it can scroll to an index too. */
+    private val verticalList = hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
+
     private val food = CategoryId("food")
     private val fun_ = CategoryId("fun")
     private val old = CategoryId("old")
@@ -78,6 +91,16 @@ class BudgetsContentTest {
         compose.setContent { BudzetsTheme { BudgetsContent(state, actions) } }
     }
 
+    private val foodRow get() = compose.onNode(hasText("Food") and hasClickAction())
+    private val dragging get() = compose.onNodeWithTag(CATEGORY_DRAGGING_TAG, useUnmergedTree = true)
+
+    /** Holds a finger on Food past the long-press time. */
+    private fun holdFood() {
+        foodRow.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+    }
+
     @Test
     fun `overall card shows plan, targets and version notes, and opens the editor`() {
         var edited: Pair<CategoryId?, YearMonth>? = null
@@ -109,7 +132,7 @@ class BudgetsContentTest {
         var moved: Pair<CategoryId, Boolean>? = null
         var archived: CategoryId? = null
         show(ready(), BudgetsActions(onEditBudget = { id, _ -> edited = id }, onMove = { id, up -> moved = id to up }, onArchive = { archived = it }))
-        val list = compose.onNode(hasScrollToIndexAction())
+        val list = compose.onNode(verticalList)
 
         list.performScrollToNode(hasText("€10.00/day"))
         compose.onNodeWithText("€10.00/day").performClick()
@@ -141,7 +164,7 @@ class BudgetsContentTest {
     fun `rename dialog starts from the current name`() {
         var renamed: Pair<CategoryId, String>? = null
         show(ready(), BudgetsActions(onRename = { id, name -> renamed = id to name }))
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("€10.00/day"))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
         compose.onNodeWithContentDescription("Actions for Food").performClick()
         compose.onNodeWithText("Rename").performClick()
         // Opens with the name selected: typing replaces it rather than prepending to it.
@@ -156,7 +179,7 @@ class BudgetsContentTest {
         var unarchived: CategoryId? = null
         var deleted: CategoryId? = null
         show(ready(), BudgetsActions(onUnarchive = { unarchived = it }, onDelete = { deleted = it }))
-        val list = compose.onNode(hasScrollToIndexAction())
+        val list = compose.onNode(verticalList)
 
         list.performScrollToNode(hasText("Archived from February 2026"))
         compose.onNodeWithContentDescription("Actions for Old").performClick()
@@ -175,7 +198,7 @@ class BudgetsContentTest {
     fun `no categories offers starters`() {
         var starters = false
         show(ready(categories = emptyList(), archived = emptyList()), BudgetsActions(onAddStarterCategories = { starters = true }))
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Add starter categories"))
+        compose.onNode(verticalList).performScrollToNode(hasText("Add starter categories"))
         compose.onNodeWithText("Add starter categories").performClick()
         assertEquals(true, starters)
     }
@@ -184,7 +207,7 @@ class BudgetsContentTest {
     fun `a category can be deleted from its menu, and the dialog says what happens`() {
         var deleted: CategoryId? = null
         show(ready(), BudgetsActions(onDelete = { deleted = it }))
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("€10.00/day"))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
         compose.onNodeWithContentDescription("Actions for Food").performClick()
         compose.onNodeWithText("Delete").performClick()
 
@@ -204,7 +227,7 @@ class BudgetsContentTest {
         compose.onNodeWithText("April 2026 is closed, so its budgets stay as they were. Changes start from the next open month. To change this month, reopen it.")
             .assertIsDisplayed()
         compose.onNodeWithText("Overall budget").performClick()
-        val list = compose.onNode(hasScrollToIndexAction())
+        val list = compose.onNode(verticalList)
         list.performScrollToNode(hasText("€10.00/day"))
         compose.onNodeWithText("€10.00/day").performClick()
         assertEquals(0, edits)
@@ -215,12 +238,162 @@ class BudgetsContentTest {
     }
 
     @Test
+    fun `swiping a category left asks first, and Delete or Cancel decide`() {
+        var deleted: CategoryId? = null
+        show(ready(), BudgetsActions(onDelete = { deleted = it }))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
+
+        foodRow.performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Delete Food?").assertIsDisplayed()
+        assertEquals(null, deleted)
+        compose.onNodeWithText("Cancel").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Delete Food?").assertDoesNotExist()
+        assertEquals(null, deleted)
+
+        // Cancelled, the row is back and works again.
+        foodRow.performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(food, deleted)
+    }
+
+    @Test
+    fun `an archived category can be swiped away too`() {
+        var deleted: CategoryId? = null
+        show(ready(), BudgetsActions(onDelete = { deleted = it }))
+        compose.onNode(verticalList).performScrollToNode(hasText("Archived from February 2026"))
+
+        compose.onNodeWithText("Archived from February 2026").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Delete Old?").assertIsDisplayed()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(old, deleted)
+    }
+
+    @Test
+    fun `swiping a category right goes to the previous month`() {
+        var month: YearMonth? = null
+        show(ready(), BudgetsActions(onSelectMonth = { month = it }))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
+
+        foodRow.performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        compose.awaitEquals(ym("2026-03")) { month }
+        compose.onNodeWithText("Delete Food?").assertDoesNotExist()
+    }
+
+    @Test
+    fun `swiping anywhere off the rows changes month both ways`() {
+        val months = mutableListOf<YearMonth>()
+        show(ready(), BudgetsActions(onSelectMonth = { months += it }))
+
+        compose.onNodeWithText("Overall budget").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.awaitEquals(listOf(ym("2026-05"))) { months.toList() }
+    }
+
+    @Test
+    fun `holding a category shows it can be dragged, and letting go changes nothing`() {
+        var reordered: List<CategoryId>? = null
+        var edits = 0
+        show(ready(), BudgetsActions(onReorder = { reordered = it }, onEditBudget = { _, _ -> edits++ }))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
+        dragging.assertDoesNotExist()
+
+        holdFood()
+        dragging.assertExists()
+
+        foodRow.performTouchInput { up() }
+        compose.waitForIdle()
+        dragging.assertDoesNotExist()
+        assertEquals(null, reordered)
+        assertEquals("a long press isn't a tap", 0, edits)
+    }
+
+    @Test
+    fun `dragging a category past another saves the new order`() {
+        var reordered: List<CategoryId>? = null
+        var edits = 0
+        val categories = listOf(
+            CategoryBudgetRow(food, "Food", line(null), null, canMoveUp = false, canMoveDown = true),
+            CategoryBudgetRow(fun_, "Fun", line(null), null, canMoveUp = true, canMoveDown = false),
+        )
+        show(ready(categories = categories, archived = emptyList()), BudgetsActions(onReorder = { reordered = it }, onEditBudget = { _, _ -> edits++ }))
+        compose.onNode(verticalList).performScrollToNode(hasText("Fun"))
+
+        holdFood()
+        repeat(12) {
+            foodRow.performTouchInput { moveBy(Offset(0f, 20.dp.toPx())) }
+            compose.waitForIdle()
+        }
+        foodRow.performTouchInput { up() }
+        compose.waitForIdle()
+
+        assertEquals(listOf(fun_, food), reordered)
+        assertEquals(0, edits)
+    }
+
+    @Test
+    fun `a finger that moves before the long press time doesn't start a drag`() {
+        var reordered: List<CategoryId>? = null
+        show(ready(), BudgetsActions(onReorder = { reordered = it }))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
+
+        foodRow.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 60.dp.toPx()))
+        }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        dragging.assertDoesNotExist()
+        compose.onRoot().performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals(null, reordered)
+    }
+
+    @Test
+    fun `a category that can't move ignores a long press`() {
+        val row = CategoryBudgetRow(food, "Food", line(null), null, canMoveUp = false, canMoveDown = false)
+        show(ready(categories = listOf(row)))
+        compose.onNode(verticalList).performScrollToNode(hasText("Food"))
+
+        holdFood()
+        dragging.assertDoesNotExist()
+        foodRow.performTouchInput { up() }
+    }
+
+    @Test
+    fun `in a closed month a row ignores a long press, and swipes change month`() {
+        val months = mutableListOf<YearMonth>()
+        val categories = listOf(
+            CategoryBudgetRow(food, "Food", line(BudgetTarget(dailyMinor = 1_000)), null, canMoveUp = false, canMoveDown = false),
+            CategoryBudgetRow(fun_, "Fun", line(null), null, canMoveUp = false, canMoveDown = false),
+        )
+        show(ready(categories = categories).copy(isClosed = true, archived = emptyList()), BudgetsActions(onSelectMonth = { months += it }))
+        compose.onNode(verticalList).performScrollToNode(hasText("€10.00/day"))
+        val closedFood = compose.onNodeWithText("€10.00/day")
+
+        closedFood.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        dragging.assertDoesNotExist()
+        closedFood.performTouchInput { up() }
+
+        closedFood.performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Delete Food?").assertDoesNotExist()
+        compose.awaitEquals(listOf(ym("2026-05"))) { months.toList() }
+    }
+
+    @Test
     fun `a deleted category in an earlier open month is marked and can't be changed`() {
         var edits = 0
         val row = CategoryBudgetRow(food, "Food", line(BudgetTarget(dailyMinor = 1_000)), april, canMoveUp = false, canMoveDown = false, isDeleted = true)
         show(ready(categories = listOf(row)), BudgetsActions(onEditBudget = { _, _ -> edits++ }))
 
-        val list = compose.onNode(hasScrollToIndexAction())
+        val list = compose.onNode(verticalList)
         list.performScrollToNode(hasText("Food (deleted)"))
         compose.onNodeWithText("Food (deleted)").performClick()
         assertEquals(0, edits)

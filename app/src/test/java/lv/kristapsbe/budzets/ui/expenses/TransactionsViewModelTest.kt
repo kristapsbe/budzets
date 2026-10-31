@@ -57,6 +57,30 @@ class TransactionsViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `a page shows its own month with the same filters, and selecting one moves the rest`() = runTest {
+        val food = categories.create("Food")
+        val fun_ = categories.create("Fun")
+        expenses.add(eur(3), food.id, LocalDate.of(2026, 3, 2))
+        expenses.add(eur(4), fun_.id, LocalDate.of(2026, 3, 3))
+        val march = ym("2026-03")
+        val handle = SavedStateHandle()
+        val vm = TransactionsViewModel(handle, expenses, categories, settings, surplus, clock)
+        vm.selectCategory(food.id)
+
+        val page = vm.stateFor(march).awaitFirst { it is TransactionsUiState.Ready && it.selectedCategory == food.id } as TransactionsUiState.Ready
+        assertEquals(march, page.month)
+        assertEquals(eur(3), page.total)
+        assertEquals(ym("2026-04"), vm.selectedMonth.value)
+
+        vm.selectMonth(march)
+        assertEquals("2026-03", handle.get<String>("month"))
+        assertEquals(eur(3), vm.awaitReady { it.month == march }.total)
+
+        vm.selectMonth(ym("2026-04"))
+        assertNull(handle.get<String>("month")) // the current month goes on following the date
+    }
+
+    @Test
     fun `note search is case-insensitive and combines with the category filter`() = runTest {
         val food = categories.create("Food")
         val fun_ = categories.create("Fun")
