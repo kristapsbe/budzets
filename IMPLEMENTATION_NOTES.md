@@ -1385,6 +1385,52 @@ from how a debug build runs its first frame, and a release build stays far below
   - A `screencap` straight after `input tap` shows the frame before the change. Allow 200 ms.
   - The expense editor opens with the keyboard up, and that takes the first back gesture.
 
+## Holding a row mid-swipe (2026-10-31)
+
+- **Reported:** dragging a category left and stopping with the finger down made the whole page lurch
+  toward the next month and spring back.
+- **Cause:** `SwipeToDelete` claimed the swipe but didn't keep hold of it.
+  - In foundation 1.12.1 a drag node that loses a gesture doesn't drop out. The pager and the
+    `LazyColumn` wait in `AwaitGesturePickup` until every finger lifts. There's no flag for this.
+  - One unconsumed change sends them back to slop detection, measured from the original touch-down,
+    so they're already past the slop and the next unconsumed change starts a drag.
+  - `horizontalDrag` leaves any change with zero x unconsumed. A moving finger rarely reports one. A
+    resting finger reports little else.
+  - The pager's first delta is the row's whole travel minus the slop. The row's next sideways change
+    cancels that drag, and the pager flings at zero velocity back to its page.
+- **Fixed:** `followToLift` replaces `horizontalDrag` and consumes every change for every finger until
+  the last one lifts. `drag` wouldn't do: `HitPathTracker` compares local positions, so a change with
+  no movement at all still arrives after the row has shifted under the finger. **Don't put
+  `horizontalDrag` back.** Expense rows share the component, so they get this too.
+- **Fixed in the same gesture:** a fast swipe, a pause of any length and a lift counted as a fling,
+  because the tracker never saw the lift and speed is measured at the last sample. A category opened
+  the delete dialog and an expense was deleted. The tracker now gets the lift, so its 40 ms reset
+  applies. A flick lifted at once still flings.
+- **Measured, same scripted gesture on both builds** (row dragged 300 px, then y-only moves, 21 px
+  slop at 420 dpi):
+
+  | Finger held down | Before | After |
+  |---|---|---|
+  | "Next month" arrow, x (944 at rest) | 665, moved 279 px | 944 |
+  | November's page | on screen | not on screen |
+  | After a few px more sideways | back at 944 | 944 |
+
+  The Robolectric test failed the same way: 84 px for a 100 px swipe, with Robolectric's slop of 16.
+- **Verified:** 370 tests ×3 (3 more), lint 0 errors. Two of the new tests failed before the fix. On
+  `Medium_Phone_API_37.0`, debug build, no crashes: delete past 40% with the dialog and Cancel; short of
+  40%; swipe right to the previous month; swipe left off a row to the next month; a long-press reorder
+  with a rest mid-drag; an expense row's held swipe, delete and Undo; a closed month's row both ways.
+- **Not verified:** a real phone, where a resting finger's noise is real and not scripted. A release
+  build. Handing over to a second finger, because `input motionevent` has one pointer. The `LazyColumn`
+  taking over was read from the source and not reproduced: with the fix, 200 px of vertical drift
+  doesn't scroll the list, but the old build wasn't tried.
+- **Emulator notes:**
+  - A closed month with no budgets at closing shows no category rows. Budget it first to test a row.
+  - On Spending the summary line also shows the amount, and a swipe there is a plain month swipe, so
+    find the row by its category name.
+  - A row's text disappears from a `uiautomator` dump once it's swiped off screen. Read the page's
+    position from the month arrows.
+
 ## Open questions
 
 None currently.

@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -24,6 +23,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
@@ -87,11 +90,14 @@ fun SwipeToDelete(
                 val velocity = VelocityTracker()
                 velocity.addPointerInputChange(first)
                 var distance = (first.positionChangeIgnoreConsumed().x * towardStart).coerceIn(0f, width)
-                val finished = horizontalDrag(first.id) { change ->
-                    distance = (distance + change.positionChange().x * towardStart).coerceIn(0f, width)
+                val finished = followToLift(first.id) { change ->
+                    // Includes the lift: that's how the tracker learns the finger had stopped.
                     velocity.addPointerInputChange(change)
-                    change.consume()
-                    scope.launch { offset.snapTo(distance * towardStart) }
+                    val moved = change.positionChange().x
+                    if (moved != 0f) {
+                        distance = (distance + moved * towardStart).coerceIn(0f, width)
+                        scope.launch { offset.snapTo(distance * towardStart) }
+                    }
                 }
 
                 val speed = velocity.calculateVelocity().x * towardStart
@@ -119,6 +125,33 @@ fun SwipeToDelete(
             }
         }
         Box(Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }) { content() }
+    }
+}
+
+/**
+ * Follows a finger until it lifts, consuming everything it reports, whether it moved or not.
+ *
+ * Not `horizontalDrag`, which leaves any change with no sideways movement unconsumed, and a resting
+ * finger reports little else. The [MonthPager] and the list around a row never give up a drag they
+ * lost: one unconsumed change hands it to them, measured from where the finger first came down, so
+ * the page would jump by everything the row had travelled. `drag` isn't enough either, because a
+ * change with no movement at all still arrives once the row has shifted under the finger.
+ *
+ * @param onChange sees every change for the finger, including the lift.
+ * @return true when the last finger lifted, false if something else took the gesture.
+ */
+private suspend fun AwaitPointerEventScope.followToLift(pointerId: PointerId, onChange: (PointerInputChange) -> Unit): Boolean {
+    var pointer = pointerId
+    while (true) {
+        val event = awaitPointerEvent()
+        val change = event.changes.firstOrNull { it.id == pointer } ?: return false
+        if (change.isConsumed) return false
+        onChange(change)
+        if (change.changedToUpIgnoreConsumed()) {
+            pointer = event.changes.firstOrNull { it.pressed }?.id ?: return true
+        }
+        // Every finger: a second one left unconsumed would hand the gesture over just the same.
+        event.changes.forEach { it.consume() }
     }
 }
 

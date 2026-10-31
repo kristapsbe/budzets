@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.TouchInjectionScope
+import androidx.compose.ui.test.assertLeftPositionInRootIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
@@ -39,7 +42,7 @@ class SwipeToDeleteTest {
     private fun show(enabled: Boolean = true, confirmsDelete: Boolean = false) {
         compose.setContent {
             MonthPager(april, { months += it }, { MutableStateFlow(it) }, YearMonth.of(1, 1), Modifier.fillMaxSize()) {
-                SwipeToDelete(onDelete = { deletes++ }, enabled = enabled, confirmsDelete = confirmsDelete) {
+                SwipeToDelete(onDelete = { deletes++ }, Modifier.testTag("slot"), enabled, confirmsDelete) {
                     Text("Row", Modifier.fillMaxWidth().height(72.dp).testTag("row"))
                 }
             }
@@ -47,6 +50,12 @@ class SwipeToDeleteTest {
     }
 
     private val row get() = compose.onNodeWithTag("row")
+
+    /** Stays where the row was during a swipe, so it moves only if the page does. */
+    private val slot get() = compose.onNodeWithTag("slot")
+
+    /** What a resting finger reports: it drifts a little, but not sideways. */
+    private fun TouchInjectionScope.rest() = repeat(4) { moveBy(Offset(0f, 1f)) }
 
     @Test
     fun `a full swipe left deletes and leaves the month alone`() {
@@ -85,6 +94,53 @@ class SwipeToDeleteTest {
         row.performTouchInput { swipeLeft(startX = right, endX = right - 120.dp.toPx(), durationMillis = 60) }
         compose.waitForIdle()
         assertEquals(1, deletes)
+    }
+
+    @Test
+    fun `a finger resting mid-swipe leaves the page where it is`() {
+        show()
+        row.performTouchInput {
+            down(center)
+            moveBy(Offset(-100.dp.toPx(), 0f))
+            rest()
+        }
+        compose.waitForIdle()
+        slot.assertLeftPositionInRootIsEqualTo(0.dp)
+
+        row.performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals(0, deletes)
+        assertEquals(emptyList<YearMonth>(), months)
+    }
+
+    @Test
+    fun `a swipe can carry on after a rest`() {
+        show()
+        row.performTouchInput {
+            down(center)
+            moveBy(Offset(-60.dp.toPx(), 0f))
+            rest()
+            moveBy(Offset(-100.dp.toPx(), 0f))
+            advanceEventTime(500)
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals(1, deletes)
+        assertEquals(emptyList<YearMonth>(), months)
+    }
+
+    @Test
+    fun `a fast swipe that stops before lifting isn't a fling`() {
+        show()
+        row.performTouchInput {
+            down(center)
+            // 120 dp at about 2,500 dp/s: short of the 40% on this 320 dp row, so only speed counts.
+            repeat(3) { moveBy(Offset(-40.dp.toPx(), 0f)) }
+            advanceEventTime(500)
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals(0, deletes)
     }
 
     @Test
