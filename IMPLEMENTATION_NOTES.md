@@ -1347,6 +1347,44 @@ from how a debug build runs its first frame, and a release build stays far below
   - zsh doesn't split unquoted variables, and `timeout` isn't installed.
   - `Medium_Phone_API_37.0`'s long-press timeout is 400 ms.
 
+## Screen transitions (2026-10-31)
+
+- **Asked for:** going back from a category opened on the overview shrank the screen towards its
+  centre. It should fade the way opening does, and the fade should be slightly faster.
+- **Cause:** the `NavHost` set no transitions. navigation-compose 2.10.2 fades on open and on the
+  back arrow (`tween(700)`), but a back swipe is a separate path, whose default is
+  `scaleOut(targetScale = 0.7f)` for the leaving screen and a spring `fadeIn` for the one below.
+- **Decided:**
+  - Set on the `NavHost`, so it covers every screen and tab switch, not just the category route.
+    A category-only fix would have to override both that route and the overview's return
+    transition, and would leave the shrink everywhere else.
+  - One `navFade` spec, 500 ms, for open, close and swipe. **Opening is faster too**, so the two
+    stay identical. `popEnterTransition` and `popExitTransition` default to the enter and exit
+    values, so only the predictive pair needs setting beside them.
+  - During a swipe the fade follows the finger, and the 500 ms applies once it lifts.
+- **Verified:** 367 tests, lint 0 errors. On `Medium_Phone_API_37.0` with gesture navigation and a
+  debug build:
+  - Held swipes on the category screen and the expense editor, screenshotted with the finger down:
+    a full-size crossfade with no shrink. Finishing lands on the screen below.
+  - A cancelled swipe returns the category screen, and its chips still work. A quick flick works.
+  - Time to the last changing frame, from bursts of screenshots about 200 ms apart:
+
+    | Path | Still changing at | Settled by |
+    |---|---|---|
+    | Open a category | 353 ms | 558 ms |
+    | Back arrow | 488 ms | 700 ms |
+    | Tab switch | 651 ms | 852 ms |
+
+    The tab switch runs past 500 ms. The navigation bar's indicator animates in the same frames,
+    and the two weren't separated.
+- **Not verified:** a release build, three-button navigation, the old build's timings (700 ms is
+  from the library source), and how it feels on a real phone.
+- **Emulator notes:**
+  - To test predictive back, hold the gesture with `input motionevent DOWN`, `MOVE` and `UP`, and
+    `screencap` before the `UP`. `input swipe` can't be held.
+  - A `screencap` straight after `input tap` shows the frame before the change. Allow 200 ms.
+  - The expense editor opens with the keyboard up, and that takes the first back gesture.
+
 ## Open questions
 
 None currently.

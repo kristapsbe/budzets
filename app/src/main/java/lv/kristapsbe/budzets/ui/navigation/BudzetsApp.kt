@@ -1,6 +1,9 @@
 package lv.kristapsbe.budzets.ui.navigation
 
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
@@ -149,6 +152,11 @@ fun BudzetsApp(
             navController = navController,
             startDestination = OverviewRoute,
             modifier = Modifier.padding(bottomOnly).consumeWindowInsets(bottomOnly),
+            enterTransition = { fadeIn(navFade) },
+            exitTransition = { fadeOut(navFade) },
+            // Separate from the two above: left unset, a back swipe shrinks the screen instead of fading.
+            predictivePopEnterTransition = { fadeIn(navFade) },
+            predictivePopExitTransition = { fadeOut(navFade) },
         ) {
             composable<OverviewRoute> {
                 OverviewScreen(
@@ -216,6 +224,9 @@ fun BudzetsApp(
 }
 
 private val MIN_LABEL_FONT_SIZE = 8.sp
+
+/** 200 ms quicker than the library's default fade. */
+private val navFade = tween<Float>(durationMillis = 500)
 
 /** Switches tabs keeping one copy of each tab on the back stack, restoring its state. */
 private const val ICONS_ONLY_FONT_SCALE = 1.5f
