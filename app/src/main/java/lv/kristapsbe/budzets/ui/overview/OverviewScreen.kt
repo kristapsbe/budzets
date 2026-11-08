@@ -361,6 +361,17 @@ private fun PaceLine(state: OverviewUiState.Ready, money: MoneyFormatter) {
         Spacer(Modifier.width(8.dp))
         Text(stringResource(label), style = MaterialTheme.typography.titleSmall)
     }
+    state.daily?.let { daily ->
+        val over = daily.leftToday.isNegative
+        Text(
+            stringResource(R.string.daily_amount, money.format(daily.perDay)) + " · " +
+                if (over) stringResource(R.string.over_today, money.format(-daily.leftToday))
+                else stringResource(R.string.left_today, money.format(daily.leftToday)),
+            style = MaterialTheme.typography.bodyLarge,
+            // The words say "over" as well, so colour isn't the only signal.
+            color = if (over) MaterialTheme.colorScheme.error else Color.Unspecified,
+        )
+    }
     if (state.isCurrentMonth) {
         pace.expectedSpend?.let {
             Text(

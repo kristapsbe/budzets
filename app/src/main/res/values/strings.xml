@@ -23,6 +23,9 @@
     <string name="surplus_boosts">Surplus boosts</string>
     <string name="spent_amount">%1$s spent</string>
     <string name="pace_guide">Pace guide: %1$s by today</string>
+    <string name="daily_amount">%1$s a day</string>
+    <string name="left_today">%1$s left today</string>
+    <string name="over_today">%1$s over today</string>
     <plurals name="days_left">
         <item quantity="one">%d day left</item>
         <item quantity="other">%d days left</item>

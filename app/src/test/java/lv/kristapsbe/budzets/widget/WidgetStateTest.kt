@@ -31,8 +31,12 @@ class WidgetStateTest {
     private fun category(id: CategoryId, name: String) = Category(id, name, null, 0, null, FIXED_NOW, FIXED_NOW)
     private val categories = listOf(category(FOOD, "Food"), category(FUN, "Fun"), category(TRAVEL, "Travel"))
 
-    private fun build(summary: MonthSummary, balances: Map<SurplusPocket, Money> = emptyMap(), cats: List<Category> = categories) =
-        WidgetStates.build(summary, today, cats, balances, CurrencySpec.DEFAULT)
+    private fun build(
+        summary: MonthSummary,
+        balances: Map<SurplusPocket, Money> = emptyMap(),
+        cats: List<Category> = categories,
+        spentToday: Money = Money.ZERO,
+    ) = WidgetStates.build(summary, today, cats, balances, CurrencySpec.DEFAULT, spentToday)
 
     @Test
     fun `no categories means not set up`() {
@@ -55,6 +59,23 @@ class WidgetStateTest {
         assertEquals(15, state.daysLeft) // today counts as elapsed
         assertEquals(eur(50), state.surplus)
         assertNull(state.topOver)
+    }
+
+    @Test
+    fun `daily amount from what was left at the start of today`() {
+        val summary = MonthSummary(april, eur(600), false, mapOf(FOOD to CategorySummary(FOOD, eur(300), Money.ZERO, eur(150))))
+        // €130 before today, €20 today: €470 over the 16 days from the 15th.
+        val daily = (build(summary, spentToday = eur(20)) as WidgetState.Month).daily!!
+        assertEquals(eur(29, 37), daily.perDay)
+        assertEquals(eur(9, 37), daily.leftToday)
+    }
+
+    @Test
+    fun `no daily amount when over budget or without one`() {
+        val over = MonthSummary(april, eur(100), false, mapOf(FOOD to CategorySummary(FOOD, null, Money.ZERO, eur(120))))
+        assertNull((build(over) as WidgetState.Month).daily)
+        val none = MonthSummary(april, null, false, mapOf(FOOD to CategorySummary(FOOD, null, Money.ZERO, eur(12))))
+        assertNull((build(none) as WidgetState.Month).daily)
     }
 
     @Test

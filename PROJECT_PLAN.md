@@ -217,7 +217,11 @@ If a pace estimate is shown, calculate expected spend by today from the
 monthly budget and fraction of calendar days elapsed. Label this as a
 pace guide, not a hard daily allowance. Do not present a misleading "on
 track" status when the month has no budget configured or the effective
-budget is zero.
+budget is zero. (Q34, 2026-11-08: at the user's request the overview and
+widget also show a daily amount next to the pace guide: what was left at
+the start of today divided by the days left including today, with what
+is left of it today. It is a separate figure; the pace guide is
+unchanged.)
 
 ## 6. User stories and acceptance criteria
 

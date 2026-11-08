@@ -28,6 +28,9 @@
     <string name="surplus_boosts">Papildinājumi no pārpalikuma</string>
     <string name="spent_amount">Iztērēts: %1$s</string>
     <string name="pace_guide">Tempa orientieris: %1$s līdz šodienai</string>
+    <string name="daily_amount">%1$s dienā</string>
+    <string name="left_today">šodien vēl %1$s</string>
+    <string name="over_today">šodien pārsniegts par %1$s</string>
     <plurals name="days_left">
         <item quantity="zero">Atlikušas %d dienas</item>
         <item quantity="one">Atlikusi %d diena</item>

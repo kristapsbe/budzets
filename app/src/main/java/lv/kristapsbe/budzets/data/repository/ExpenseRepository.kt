@@ -38,6 +38,14 @@ class ExpenseRepository(
         }
     }
 
+    /** Total spent on each day of [month] that has expenses. */
+    fun observeDailySpending(month: YearMonth): Flow<Map<LocalDate, Money>> {
+        val (from, to) = month.dateRange()
+        return dao.observeDailySpending(from, to)
+            .map { rows -> rows.associate { LocalDate.parse(it.date) to Money(it.totalMinor) } }
+            .distinctUntilChanged()
+    }
+
     fun observeRecent(limit: Int = 50): Flow<List<Expense>> =
         dao.observeRecent(limit).map { rows -> rows.map { it.toDomain() } }
 

@@ -5,8 +5,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
+import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
+import lv.kristapsbe.budzets.domain.calculation.DailyAllowance
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
@@ -35,6 +37,8 @@ sealed interface WidgetState {
         val topOver: TopOver?,
         /** Net of all surplus pockets; may be negative. */
         val surplus: Money,
+        /** What can be spent per day for the rest of the month (Q34); null with no budget or none left. */
+        val daily: DailyAllowance? = null,
     ) : WidgetState {
         val hasBudget: Boolean get() = budget.isPositive
         val remaining: Money get() = budget - spent
@@ -65,6 +69,7 @@ object WidgetStates {
         categories: CategoryRepository,
         surplus: SurplusRepository,
         settings: SettingsRepository,
+        expenses: ExpenseRepository,
         today: LocalDate,
     ): Flow<WidgetState> =
         combine(
@@ -72,7 +77,10 @@ object WidgetStates {
             categories.categories,
             surplus.balances,
             settings.currency,
-        ) { summary, all, balances, currency -> build(summary, today, all, balances, currency) }
+            expenses.observeDailySpending(YearMonth.from(today)),
+        ) { summary, all, balances, currency, byDay ->
+            build(summary, today, all, balances, currency, spentToday = byDay[today] ?: Money.ZERO)
+        }
             .distinctUntilChanged()
 
     /**
@@ -85,6 +93,7 @@ object WidgetStates {
         categories: List<Category>,
         balances: Map<SurplusPocket, Money>,
         currency: CurrencySpec,
+        spentToday: Money = Money.ZERO,
     ): WidgetState {
         if (categories.all { it.isDeleted }) return WidgetState.NotSetUp
         val names = categories.associate { it.id to it.name }
@@ -101,6 +110,7 @@ object WidgetStates {
             daysLeft = pace.daysRemaining,
             topOver = worst?.let { TopOver(names[it.categoryId] ?: "?", -it.remaining) },
             surplus = balances.values.sumMoney(),
+            daily = PaceCalculator.dailyAllowance(summary, today, spentToday),
         )
     }
 }

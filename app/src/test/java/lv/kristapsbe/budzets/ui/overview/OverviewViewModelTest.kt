@@ -25,7 +25,7 @@ class OverviewViewModelTest : ViewModelTest() {
 
     @Before
     fun createViewModel() {
-        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
+        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, expenses, clock)
     }
 
     private suspend fun awaitReady(predicate: (OverviewUiState.Ready) -> Boolean = { true }): OverviewUiState.Ready =
@@ -34,7 +34,7 @@ class OverviewViewModelTest : ViewModelTest() {
     @Test
     fun `a page shows its own month, and selecting one moves the rest`() = runTest {
         val handle = SavedStateHandle()
-        val paged = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
+        val paged = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses, clock)
         val may = ym("2026-05")
 
         val page = paged.stateFor(may).awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
@@ -94,6 +94,29 @@ class OverviewViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `daily amount for the current month splits today's spending from earlier spending`() = runTest {
+        val food = categories.create("Food")
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(dailyMinor = 2_000)) // 600
+        expenses.add(eur(100), food.id, LocalDate.of(2026, 4, 2))
+        expenses.add(eur(30), food.id, LocalDate.of(2026, 4, 15)) // today
+
+        // €500 left at the start of the 15th, over 16 days: €31.25 a day, €1.25 of it left today.
+        val daily = awaitReady { it.summary.totalSpent == eur(130) }.daily!!
+        assertEquals(eur(31, 25), daily.perDay)
+        assertEquals(eur(1, 25), daily.leftToday)
+
+        expenses.add(eur(5), food.id, LocalDate.of(2026, 4, 15))
+        val later = awaitReady { it.summary.totalSpent == eur(135) }.daily!!
+        assertEquals(eur(31, 25), later.perDay)
+        assertEquals(eur(-3, -75), later.leftToday)
+
+        vm.previousMonth()
+        assertNull(awaitReady { it.month == ym("2026-03") }.daily)
+        vm.nextMonth(); vm.nextMonth()
+        assertNull(awaitReady { it.month == ym("2026-05") }.daily)
+    }
+
+    @Test
     fun `month navigation`() = runTest {
         awaitReady()
         vm.previousMonth()
@@ -134,11 +157,11 @@ class OverviewViewModelTest : ViewModelTest() {
     @Test
     fun `selected month survives process death via SavedStateHandle`() = runTest {
         val handle = SavedStateHandle()
-        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
+        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses, clock)
         first.previousMonth()
         first.previousMonth()
         // A recreated process hands the ViewModel the saved handle contents.
-        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, expenses.hasMonetaryData, clock)
+        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, expenses, clock)
         val state = restored.uiState.awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
         assertEquals(ym("2026-02"), state.month)
         restored.goToCurrentMonth()

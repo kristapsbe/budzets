@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import lv.kristapsbe.budzets.domain.calculation.CategorySummary
+import lv.kristapsbe.budzets.domain.calculation.DailyAllowance
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
 import lv.kristapsbe.budzets.domain.eur
@@ -54,6 +55,7 @@ class OverviewContentTest {
         hasCategories: Boolean = true,
         closeStatus: CloseStatus = CloseStatus.OPEN,
         backupReminder: BackupReminder? = null,
+        daily: DailyAllowance? = null,
     ) = OverviewUiState.Ready(
         month = april,
         isCurrentMonth = true,
@@ -65,6 +67,7 @@ class OverviewContentTest {
         totalSurplus = eur(42),
         hasCategories = hasCategories,
         backupReminder = backupReminder,
+        daily = daily,
     )
 
     private fun show(state: OverviewUiState, actions: OverviewActions = OverviewActions()) {
@@ -114,6 +117,30 @@ class OverviewContentTest {
         compose.onNodeWithText("+€50.00 boost").assertIsDisplayed()
         list.performScrollToNode(hasText("€60.00 left"))
         compose.onNodeWithText("€60.00 left").assertIsDisplayed()
+    }
+
+    private val budgeted = CategorySummary(food, eur(600), Money.ZERO, eur(130))
+    private fun budgetedMonth(daily: DailyAllowance?) =
+        ready(MonthSummary(april, eur(600), false, mapOf(food to budgeted)), listOf(CategoryRow(food, "Food", false, budgeted)), daily = daily)
+
+    @Test
+    fun `daily amount sits under the status with what's left today`() {
+        show(budgetedMonth(DailyAllowance(eur(31, 25), eur(30))))
+        compose.onNodeWithText("€31.25 a day · €1.25 left today").assertIsDisplayed()
+        compose.onNodeWithText("Pace guide", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `today over its daily amount is said in words`() {
+        show(budgetedMonth(DailyAllowance(eur(10), eur(13))))
+        compose.onNodeWithText("€10.00 a day · €3.00 over today").assertIsDisplayed()
+    }
+
+    @Test
+    fun `no daily amount line without one`() {
+        show(budgetedMonth(daily = null))
+        compose.onNodeWithText("Pace guide", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("a day", substring = true).assertDoesNotExist()
     }
 
     @Test

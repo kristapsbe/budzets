@@ -76,6 +76,9 @@ interface BudgetConfigDao {
 
 data class CategorySpendRow(val categoryId: String, val totalMinor: Long)
 
+/** [date] is the ISO date. */
+data class DateSpendRow(val date: String, val totalMinor: Long)
+
 @Dao
 interface ExpenseDao {
     /** Dates are ISO strings, so lexical comparison is chronological. */
@@ -96,6 +99,15 @@ interface ExpenseDao {
         """
     )
     fun observeSpending(fromDate: String, toDateExclusive: String): Flow<List<CategorySpendRow>>
+
+    @Query(
+        """
+        SELECT expenseDate AS date, SUM(amountMinor) AS totalMinor FROM expenses
+        WHERE expenseDate >= :fromDate AND expenseDate < :toDateExclusive
+        GROUP BY expenseDate
+        """
+    )
+    fun observeDailySpending(fromDate: String, toDateExclusive: String): Flow<List<DateSpendRow>>
 
     @Query(
         """

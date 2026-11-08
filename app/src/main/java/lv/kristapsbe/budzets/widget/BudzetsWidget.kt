@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.first
 import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.MainActivity
 import lv.kristapsbe.budzets.R
+import lv.kristapsbe.budzets.domain.calculation.DailyAllowance
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -74,6 +75,7 @@ class BudzetsWidget : GlanceAppWidget() {
             categories = container.categories,
             surplus = container.surplus,
             settings = container.settings,
+            expenses = container.expenses,
             today = LocalDate.now(container.clock),
         )
         // Loaded up front so the first frame already has data.
@@ -97,10 +99,10 @@ class BudzetsWidget : GlanceAppWidget() {
 /** 2×1-ish: remaining and the bar only. */
 internal val SMALL = DpSize(100.dp, 48.dp)
 
-/** 2×2 / 3×2: adds the month, spent of budget, status, and the + button. */
+/** 2×2 / 3×2: adds the month, the + button, the daily amount (or spent of budget without one) and status. */
 internal val MEDIUM = DpSize(160.dp, 110.dp)
 
-/** 4×2 and up: adds the most over-budget category and saved surplus. */
+/** 4×2 and up: adds spent of budget beside the daily amount, the most over-budget category and saved surplus. */
 internal val LARGE = DpSize(250.dp, 150.dp)
 
 /** Asks [MainActivity] for Add expense (Q17). The widget goes through [QuickAddActivity] (Q18). */
@@ -179,9 +181,11 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
     if (!roomy) return
 
     Spacer(GlanceModifier.height(6.dp))
-    if (state.hasBudget) {
+    // Medium shows the daily amount instead of "spent of" (Q34); the bar's description still reads it.
+    if (state.hasBudget && (large || state.daily == null)) {
         Text(context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.budget)), style = bodyStyle(), maxLines = 1)
     }
+    state.daily?.let { DailyLines(it, money, context, oneLine = large) }
     StatusLine(state, context)
 
     if (!large) return
@@ -193,6 +197,29 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
         )
     }
     Text(context.getString(R.string.widget_saved_surplus, money.format(state.surplus)), style = bodyStyle(), maxLines = 1)
+}
+
+/**
+ * The daily amount and what's left of it today (Q34). Medium is too narrow for both on one line,
+ * so they take the two lines "spent of" and the daily line would have; large joins them and may
+ * wrap, as Latvian and big amounts can run long.
+ */
+@Composable
+private fun DailyLines(daily: DailyAllowance, money: MoneyFormatter, context: Context, oneLine: Boolean) {
+    val over = daily.leftToday.isNegative
+    val perDay = context.getString(R.string.daily_amount, money.format(daily.perDay))
+    val today =
+        if (over) context.getString(R.string.over_today, money.format(-daily.leftToday))
+        else context.getString(R.string.left_today, money.format(daily.leftToday))
+    // The words say "over", so colour isn't the only signal.
+    val todayColor = if (over) GlanceTheme.colors.error else GlanceTheme.colors.onSurface
+    if (oneLine) {
+        Text("$perDay · $today", style = bodyStyle(todayColor), maxLines = 2)
+    } else {
+        Text(perDay, style = bodyStyle(GlanceTheme.colors.onSurface), maxLines = 1)
+        // May wrap: Latvian's "over" runs past 2×2's width, and the amount comes last.
+        Text(today.replaceFirstChar { it.uppercase(context.resources.configuration.locales[0]) }, style = bodyStyle(todayColor), maxLines = 2)
+    }
 }
 
 /** Status in words with an icon, never by colour alone. */

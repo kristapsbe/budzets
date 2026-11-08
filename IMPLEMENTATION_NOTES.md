@@ -1431,6 +1431,63 @@ from how a debug build runs its first frame, and a release build stays far below
   - A row's text disappears from a `uiautomator` dump once it's swiped off screen. Read the page's
     position from the month arrows.
 
+## Daily amount (2026-11-08)
+
+- **Asked for:** how much can be spent per day and still finish the month within budget, on the
+  Overview and on the widget. Spec §5.2 says the pace guide isn't a daily allowance. This is a
+  separate figure the user asked for, and the pace guide is unchanged. §5.2 is annotated.
+- **Q34 — How it behaves** (both answers were the recommended options):
+  - **Fixed for the day.** What was left at the start of today ÷ the days from today to the month's
+    end, today included. It doesn't move while today's expenses come in. A second figure does: "€6.00
+    left today", or "€3.00 over today". It is recalculated after midnight.
+    "Live" was offered too: what's left now ÷ days left. With that, spending exactly the day's amount
+    still lowers it until midnight.
+  - **Widget:** at medium size the daily amount takes the place of "€x of €y spent". The bar's
+    TalkBack description still says it. Large shows both. Small doesn't change.
+- **Decided along the way:**
+  - Shown for the current month only. Hidden with no budget, or when nothing was left at the start of
+    today. Over budget, the status already says so.
+  - **Rounded down**, so spending it every day never goes over. Everything else rounds half-up; this
+    is the one exception. €200 over 3 days gives €66.66.
+  - Spending before today is the month's total less today's. A future-dated expense, possible only
+    after a clock change, counts as already spent.
+  - "Over today" is red as well as worded, so colour isn't the only signal.
+  - **Medium widget:** the daily amount and what's left today go on two lines. One line was cut off at
+    2×2 ("€31.30 a day · €2.70 over …"). Two lines are the same height as the old medium layout, which
+    had "spent of" and status. The "today" line may wrap: in Latvian at 2×2, "Šodien pārsniegts par
+    2,70 €" doesn't fit, and the amount comes last. On a line of its own it starts with a capital
+    ("Šodien vēl …").
+  - **Large widget:** one line that may wrap to two.
+- **Code:**
+  - `PaceCalculator.dailyAllowance` and `DailyAllowance` in `Pace.kt`. `Pace` itself is unchanged, so
+    no caller gets a "live" figure by leaving out today's spending.
+  - `ExpenseDao.observeDailySpending` (grouped by date, on the existing `expenseDate` index, no schema
+    change) and `ExpenseRepository.observeDailySpending(month)`.
+  - The Overview and the widget read today's total from the month's per-day totals at each emission.
+    A query for "today" alone would be bound to the day the flow was built: `MonthStates` keeps a
+    month's flow for the ViewModel's life, which can be days in the background. Past months skip the
+    query; they never become current again.
+  - `OverviewViewModel` takes the `ExpenseRepository` instead of its `hasMonetaryData` flow.
+- **Not changed:** an Overview left open across midnight keeps yesterday's figure until the next
+  change, as the pace guide and days left already did. The widget's midnight alarm already starts a
+  session with the new day.
+- **Verified:** 390 tests ×3, lint 0 errors. Emulator `Medium_Phone_API_37.0`, debug build,
+  `-read-only`:
+  - €900 budget, €180 before the 8th, €4 today: "€31.30 a day · €27.30 left today", matching
+    €720 ÷ 23. After €30 more today: "€31.30 a day · €2.70 over today", in red.
+  - Widget at 3×2 (the large layout here), worst case including "Groceries over by €20.00": it fits,
+    filling the last of the space. At 2×2 (medium): two lines, nothing cut off.
+  - Latvian, set as the app's language: the Overview and the 3×2 widget each fit on one line. At 2×2
+    the "Šodien" line wraps.
+- **Seen, not changed:** in Latvian at 2×2 the headline ("Atlikums: 686,…") and the status line
+  ("Atbilst plānam · Atlik…") were already cut off before this change.
+- **Emulator notes:**
+  - The launcher's resize handles do work with `input swipe`: long-press the widget, then drag a
+    handle. So medium can be checked on the emulator after all.
+  - `cmd locale set-app-locales <pkg> --locales lv-LV` switches the app and its widget to Latvian
+    without changing the device's language.
+
 ## Open questions
 
-None currently.
+- Latvian at 2×2: the headline and status line are cut off (see "Daily amount"). They need a shorter
+  wording or a smaller headline. This was there before Q34.

@@ -89,6 +89,23 @@ class CategoryAndExpenseRepositoryTest : DbTest() {
     }
 
     @Test
+    fun `daily spending totals each day of the month across categories`() = runTest {
+        val food = categories.create("Food")
+        val fun_ = categories.create("Fun")
+        expenses.add(eur(5), food.id, LocalDate.of(2026, 3, 31))
+        expenses.add(eur(7), food.id, LocalDate.of(2026, 4, 1))
+        expenses.add(eur(2, 50), fun_.id, LocalDate.of(2026, 4, 1))
+        expenses.add(eur(9), fun_.id, LocalDate.of(2026, 4, 30))
+        expenses.add(eur(11), fun_.id, LocalDate.of(2026, 5, 1))
+
+        assertEquals(
+            mapOf(LocalDate.of(2026, 4, 1) to eur(9, 50), LocalDate.of(2026, 4, 30) to eur(9)),
+            expenses.observeDailySpending(ym("2026-04")).first(),
+        )
+        assertEquals(emptyMap<LocalDate, Money>(), expenses.observeDailySpending(ym("2026-06")).first())
+    }
+
+    @Test
     fun `expense amount validated`() = runTest {
         val food = categories.create("Food")
         for (bad in listOf(Money.ZERO, Money(-1), Money(100_000_000_001))) {

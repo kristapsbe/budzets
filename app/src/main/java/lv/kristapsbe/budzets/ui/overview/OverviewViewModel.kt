@@ -9,7 +9,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +16,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -25,9 +25,11 @@ import kotlinx.coroutines.launch
 import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
+import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.domain.calculation.CategorySummary
+import lv.kristapsbe.budzets.domain.calculation.DailyAllowance
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.Pace
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
@@ -84,6 +86,8 @@ sealed interface OverviewUiState {
         val backupReminder: BackupReminder? = null,
         /** One-off boosts added to this month. They're in the unallocated surplus, not its budget. */
         val oneOffTotal: Money = Money.ZERO,
+        /** What can be spent per day for the rest of the month (Q34); current month only. */
+        val daily: DailyAllowance? = null,
     ) : OverviewUiState {
 
         val hasBudget: Boolean get() = summary.overallEffective.isPositive
@@ -98,8 +102,8 @@ class OverviewViewModel(
     private val surplus: SurplusRepository,
     private val categories: CategoryRepository,
     private val settings: SettingsRepository,
-    /** Whether amounts exist; with none, there is nothing worth a backup reminder. */
-    private val hasMonetaryData: Flow<Boolean>,
+    /** For whether amounts exist (with none, no backup reminder) and for today's spending. */
+    private val expenses: ExpenseRepository,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -150,11 +154,14 @@ class OverviewViewModel(
                 MonthFigures(summary, status, closed, SurplusLedger.balances(ledger).values.sumMoney(), oneOffs.map { it.amount }.sumMoney())
             },
             categories.categories,
-            combine(settings.currency, settings.lastBackupAt, hasMonetaryData) { currency, lastBackup, hasData ->
+            combine(settings.currency, settings.lastBackupAt, expenses.hasMonetaryData) { currency, lastBackup, hasData ->
                 currency to BackupReminder.due(lastBackup, hasData, clock.instant())
             },
             budgets.configs,
-        ) { (summary, status, closed, totalSurplus, oneOffTotal), allCategories, (currency, backupReminder), configs ->
+            // Per day rather than for today alone: this flow outlives the date it was built on, and
+            // today is read at each emission. A past month is never current again, so it skips the query.
+            if (month < YearMonth.now(clock)) flowOf(emptyMap<LocalDate, Money>()) else expenses.observeDailySpending(month),
+        ) { (summary, status, closed, totalSurplus, oneOffTotal), allCategories, (currency, backupReminder), configs, byDay ->
             val today = LocalDate.now(clock)
             OverviewUiState.Ready(
                 month = month,
@@ -172,6 +179,7 @@ class OverviewViewModel(
                 canClose = month <= YearMonth.from(today),
                 backupReminder = backupReminder,
                 oneOffTotal = oneOffTotal,
+                daily = PaceCalculator.dailyAllowance(summary, today, byDay[today] ?: Money.ZERO),
             ) as OverviewUiState
         }.catch { emit(OverviewUiState.Error(it.message)) }
 
@@ -213,7 +221,7 @@ class OverviewViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as BudzetsApplication).container
-                OverviewViewModel(createSavedStateHandle(), container.budgets, container.surplus, container.categories, container.settings, container.expenses.hasMonetaryData, container.clock)
+                OverviewViewModel(createSavedStateHandle(), container.budgets, container.surplus, container.categories, container.settings, container.expenses, container.clock)
             }
         }
     }

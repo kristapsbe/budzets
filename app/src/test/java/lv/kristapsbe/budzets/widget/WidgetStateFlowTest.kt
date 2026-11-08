@@ -40,7 +40,7 @@ class WidgetStateFlowTest : ViewModelTest() {
     @Test
     fun `one collection follows setup, expenses, budgets and currency`() = runTest {
         scope.launch {
-            WidgetStates.observe(budgets, categories, surplus, settings, LocalDate.of(2026, 4, 15)).collect { latest.value = it }
+            WidgetStates.observe(budgets, categories, surplus, settings, expenses, LocalDate.of(2026, 4, 15)).collect { latest.value = it }
         }
         assertEquals(WidgetState.NotSetUp, awaitState { true })
 
@@ -53,7 +53,16 @@ class WidgetStateFlowTest : ViewModelTest() {
         awaitMonth { it.spent == eur(5) }
 
         budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = eur(300).minor), ym("2026-04"))
-        assertEquals(eur(295), awaitMonth { it.hasBudget }.remaining)
+        val budgeted = awaitMonth { it.hasBudget }
+        assertEquals(eur(295), budgeted.remaining)
+        // €295 left at the start of the 15th, over 16 days.
+        assertEquals(eur(18, 43), budgeted.daily!!.perDay)
+
+        // Spending today moves what's left of today, not the daily amount.
+        expenses.add(eur(8), food.id, LocalDate.of(2026, 4, 15))
+        val spentToday = awaitMonth { it.spent == eur(13) }.daily!!
+        assertEquals(eur(18, 43), spentToday.perDay)
+        assertEquals(eur(10, 43), spentToday.leftToday)
 
         settings.setCurrency(CurrencySpec.of("USD"))
         awaitMonth { it.currency.code == "USD" }
