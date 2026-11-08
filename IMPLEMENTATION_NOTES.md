@@ -444,6 +444,8 @@ coroutines. The persistence layer will commit each `Outcome.Ok` record set in on
   is written in the same Compose style as the app, instead of hand-built `RemoteViews`.
   `GlanceTheme` gives dynamic colours and dark mode. No schema change.
 - **Layouts** (`SizeMode.Responsive`, default 3×2, resizable):
+  *`SizeMode.Exact` since "Fitting widget text" (2026-11-08); the sizes below are where lines are
+  added.*
   - Small (2×1): remaining (or "spent" with no budget) and the bar.
   - Medium: adds the month, the "+" button, "€x of €y spent", and status · days left (icon and
     words, never colour alone).
@@ -1480,14 +1482,55 @@ from how a debug build runs its first frame, and a release build stays far below
   - Latvian, set as the app's language: the Overview and the 3×2 widget each fit on one line. At 2×2
     the "Šodien" line wraps.
 - **Seen, not changed:** in Latvian at 2×2 the headline ("Atlikums: 686,…") and the status line
-  ("Atbilst plānam · Atlik…") were already cut off before this change.
+  ("Atbilst plānam · Atlik…") were already cut off before this change. *Fixed in "Fitting widget
+  text".*
 - **Emulator notes:**
   - The launcher's resize handles do work with `input swipe`: long-press the widget, then drag a
     handle. So medium can be checked on the emulator after all.
   - `cmd locale set-app-locales <pkg> --locales lv-LV` switches the app and its widget to Latvian
     without changing the device's language.
 
+## Fitting widget text (2026-11-08)
+
+- **Asked for:** fix the Latvian 2×2 widget, where text was cut off with "…". Cut off at 2×2
+  (about 180 dp wide on the emulator):
+  - the headline: "Atlikums: 686,…", "Pārsniegts par 64,0…"
+  - the status: "Atbilst plānam · Atlik…"
+  - "spent of" when there's no daily amount: "Iztērēts 964,00 € no …"
+  English cut off too, with a longer status ("Watch spending · 22 d…") or a big amount.
+- **`SizeMode.Exact` instead of `Responsive`:**
+  - Responsive lays out once for each of a fixed set of sizes. Each layout has to fit the narrowest
+    widget it stands for, so the medium one had to assume 160 dp, and it couldn't tell whether text
+    would fit.
+  - Exact lays out for each size the launcher reports (portrait and landscape, so usually two
+    compositions rather than three), and `LocalSize` is the real size.
+  - Cost: a resize starts a session to lay it out again, where Responsive needed none. On the
+    emulator the new layout was there within a second. `SMALL`/`MEDIUM`/`LARGE` are now just the
+    sizes where lines are added.
+- **`WidgetText`:** measures with `TextPaint`, using the system font and the device's font scale
+  (`TypedValue.applyDimension`, which applies Android 14's non-linear scaling). The launcher draws
+  the text, so it can't be measured there. Text may take 94% of the width, in case a launcher's font
+  runs wider.
+- **Headline:** the largest of 22/20/18/16 sp that fits (18/16/14 at the small size). If even the
+  smallest doesn't fit, it takes two lines from medium up. Latvian amounts use non-breaking spaces
+  (CLDR), so the amount moves to line 2 whole: "Pārsniegts par" / "64,00 €". The small size keeps one
+  line, because it has no room for two.
+- **Status:** one line if it fits, otherwise the status words and days left on two ("Atbilst
+  plānam" / "Atlikušas 22 dienas"). A third line is allowed only if the words alone don't fit.
+  English 2×2 "On track · 22 days left" stays on one line; "Watch spending" splits.
+- **"Spent of"** may wrap to two lines. It shows at medium only when there's no daily amount, so the
+  daily lines' room is free.
+- **Tests:** `WidgetFitTest` uses NATIVE graphics, so text is measured with real fonts. It covers the
+  measuring, Latvian and English at 2×2, a wide widget, and Latvian over budget. `WidgetContentTest`
+  stays in Robolectric's default mode, where text has no real width, so everything there "fits".
+- **Verified:** 397 tests ×3, lint 0 errors. On the emulator in Latvian, nothing ends in "…":
+  - 2×2 within budget: "Atlikums: 686,00 €" smaller, status on two lines.
+  - 2×2 over budget: two-line headline, "spent of" and status, with room to spare.
+  - 3×2 with an over-budget category.
+  - 2×1.
+  English 2×2 and 3×2 look as before.
+- **Not verified:** a real phone, other launchers' fonts, and large font scales.
+
 ## Open questions
 
-- Latvian at 2×2: the headline and status line are cut off (see "Daily amount"). They need a shorter
-  wording or a smaller headline. This was there before Q34.
+None currently.

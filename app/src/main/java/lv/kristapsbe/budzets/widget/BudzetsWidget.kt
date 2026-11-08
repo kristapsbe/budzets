@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,10 +64,14 @@ import java.time.LocalDate
  *
  * "Today" is fixed for the session. Sessions last seconds, so one alive at midnight is rare and
  * the next change corrects it.
+ *
+ * Laid out for each size the launcher reports, so text can be fitted to the real width; a fixed
+ * set of sizes would have to fit the narrowest widget each one stands for. A resize starts a
+ * session to lay it out again.
  */
 class BudzetsWidget : GlanceAppWidget() {
 
-    override val sizeMode = SizeMode.Responsive(setOf(SMALL, MEDIUM, LARGE))
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as BudzetsApplication).container
@@ -95,6 +100,8 @@ class BudzetsWidget : GlanceAppWidget() {
         val languageChanges = MutableStateFlow(0)
     }
 }
+
+// Where the layout gains lines. Below MEDIUM it's the small one.
 
 /** 2×1-ish: remaining and the bar only. */
 internal val SMALL = DpSize(100.dp, 48.dp)
@@ -129,13 +136,13 @@ fun WidgetContent(state: WidgetState) {
                 Text(context.getString(R.string.app_name), style = titleStyle())
                 Text(context.getString(R.string.widget_not_set_up), style = bodyStyle())
             }
-            is WidgetState.Month -> MonthContent(state, context, size)
+            is WidgetState.Month -> MonthContent(state, context, size, padding)
         }
     }
 }
 
 @Composable
-private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSize) {
+private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSize, padding: Dp) {
     val locale = context.resources.configuration.locales[0]
     val money = MoneyFormatter(state.currency, locale)
     val roomy = size.height >= MEDIUM.height && size.width >= MEDIUM.width
@@ -160,14 +167,19 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
         state.remaining.isNegative -> context.getString(R.string.over_by_amount, money.format(-state.remaining))
         else -> context.getString(R.string.remaining_amount, money.format(state.remaining))
     }
+    // Shrinks rather than cutting the amount off: Latvian puts a label first, and amounts grow.
+    // Past the smallest size it takes two lines where there's room for them; Latvian amounts don't
+    // break, so the amount moves down whole.
+    val textWidth = size.width - padding * 2
+    val headlineSize = WidgetText.largestFitting(context, headline, textWidth, if (roomy) ROOMY_HEADLINE else SMALL_HEADLINE, bold = true)
     Text(
         headline,
         style = TextStyle(
-            fontSize = if (roomy) 22.sp else 18.sp,
+            fontSize = headlineSize,
             fontWeight = FontWeight.Bold,
             color = if (state.isOver) GlanceTheme.colors.error else GlanceTheme.colors.onSurface,
         ),
-        maxLines = 1,
+        maxLines = if (roomy && !WidgetText.fits(context, headline, headlineSize, textWidth, bold = true)) 2 else 1,
     )
     Spacer(GlanceModifier.height(4.dp))
     LinearProgressIndicator(
@@ -183,10 +195,10 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
     Spacer(GlanceModifier.height(6.dp))
     // Medium shows the daily amount instead of "spent of" (Q34); the bar's description still reads it.
     if (state.hasBudget && (large || state.daily == null)) {
-        Text(context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.budget)), style = bodyStyle(), maxLines = 1)
+        Text(context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.budget)), style = bodyStyle(), maxLines = 2)
     }
     state.daily?.let { DailyLines(it, money, context, oneLine = large) }
-    StatusLine(state, context)
+    StatusLine(state, context, textWidth - STATUS_ICON - STATUS_GAP)
 
     if (!large) return
     state.topOver?.let {
@@ -222,28 +234,41 @@ private fun DailyLines(daily: DailyAllowance, money: MoneyFormatter, context: Co
     }
 }
 
-/** Status in words with an icon, never by colour alone. */
+/**
+ * Status in words with an icon, never by colour alone. Days left go on a line of their own when
+ * both don't fit on one, rather than being cut off.
+ */
 @Composable
-private fun StatusLine(state: WidgetState.Month, context: Context) {
+private fun StatusLine(state: WidgetState.Month, context: Context, width: Dp) {
     val (icon, label, tint) = when (state.status) {
         PaceStatus.ON_TRACK -> Triple(R.drawable.ic_widget_on_track, R.string.status_on_track, GlanceTheme.colors.primary)
         PaceStatus.WATCH -> Triple(R.drawable.ic_widget_warning, R.string.status_watch, GlanceTheme.colors.tertiary)
         PaceStatus.OVER -> Triple(R.drawable.ic_widget_warning, R.string.status_over, GlanceTheme.colors.error)
         PaceStatus.NO_BUDGET -> Triple(R.drawable.ic_widget_info, R.string.status_no_budget, GlanceTheme.colors.onSurfaceVariant)
     }
+    val words = context.getString(label)
+    val days = context.resources.getQuantityString(R.plurals.days_left, state.daysLeft, state.daysLeft)
+    val oneLine = "$words · $days"
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Image(ImageProvider(icon), contentDescription = null, colorFilter = ColorFilter.tint(tint), modifier = GlanceModifier.size(16.dp))
-        Spacer(GlanceModifier.width(6.dp))
+        Image(ImageProvider(icon), contentDescription = null, colorFilter = ColorFilter.tint(tint), modifier = GlanceModifier.size(STATUS_ICON))
+        Spacer(GlanceModifier.width(STATUS_GAP))
         Text(
-            context.getString(label) + " · " + context.resources.getQuantityString(R.plurals.days_left, state.daysLeft, state.daysLeft),
+            if (WidgetText.fits(context, oneLine, BODY_SIZE, width)) oneLine else "$words\n$days",
             style = bodyStyle(),
-            maxLines = 1,
+            // A third line only if the status words alone don't fit.
+            maxLines = 3,
         )
     }
 }
+
+private val ROOMY_HEADLINE = listOf(22.sp, 20.sp, 18.sp, 16.sp)
+private val SMALL_HEADLINE = listOf(18.sp, 16.sp, 14.sp)
+private val BODY_SIZE = 13.sp
+private val STATUS_ICON = 16.dp
+private val STATUS_GAP = 6.dp
 
 @Composable
 private fun titleStyle() = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
 
 @Composable
-private fun bodyStyle(color: ColorProvider = GlanceTheme.colors.onSurfaceVariant) = TextStyle(fontSize = 13.sp, color = color)
+private fun bodyStyle(color: ColorProvider = GlanceTheme.colors.onSurfaceVariant) = TextStyle(fontSize = BODY_SIZE, color = color)
