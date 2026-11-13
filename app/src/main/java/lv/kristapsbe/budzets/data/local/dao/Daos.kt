@@ -79,6 +79,9 @@ data class CategorySpendRow(val categoryId: String, val totalMinor: Long)
 /** [date] is the ISO date. */
 data class DateSpendRow(val date: String, val totalMinor: Long)
 
+/** [month] is "YYYY-MM". */
+data class MonthCategorySpendRow(val month: String, val categoryId: String, val totalMinor: Long)
+
 @Dao
 interface ExpenseDao {
     /** Dates are ISO strings, so lexical comparison is chronological. */
@@ -108,6 +111,15 @@ interface ExpenseDao {
         """
     )
     fun observeDailySpending(fromDate: String, toDateExclusive: String): Flow<List<DateSpendRow>>
+
+    /** Every month's total per category. The first 7 characters of an ISO date are its month. */
+    @Query(
+        """
+        SELECT substr(expenseDate, 1, 7) AS month, categoryId, SUM(amountMinor) AS totalMinor FROM expenses
+        GROUP BY month, categoryId
+        """
+    )
+    fun observeMonthlySpending(): Flow<List<MonthCategorySpendRow>>
 
     @Query(
         """
@@ -158,6 +170,7 @@ interface ExpenseDao {
 
 /** One line of a closed month's snapshot; the category columns are null if it has no categories. */
 data class ClosureSnapshotRow(
+    val month: String,
     val overallBaseMinor: Long?,
     val overallDerived: Boolean,
     val categoryId: String?,
@@ -232,7 +245,7 @@ interface SurplusDao {
      */
     @Query(
         """
-        SELECT c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
+        SELECT c.month, c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
         FROM month_closures c
         LEFT JOIN month_closure_categories r ON r.month = c.month AND r.revision = c.revision
         WHERE c.month = :month AND c.reopenedAt IS NULL
@@ -243,7 +256,7 @@ interface SurplusDao {
 
     @Query(
         """
-        SELECT c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
+        SELECT c.month, c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
         FROM month_closures c
         LEFT JOIN month_closure_categories r ON r.month = c.month AND r.revision = c.revision
         WHERE c.month = :month AND c.reopenedAt IS NULL
@@ -251,6 +264,18 @@ interface SurplusDao {
         """
     )
     suspend fun getClosureSnapshot(month: String): List<ClosureSnapshotRow>
+
+    /** The snapshots of every closed month, as [observeClosureSnapshot] gives them one month at a time. */
+    @Query(
+        """
+        SELECT c.month, c.overallBaseMinor, c.overallDerived, r.categoryId, r.baseMinor, r.boostMinor, r.spentMinor
+        FROM month_closures c
+        LEFT JOIN month_closure_categories r ON r.month = c.month AND r.revision = c.revision
+        WHERE c.reopenedAt IS NULL
+          AND c.revision = (SELECT MAX(revision) FROM month_closures WHERE month = c.month)
+        """
+    )
+    fun observeClosureSnapshots(): Flow<List<ClosureSnapshotRow>>
 
     @Insert
     suspend fun insertClosure(closure: MonthClosureEntity)

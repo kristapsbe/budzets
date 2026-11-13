@@ -195,6 +195,14 @@ class OverviewContentTest {
     }
 
     @Test
+    fun `the chart icon opens spending by month`() {
+        var opened = false
+        show(ready(MonthSummary(april, null, false, emptyMap()), emptyList()), OverviewActions(onOpenHistory = { opened = true }))
+        compose.onNodeWithContentDescription("Spending by month").performClick()
+        assertEquals(true, opened)
+    }
+
+    @Test
     fun `backup reminder when there is no backup at all`() {
         show(ready(MonthSummary(april, null, false, emptyMap()), emptyList(), backupReminder = BackupReminder(null)))
         compose.onNodeWithText("No backup yet", substring = true).assertIsDisplayed()

@@ -21,9 +21,16 @@ class MoneyFormatter(private val currency: CurrencySpec, locale: Locale = Locale
         minimumFractionDigits = this@MoneyFormatter.currency.fractionDigits
         maximumFractionDigits = this@MoneyFormatter.currency.fractionDigits
     }
+    private val wholeFormat = (format.clone() as NumberFormat).apply {
+        minimumFractionDigits = 0
+        maximumFractionDigits = 0
+    }
     private val decimalSeparator = DecimalFormatSymbols.getInstance(locale).decimalSeparator
 
     fun format(money: Money): String = format.format(BigDecimal.valueOf(money.minor, currency.fractionDigits))
+
+    /** Without the minor unit ("€200"), for a chart axis whose ticks are whole amounts. */
+    fun formatWhole(money: Money): String = wholeFormat.format(BigDecimal.valueOf(money.minor, currency.fractionDigits))
 
     /** Plain, editable text for an amount field: no symbol or grouping, the locale's decimal separator. */
     fun formatForInput(money: Money): String = formatForInput(money, currency, decimalSeparator)

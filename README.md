@@ -109,6 +109,23 @@ Room, so the screens and the widget update from Room's invalidation without extr
   straight into the Unallocated surplus, and changes no budget until you move it or use it for a
   boost.
 
+## Spending by month
+
+The chart icon in the Overview's top bar opens a chart of every month from the first expense to
+the current one, newest on the right. Each month is a bar stacked by category, largest on top, so
+the order can change from month to month; a ribbon joins each category to the same category in the
+next month. The dashed line is the month's budget including boosts (a closed month's is the budget
+it was closed with). Tap a month to list its categories with amounts; tap a category there or in
+the legend to highlight it across all months. More than eight categories: the eight spent on most
+keep their own colour and the rest share one grey band.
+
+Under it, the surplus chart shows what each finished month added to the saved surplus (blue, above
+zero) or took from it (red, below), with a line for the running total. A month you haven't closed
+counts as if you closed it now, drawn lighter. A month with no budget that was never closed counts
+nothing. The current month waits until it ends. Boosts funded by the surplus and one-off boosts count
+in their month, so the breakdown splits a month's result into what closing gave and what boosts
+took. Once every finished month is closed, the line ends at the Overview's saved surplus.
+
 ## Data, backup and privacy
 
 - **No account and no server.** The app has no internet permission. All data is on the phone.

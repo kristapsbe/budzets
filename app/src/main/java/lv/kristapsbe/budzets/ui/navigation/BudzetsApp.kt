@@ -44,6 +44,7 @@ import lv.kristapsbe.budzets.ui.budgets.BudgetsScreen
 import lv.kristapsbe.budzets.ui.close.MonthCloseScreen
 import lv.kristapsbe.budzets.ui.expenses.ExpenseEditorScreen
 import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
+import lv.kristapsbe.budzets.ui.history.SpendingHistoryScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
 import lv.kristapsbe.budzets.ui.surplus.BoostScreen
 import lv.kristapsbe.budzets.ui.surplus.MoveSurplusScreen
@@ -65,6 +66,9 @@ import kotlin.reflect.KClass
  * a stale filter instead of the one just tapped.
  */
 @Serializable data class CategorySpendingRoute(val categoryId: String, val month: String)
+
+/** Spending by month as a chart, opened from the overview (Q35). */
+@Serializable data object SpendingHistoryRoute
 
 /** Edits a budget from [month] ("YYYY-MM") on: a category's, or the overall one when [categoryId] is null. */
 @Serializable data class BudgetEditorRoute(val categoryId: String? = null, val month: String)
@@ -166,7 +170,11 @@ fun BudzetsApp(
                     onOpenCategory = { id, month -> navController.navigate(CategorySpendingRoute(id.value, month.toString())) },
                     onReviewClose = { navController.navigate(MonthCloseRoute(it.toString())) },
                     onOpenSettings = { navController.navigateTopLevel(SettingsRoute) },
+                    onOpenHistory = { navController.navigate(SpendingHistoryRoute) { launchSingleTop = true } },
                 )
+            }
+            composable<SpendingHistoryRoute> {
+                SpendingHistoryScreen(onBack = { navController.popBackStack<SpendingHistoryRoute>(inclusive = true) })
             }
             composable<TransactionsRoute> {
                 TransactionsScreen(

@@ -1,14 +1,19 @@
 package lv.kristapsbe.budzets.ui
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -41,8 +46,20 @@ abstract class ViewModelTest : DbTest() {
         )
     }
 
+    private val viewModels = mutableListOf<ViewModel>()
+
+    /**
+     * Ends this ViewModel's scope when the test ends, before Main is reset and the database is
+     * closed, and waits for it. A scope still running, or only cancelled, can resume onto Main
+     * from a Room or Default thread while Main is being reset ("Dispatchers.Main is used
+     * concurrently with setting it"): a `flowOn(Dispatchers.Default)` producer finishing on its own
+     * thread resumes its collector there.
+     */
+    protected fun <T : ViewModel> T.clearedAfterTest(): T = also { viewModels += it }
+
     @After
     fun tearDownViewModelTest() {
+        runBlocking { withTimeout(5_000) { viewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() } } }
         dataStoreScope.cancel()
         Dispatchers.resetMain()
     }

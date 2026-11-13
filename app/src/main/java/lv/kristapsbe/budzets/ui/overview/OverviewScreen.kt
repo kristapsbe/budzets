@@ -28,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -74,6 +76,7 @@ fun OverviewScreen(
     onOpenCategory: (CategoryId, YearMonth) -> Unit,
     onReviewClose: (YearMonth) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     viewModel: OverviewViewModel = viewModel(factory = OverviewViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,6 +101,7 @@ fun OverviewScreen(
             onOpenCategory = onOpenCategory,
             onReviewClose = onReviewClose,
             onOpenSettings = onOpenSettings,
+            onOpenHistory = onOpenHistory,
         ),
     )
 }
@@ -115,6 +119,7 @@ data class OverviewActions(
     val onOpenCategory: (CategoryId, YearMonth) -> Unit = { _, _ -> },
     val onReviewClose: (YearMonth) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
+    val onOpenHistory: () -> Unit = {},
 )
 
 /**
@@ -131,7 +136,16 @@ fun OverviewContent(
     pageState: (YearMonth) -> StateFlow<OverviewUiState> = { MutableStateFlow(state) },
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_overview)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_overview)) },
+                actions = {
+                    IconButton(onClick = actions.onOpenHistory) {
+                        Icon(painterResource(R.drawable.ic_stacked_chart), contentDescription = stringResource(R.string.spending_by_month))
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             // Hidden until categories exist: an expense needs one.
             if (state is OverviewUiState.Ready && state.hasCategories) {

@@ -16,6 +16,7 @@ import lv.kristapsbe.budzets.data.local.scopeKey
 import lv.kristapsbe.budzets.data.local.toDb
 import lv.kristapsbe.budzets.data.local.toDomain
 import lv.kristapsbe.budzets.data.local.toSnapshot
+import lv.kristapsbe.budzets.data.local.toYearMonth
 import lv.kristapsbe.budzets.domain.calculation.BudgetResolver
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
 import lv.kristapsbe.budzets.domain.calculation.MonthSummaryCalculator
@@ -88,6 +89,36 @@ class BudgetRepository(
             surplusDao.observeClosureSnapshot(month.toDb()),
         ) { categories, configs, boosts, spending, closure -> summarize(month, categories, configs, boosts, spending, closure) }
     }
+
+    /**
+     * Live summaries of every month from the first one with spending through [until], months
+     * without spending included; empty while there are no expenses. Each month is worked out as
+     * [observeMonthSummary] does, so a closed month keeps the budgets it was closed with. Spending
+     * dated after [until] (possible only after a clock change) is left out.
+     */
+    fun observeMonthSummaries(until: YearMonth): Flow<List<MonthSummary>> =
+        combine(
+            categoryDao.observeAll(),
+            configDao.observeAll(),
+            surplusDao.observeBoosts(),
+            expenseDao.observeMonthlySpending(),
+            surplusDao.observeClosureSnapshots(),
+        ) { categories, configs, boosts, spending, closures ->
+            val spendingByMonth = spending.groupBy { it.month.toYearMonth() }.filterKeys { it <= until }
+            val first = spendingByMonth.keys.minOrNull() ?: return@combine emptyList()
+            val boostsByMonth = boosts.groupBy { it.targetMonth.toYearMonth() }
+            val closuresByMonth = closures.groupBy { it.month.toYearMonth() }
+            generateSequence(first) { it.plusMonths(1) }.takeWhile { it <= until }.map { month ->
+                summarize(
+                    month,
+                    categories,
+                    configs,
+                    boostsByMonth[month].orEmpty(),
+                    spendingByMonth[month].orEmpty().map { CategorySpendRow(it.categoryId, it.totalMinor) },
+                    closuresByMonth[month].orEmpty(),
+                )
+            }.toList()
+        }
 
     /** One-shot summary read in a single transaction (consistent snapshot). */
     suspend fun loadMonthSummary(month: YearMonth): MonthSummary = db.withTransaction {

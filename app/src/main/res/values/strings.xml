@@ -350,6 +350,34 @@
     <string name="about_version" translatable="false">Budzets %1$s</string>
     <string name="about_data_version">Data version %1$d · backup format %2$d</string>
 
+    <!-- Spending by month -->
+    <string name="spending_by_month">Spending by month</string>
+    <string name="history_empty">No spending logged yet. Once you log a purchase, each month’s spending appears here.</string>
+    <string name="error_loading_history">Couldn’t load your spending.</string>
+    <!-- %1$s is a month and year, e.g. "November 2026". -->
+    <string name="history_so_far">%1$s (so far)</string>
+    <string name="history_budget_key">Budget</string>
+    <string name="history_other_categories">All other categories</string>
+    <string name="history_month_empty">Nothing spent this month.</string>
+    <string name="history_spending_heading">Spending</string>
+    <string name="history_surplus_heading">Surplus</string>
+    <string name="history_surplus_added">Added %1$s to the surplus</string>
+    <string name="history_surplus_taken">Took %1$s from the surplus</string>
+    <string name="history_surplus_would_add">Not closed yet: closing it now would add %1$s</string>
+    <string name="history_surplus_would_take">Not closed yet: closing it now would take %1$s</string>
+    <string name="history_surplus_zero">Nothing added or taken</string>
+    <string name="history_surplus_nothing">No budget, so nothing added or taken</string>
+    <string name="history_surplus_pending">The result comes when the month ends</string>
+    <string name="history_surplus_after">Surplus after this month: %1$s</string>
+    <string name="history_surplus_empty">Nothing here yet: a month’s result comes when it ends.</string>
+    <string name="history_legend_added">Added</string>
+    <string name="history_legend_taken">Taken</string>
+    <string name="history_legend_not_closed">Not closed yet</string>
+    <string name="history_legend_total">Surplus total</string>
+    <string name="history_surplus_part_closing">Closing the month: %1$s</string>
+    <string name="history_surplus_part_boosts">Boosts from the surplus: %1$s</string>
+    <string name="history_surplus_part_one_offs">One-off boosts: %1$s</string>
+
     <string-array name="starter_categories">
         <item>Groceries</item>
         <item>Eating out</item>

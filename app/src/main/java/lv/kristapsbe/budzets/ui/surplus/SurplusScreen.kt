@@ -288,7 +288,7 @@ private fun HistoryItem(row: HistoryRow, money: MoneyFormatter, locale: Locale, 
 
 /** "+€10.00" / "−€5.00": the sign is always written out. */
 @Composable
-private fun signed(amount: Money, money: MoneyFormatter): String = when {
+internal fun signed(amount: Money, money: MoneyFormatter): String = when {
     amount.isNegative -> "−" + money.format(-amount)
     amount.isPositive -> "+" + money.format(amount)
     else -> money.format(amount)

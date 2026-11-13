@@ -364,6 +364,33 @@
     <string name="settings_about">Par lietotni</string>
     <string name="about_data_version">Datu versija %1$d · rezerves kopijas formāts %2$d</string>
 
+    <!-- Spending by month -->
+    <string name="spending_by_month">Izdevumi pa mēnešiem</string>
+    <string name="history_empty">Vēl nav reģistrētu izdevumu. Kad reģistrēsiet pirkumu, šeit būs redzami katra mēneša izdevumi.</string>
+    <string name="error_loading_history">Neizdevās ielādēt izdevumus.</string>
+    <string name="history_so_far">%1$s (līdz šim)</string>
+    <string name="history_budget_key">Budžets</string>
+    <string name="history_other_categories">Visas pārējās kategorijas</string>
+    <string name="history_month_empty">Šajā mēnesī nekas nav iztērēts.</string>
+    <string name="history_spending_heading">Izdevumi</string>
+    <string name="history_surplus_heading">Pārpalikums</string>
+    <string name="history_surplus_added">Pārpalikumam pievienoti %1$s</string>
+    <string name="history_surplus_taken">No pārpalikuma paņemti %1$s</string>
+    <string name="history_surplus_would_add">Vēl nav noslēgts: noslēdzot tagad, tiktu pievienoti %1$s</string>
+    <string name="history_surplus_would_take">Vēl nav noslēgts: noslēdzot tagad, tiktu paņemti %1$s</string>
+    <string name="history_surplus_zero">Nekas nav pievienots vai paņemts</string>
+    <string name="history_surplus_nothing">Budžeta nav, tāpēc nekas nav pievienots vai paņemts</string>
+    <string name="history_surplus_pending">Rezultāts būs zināms mēneša beigās</string>
+    <string name="history_surplus_after">Pārpalikums pēc šī mēneša: %1$s</string>
+    <string name="history_surplus_empty">Šeit vēl nekā nav: mēneša rezultāts būs zināms tā beigās.</string>
+    <string name="history_legend_added">Pievienots</string>
+    <string name="history_legend_taken">Paņemts</string>
+    <string name="history_legend_not_closed">Vēl nav noslēgts</string>
+    <string name="history_legend_total">Pārpalikums kopā</string>
+    <string name="history_surplus_part_closing">Mēneša noslēgšana: %1$s</string>
+    <string name="history_surplus_part_boosts">Papildinājumi no pārpalikuma: %1$s</string>
+    <string name="history_surplus_part_one_offs">Vienreizēji papildinājumi: %1$s</string>
+
     <string-array name="starter_categories">
         <item>Pārtika</item>
         <item>Ēšana ārpus mājām</item>

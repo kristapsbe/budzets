@@ -56,6 +56,17 @@ fun closureChanges(target: Map<SurplusPocket, Money>, recorded: Map<SurplusPocke
         .filterValues { !it.isZero }
 
 /**
+ * The net ledger effect closing [summary] has, per pocket: each category's remaining (a credit, or
+ * a debit when overspent) and the unallocated base. Zero pockets are omitted.
+ */
+fun closingEffect(summary: MonthSummary): Map<SurplusPocket, Money> = buildMap {
+    summary.categories.values.forEach { c ->
+        if (!c.remaining.isZero) put(SurplusPocket.Category(c.categoryId), c.remaining)
+    }
+    if (summary.unallocatedBase.isPositive) put(SurplusPocket.Unallocated, summary.unallocatedBase)
+}
+
+/**
  * Month closing rules:
  * - Each category's remaining amount is credited (if positive) or debited (if negative) to its own
  *   surplus pocket. A debit may make the balance negative. A boost's unspent money is part of
@@ -69,12 +80,7 @@ class MonthFinalizer(
 ) {
 
     /** The net ledger effect closing [summary] should have, per pocket. Zero pockets are omitted. */
-    fun preview(summary: MonthSummary): Map<SurplusPocket, Money> = buildMap {
-        summary.categories.values.forEach { c ->
-            if (!c.remaining.isZero) put(SurplusPocket.Category(c.categoryId), c.remaining)
-        }
-        if (summary.unallocatedBase.isPositive) put(SurplusPocket.Unallocated, summary.unallocatedBase)
-    }
+    fun preview(summary: MonthSummary): Map<SurplusPocket, Money> = closingEffect(summary)
 
     fun review(ledger: List<LedgerEntry>, summary: MonthSummary): CloseReview =
         CloseReview(summary, preview(summary), SurplusLedger.closureNet(ledger, summary.month))

@@ -392,6 +392,13 @@ Primary screen and default destination.
 -   Shortcut to surplus management and backup status/settings.
     (Phase 9 review: a reminder card when there is data and no backup
     in the last 30 days, opening Settings.)
+-   (Q35–Q38, 2026-11-13, at the user's request: a chart icon in the
+    top bar opens "Spending by month", a stacked bar per month by
+    category with the largest category on top, the same category joined
+    between months by a ribbon, and a dashed line at the month's budget.
+    Under it (Q39–Q42), what each finished month added to or took from
+    the saved surplus, with the running total. See
+    `IMPLEMENTATION_NOTES.md`.)
 
 ### 7.2 Add/edit expense
 

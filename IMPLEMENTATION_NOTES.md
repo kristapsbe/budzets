@@ -1531,6 +1531,160 @@ from how a debug build runs its first frame, and a release build stays far below
   English 2×2 and 3×2 look as before.
 - **Not verified:** a real phone, other launchers' fonts, and large font scales.
 
+## Spending by month (2026-11-13)
+
+- **Asked for:** a stacked chart of spending per month. The largest category goes on top of each
+  month. The same category is visually joined from month to month. A dashed line shows the month's
+  budget.
+- **Q35–Q38** (all four were the recommended options):
+  - **Q35 Where:** a new screen, opened from a chart icon in the Overview's top bar. It has a back
+    arrow and no bottom bar, and the five tabs are unchanged. Overview and Spending show one month at
+    a time, and a sixth tab is more than Material recommends.
+  - **Q36 Which months:** every month from the first expense to the current one, gaps included,
+    and the current one although it isn't over. It scrolls sideways and opens on the newest month.
+  - **Q37 Budget line:** the budget including surplus boosts (`overallEffective`, the Overview's
+    "spent of €X"). A closed month uses its snapshot. No line without a budget.
+  - **Q38 Reading:** tap a month to list its categories, largest first, with the total and the
+    budget. Tapping a category in that list, or its chip in the legend, highlights its band across
+    all months and fades the rest. Tapping it again clears the highlight.
+- **Form:** a ribbon chart, drawn by hand on a Compose `Canvas`. Chart libraries (Vico and the
+  others) have no ribbons. No new dependency, no schema change.
+- **Decided along the way:**
+  - Equal amounts stack in category display order, so they don't swap places between months.
+  - A ribbon joins a category only between neighbouring months it has spending in both. It is
+    drawn behind the bars.
+  - **Colours:** a fixed 8-colour categorical palette (`ui/theme/ChartColors.kt`), not the theme.
+    Dynamic colour gives related tones, and a chart needs hues that stay apart. The values are the
+    dataviz reference palette, light and dark, in the order validated for neighbouring pairs,
+    including colour-blind simulation. They were validated against near-neutral surfaces
+    (`#fcfcfb`/`#1a1a19`). Not re-run against Material You surfaces: no `node` here.
+  - Colour follows the category, assigned in display order, not by rank. With more than 8
+    categories, the 8 spent on most over all shown months keep their own colour, and the rest share
+    one grey "All other categories" band, stacked by size like the others. Colours are never
+    generated or reused.
+  - **Marks:**
+    - bars are 24 dp, with a 2 dp gap between segments and the top rounded
+    - ribbons are the category's colour at 30%
+    - gridlines are solid hairlines, so dashes only ever mean "budget"
+    - while something is highlighted, its ribbon goes to 55% and everything else fades
+  - **Axis:** whole currency units ("€250"), the lowest round top in 2–4 steps of 1/2/2.5/5 × 10ⁿ
+    (`ChartScale`). The labels stay put while the plot scrolls.
+  - The "Budget" key in the legend shows only if some month has a budget line.
+  - **Not by colour alone:**
+    - each month is a TalkBack tab described in words ("September 2026: €1,125.00 of €1,000.00
+      spent")
+    - the breakdown says "Over by …" with an icon
+    - a highlighted chip or row has a tick
+  - The current month is labelled "(so far)". The range is fixed when the screen opens, so a
+    screen left open across midnight at month's end doesn't add the new month until it's reopened.
+- **Code:**
+  - `ExpenseDao.observeMonthlySpending` (grouped on `substr(expenseDate, 1, 7)`)
+  - `SurplusDao.observeClosureSnapshots`, with `month` added to `ClosureSnapshotRow`
+  - `BudgetRepository.observeMonthSummaries(until)`, which runs each month through the same
+    `summarize` as `observeMonthSummary`, so closed months, boosts and archived categories match
+    the Overview exactly
+  - `SpendingHistory.stacks` (pure, domain)
+  - `ui/history/`: ViewModel, screen, `SpendingChart`, `ChartScale`
+  - `MoneyFormatter.formatWhole`
+  - a new `SpendingHistoryRoute` and drawable `ic_stacked_chart`
+  - new strings, with Latvian, join the translation awaiting the user's read
+- **Baseline Profiles:** not regenerated. The two rules whose signatures changed
+  (`OverviewScreen`, `OverviewActions.<init>`: one more lambda) were edited by hand. The new screen
+  isn't on the start-up path.
+- **Test flake found and fixed:** with the new ViewModel test, about one full run in three failed
+  in a ViewModel test's teardown with "Dispatchers.Main is used concurrently with setting it".
+  - Cause: a `viewModelScope` with a `flowOn(Dispatchers.Default)` producer was still finishing on a
+    Default thread, and resumed its collector through Main while `resetMain` ran. Cancelling alone
+    didn't help (1 in 6 still failed).
+  - Fix: `ViewModelTest.clearedAfterTest()` cancels and joins the scope before Main is reset. The new
+    test uses it.
+  - Unchanged `HEAD` showed no such failure in 6 full runs. Existing ViewModel tests can adopt the
+    helper if the race ever shows up there.
+  - `WidgetStateFlowTest` failed once in those 6 baseline runs (an expected total off by €0.50). That
+    is pre-existing and not looked into.
+- **Verified:**
+  - 432 tests (35 new), the full suite 6 times in a row clean after the fix, plus 12 runs of the
+    two ViewModel classes. Lint 0 errors.
+  - Emulator `Medium_Phone_API_37.0`, `-read-only`, debug build, 8 months of seeded data: April
+    without a budget, closed June (snapshot €850 against a €900 config), September over budget,
+    and a €50 boost in October. The checks:
+    - it opens on November, and the ribbons cross where the ranking changes
+    - the dashes are at €850, €900, €1,000 and €1,050
+    - tapping September lists it with "Over by €125.00"
+    - highlighting Fun works
+    - dark mode, Latvian and font scale 1.5 work
+    - the selection and highlight survive a configuration change
+    - the TalkBack descriptions are right (`uiautomator dump`)
+    - back returns to the Overview
+  - R8 release build with a throwaway key: the chart opens and draws, with no crash.
+- **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
+
+### Surplus by month (same day)
+
+- **Asked for:** a second chart showing whether the user is positive or negative in surplus terms.
+- **Q39–Q42** (all four were the recommended options):
+  - **Q39 What:** one bar per month above or below zero, for what the month added to or took from
+    the saved surplus, and a line for the running total.
+  - **Q40 Unclosed months:** a past month that isn't closed counts as if it were closed now. Its bar
+    is lighter, with an outline. An unclosed month with no budget shows nothing: closing it would
+    only turn spending into debits, which is why `ClosingSchedule` skips such months.
+  - **Q41 Current month:** left out while it's under way: mid-month most of its budget is merely not
+    spent yet. *Decided along the way:* if the user has closed it already, it's shown.
+  - **Q42 Placement:** under the spending chart. The months line up, one `ScrollState` drives both
+    charts, and the selected month is shared. The breakdown gains the month's surplus lines.
+- **A month's result** (`SurplusHistory`, pure domain) has three parts:
+  - **Closing part:** what its closes posted (`closureNet`, re-closes included) for a closed month,
+    or `closingEffect(summary)` for an open past month with a budget. `MonthFinalizer.preview` now
+    calls the extracted `closingEffect`.
+  - **Boosts:** the month's boosts funded by the surplus (`BOOST_RESERVE`/`RELEASE`, by
+    `targetMonth`).
+  - **One-offs:** the month's one-off boosts (by `targetMonth`).
+
+  Boosts and one-offs are in the surplus already, closed or not. With them counted, a boosted month
+  is measured against its base budget: €1,000 budget, €50 boost, €810 spent gives +€190.
+- **The close screen shows a different figure for a boosted month.** It shows the closing part only
+  (+€240 in that example). The breakdown splits the result whenever a month has boosts or one-offs:
+  "Closing the month: +€240.00 · Boosts from the surplus: −€50.00". This turned up on the emulator.
+- **Running total:**
+  - It starts from what months before the chart gave, which is rare.
+  - Transfers net to zero across pockets.
+  - With every finished month closed, and no boosts or one-offs for the current month or later, it
+    ends at the Overview's saved surplus. A test checks this with `MonthFinalizer`'s own entries.
+  - It runs through the unclosed months' projections, so until those are closed it can differ from
+    the saved surplus.
+- **Marks** (dataviz):
+  - Bars use the diverging pair: blue above zero, red below. These are fixed colours
+    (`ChartColors.positive`/`negative`), not the theme's.
+  - Bars are 24 dp, rounded at the end away from zero.
+  - The zero line is a step stronger than the gridlines; the spending chart's baseline now is too.
+  - The total is a 2 dp line in `onSurface`, with ringed 8 dp dots.
+  - Words carry the sign ("Added", "Took", "would take"), and taking is red with a warning icon.
+  - The legend shows "Not closed yet" only when there is such a bar.
+- **Code:**
+  - `MonthChartFrame`: the axis, scrolling, gridlines, selection column, TalkBack tabs and month
+    labels, now shared by both charts. Its axis width is the wider of the two charts' labels, so the
+    plots start at the same x.
+  - `ChartScale.around(min, max, …)`: renamed from a second `of` overload, which three `Int`
+    literals silently resolved to the old `of(max, unit, maxSteps)`.
+  - `SurplusChart`
+  - `signed()` in `ui/surplus` is now internal and reused
+  - `SpendingHistoryViewModel` also reads `surplus.ledger` and `closedMonths`
+  - 18 new strings, with Latvian, join the translation awaiting the user's read
+- **Verified:**
+  - 453 tests (21 new), 6 clean full runs. Lint 0 errors.
+  - Emulator, `-read-only`, with the same seed plus June's real closure entries (net +€35). The
+    numbers check out:
+    - Jul +€95, Aug −€50 and Sep −€125 are lighter; June is solid
+    - October was closed through the app, after which it is solid and still +€190, shown as
+      +€240 − €50
+    - the total runs €80 → €115 → €210 → €160 → €35 → €225, and €225 is the ledger's total
+  - The two charts scroll together and line up.
+  - Tapping a surplus bar selects the month in both charts.
+  - Dark mode, Latvian and font scale 1.5 all work.
+  - R8 release: a backup made in the debug build was restored into the release build (2 closed
+    months came through), and the surplus chart draws, with no crash.
+- **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
+
 ## Open questions
 
 None currently.
