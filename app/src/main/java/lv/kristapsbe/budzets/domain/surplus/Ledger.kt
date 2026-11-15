@@ -5,6 +5,7 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.LedgerEntryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
+import lv.kristapsbe.budzets.domain.model.sumMoney
 import java.time.Instant
 import java.time.YearMonth
 
@@ -111,6 +112,16 @@ object SurplusLedger {
 
     fun balance(entries: Iterable<LedgerEntry>, pocket: SurplusPocket): Money =
         entries.filter { it.pocket == pocket }.fold(Money.ZERO) { acc, e -> acc + e.signedAmount }
+
+    /** What each pocket below zero owes, as a positive amount (Q43). Other pockets are omitted. */
+    fun debts(balances: Map<SurplusPocket, Money>): Map<SurplusPocket, Money> =
+        balances.filterValues { it.isNegative }.mapValues { (_, balance) -> -balance }
+
+    /** The pockets above zero, added up. Debt isn't netted against it: one pocket's savings don't pay another's debt. */
+    fun saved(balances: Map<SurplusPocket, Money>): Money = balances.values.filter { it.isPositive }.sumMoney()
+
+    /** Everything owed: [debts], added up. */
+    fun owed(balances: Map<SurplusPocket, Money>): Money = debts(balances).values.sumMoney()
 
     /** Net effect, per pocket, of every closure entry for [month]. Zero pockets are omitted. */
     fun closureNet(entries: Iterable<LedgerEntry>, month: YearMonth): Map<SurplusPocket, Money> =

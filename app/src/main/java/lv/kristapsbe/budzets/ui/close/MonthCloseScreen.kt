@@ -234,9 +234,9 @@ private fun LineItem(line: CloseLine, money: MoneyFormatter, showPending: Boolea
             SignedAmount(if (showPending) line.pending else line.effect, money)
         }
         val s = line.summary
+        // A category with no amount set counts as zero (Q44), so it reads like any other.
         val detail = when {
             s == null -> stringResource(R.string.close_line_unallocated)
-            line.isUnbudgetedSpending -> stringResource(R.string.close_line_no_budget, money.format(s.spent))
             s.boost.isPositive -> stringResource(R.string.close_line_budget_boost, money.format(s.base ?: Money.ZERO), money.format(s.boost), money.format(s.spent))
             else -> stringResource(R.string.close_line_budget, money.format(s.base ?: Money.ZERO), money.format(s.spent))
         }
@@ -244,18 +244,35 @@ private fun LineItem(line: CloseLine, money: MoneyFormatter, showPending: Boolea
         if (line.label.isDeleted) {
             Text(stringResource(R.string.close_line_deleted), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        // Q43: what closing does to the pocket's debt. The words carry it; colour only marks new debt.
+        when (val change = line.debtChange) {
+            is DebtChange.PaysOff -> Text(stringResource(R.string.close_line_pays_off, money.format(change.debt)), style = MaterialTheme.typography.bodySmall)
+            is DebtChange.PaysOffPart -> Text(
+                stringResource(R.string.close_line_pays_off_part, money.format(change.paid), money.format(change.stillOwed)),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            is DebtChange.Leaves -> Text(
+                stringResource(R.string.close_line_leaves_debt, money.format(change.debt)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            null -> Unit
+        }
         if (showPending && !line.pending.isZero) {
             Text(stringResource(R.string.close_line_total_after, money.format(line.effect)), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-/** "+€10.00 saved" / "−€5.00 debit" / "€0.00": the sign is spelled out, colour only reinforces it. */
+/**
+ * "+€10.00 saved" / "−€5.00 overspent" / "€0.00": the sign is spelled out, colour only reinforces
+ * it. Overspending is debt only if it takes the pocket below zero, which the line under it says.
+ */
 @Composable
 private fun SignedAmount(amount: Money, money: MoneyFormatter, style: TextStyle = MaterialTheme.typography.bodyLarge) {
     val text = when {
         amount.isPositive -> stringResource(R.string.amount_saved, money.format(amount))
-        amount.isNegative -> stringResource(R.string.amount_debit, money.format(-amount))
+        amount.isNegative -> stringResource(R.string.amount_overspent, money.format(-amount))
         else -> money.format(amount)
     }
     Text(

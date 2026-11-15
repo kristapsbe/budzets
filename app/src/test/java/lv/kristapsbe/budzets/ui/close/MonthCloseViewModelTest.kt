@@ -36,7 +36,7 @@ class MonthCloseViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `an open month previews each pocket, calling out spending without a budget`() = runTest {
+    fun `an open month previews each pocket, and says which one closing leaves in debt`() = runTest {
         val (food, fun_) = setUpMarch()
         val state = review("2026-03").awaitReady()
 
@@ -46,7 +46,8 @@ class MonthCloseViewModelTest : ViewModelTest() {
         assertTrue(state.hasBudget)
         assertEquals(listOf(food, fun_, SurplusPocket.Unallocated), state.lines.map { it.label.pocket })
         assertEquals(listOf(eur(100), eur(-30), eur(500)), state.lines.map { it.effect })
-        assertEquals(listOf(false, true, false), state.lines.map { it.isUnbudgetedSpending })
+        // Fun has no amount set, so its €30 is overspending, and nothing saved covers it.
+        assertEquals(listOf(null, DebtChange.Leaves(eur(30)), null), state.lines.map { it.debtChange })
         assertNull(state.lines.last().summary)
         assertEquals(eur(570), state.netEffect)
     }
@@ -97,6 +98,31 @@ class MonthCloseViewModelTest : ViewModelTest() {
         val reopened = vm.awaitReady { it.status == MonthStatus.OPEN }
         assertTrue(reopened.wasReopened)
         assertEquals(Money.ZERO, surplus.balances.awaitFirst { true }.values.fold(Money.ZERO) { a, b -> a + b })
+    }
+
+    @Test
+    fun `an open month says what closing does to debt, a closed or future one doesn't`() = runTest {
+        val (food, fun_) = setUpMarch()
+        surplus.closeMonth(ym("2026-03")).ok() // Food +100, Fun −30, Unallocated +500
+        val foodId = (food as SurplusPocket.Category).id
+        val funId = (fun_ as SurplusPocket.Category).id
+        // April: Fun gets €20 and spends nothing; Food spends €650 of its €500.
+        budgets.setTarget(BudgetScope.Category(funId), BudgetTarget(monthlyMinor = 2_000), ym("2026-04"))
+        expenses.add(eur(650), foodId, LocalDate.of(2026, 4, 3))
+
+        fun MonthCloseUiState.Ready.line(pocket: SurplusPocket) = lines.single { it.label.pocket == pocket }
+        val april = review("2026-04").awaitReady { state -> state.lines.any { it.label.pocket == fun_ && it.effect == eur(20) } }
+        assertEquals(DebtChange.PaysOffPart(paid = eur(20), stillOwed = eur(10)), april.line(fun_).debtChange)
+        assertEquals(DebtChange.Leaves(eur(50)), april.line(food).debtChange) // its €100 saved doesn't cover €150 over
+        assertNull(april.line(SurplusPocket.Unallocated).debtChange)
+
+        budgets.setTarget(BudgetScope.Category(funId), BudgetTarget(monthlyMinor = 4_000), ym("2026-04"))
+        val enough = review("2026-04").awaitReady { state -> state.lines.any { it.label.pocket == fun_ && it.effect == eur(40) } }
+        assertEquals(DebtChange.PaysOff(eur(30)), enough.line(fun_).debtChange)
+
+        // March is closed: its effect is in the balances already. May can't be closed yet.
+        assertTrue(review("2026-03").awaitReady().lines.all { it.debtChange == null })
+        assertTrue(review("2026-05").awaitReady { it.lines.isNotEmpty() }.lines.all { it.debtChange == null })
     }
 
     @Test

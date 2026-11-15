@@ -55,7 +55,8 @@ class SurplusContentTest {
 
     private fun ready(filter: SurplusPocket? = null) = SurplusUiState.Ready(
         currency = CurrencySpec.DEFAULT,
-        total = eur(545),
+        saved = eur(575),
+        debt = eur(30),
         pockets = listOf(
             PocketRow(food, PocketBreakdown(eur(100), eur(50), eur(-25))),
             PocketRow(fun_, PocketBreakdown(eur(-30))),
@@ -75,16 +76,25 @@ class SurplusContentTest {
     fun `surplus tab shows balances, how they arose, boosts and history`() {
         var released: BoostId? = null
         var moveFrom: SurplusPocket? = SurplusPocket.Unallocated
-        compose.setContent { BudzetsTheme { SurplusContent(ready(), SurplusActions(onRelease = { released = it }, onMove = { moveFrom = it })) } }
+        var paidOff: SurplusPocket? = null
+        compose.setContent {
+            BudzetsTheme { SurplusContent(ready(), SurplusActions(onRelease = { released = it }, onMove = { moveFrom = it }, onPayOff = { paidOff = it })) }
+        }
 
-        compose.onNodeWithText("€545.00").assertIsDisplayed()
-        compose.onNodeWithText("Closed months +€100.00 · Moved +€50.00 · Boosts −€25.00").assertIsDisplayed()
+        // Saved and owed each have a card; neither is netted into the other.
+        compose.onNodeWithText("€575.00").assertIsDisplayed()
+        compose.onNodeWithText("Debt").assertIsDisplayed()
+        compose.onNodeWithText("€30.00").assertIsDisplayed()
         compose.onNodeWithText("Move surplus").performClick()
         assertEquals(null, moveFrom)
 
+        // The debt card takes the room the first pocket had: scroll like a user would.
         val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
-        list.performScrollToNode(hasText("−€30.00 debit"))
-        compose.onNodeWithText("Overspent. Later surplus or a transfer in repays it.").assertIsDisplayed()
+        list.performScrollToNode(hasText("Closed months +€100.00 · Moved +€50.00 · Boosts −€25.00"))
+        list.performScrollToNode(hasText("−€30.00 debt"))
+        compose.onNodeWithText("Overspent. It comes out of this month’s budget until it’s paid off.").assertIsDisplayed()
+        compose.onNodeWithText("Pay off").performClick()
+        assertEquals(fun_.pocket, paidOff)
 
         list.performScrollToNode(hasText("+€25.00 for Fun, May 2026"))
         compose.onNodeWithText("From Food").assertIsDisplayed()
@@ -146,6 +156,38 @@ class SurplusContentTest {
     }
 
     @Test
+    fun `no debt card without debt, and no pay off without surplus to pay with`() {
+        val saved = ready().copy(debt = eur(0), pockets = listOf(PocketRow(food, PocketBreakdown(eur(100)))))
+        compose.setContent { BudzetsTheme { SurplusContent(saved, SurplusActions()) } }
+        compose.onNodeWithText("Debt").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a debt can't be paid off while nothing is saved`() {
+        val owing = ready().copy(saved = eur(0), pockets = listOf(PocketRow(fun_, PocketBreakdown(eur(-30)))), boosts = emptyList(), hasAvailable = false)
+        compose.setContent { BudzetsTheme { SurplusContent(owing, SurplusActions()) } }
+        compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(hasText("−€30.00 debt"))
+        compose.onNodeWithText("Pay off").assertDoesNotExist()
+    }
+
+    @Test
+    fun `move editor says what the chosen destination owes`() {
+        val editing = MoveSurplusState.Editing(
+            currency = CurrencySpec.DEFAULT,
+            form = MoveForm(food.pocket, fun_.pocket, "30"),
+            sources = listOf(PocketChoice(food, eur(100))),
+            destinations = listOf(PocketChoice(fun_, eur(-30)), PocketChoice(unallocated, eur(450))),
+            amountError = null,
+            exceedsAvailable = null,
+            missingFrom = false,
+            missingTo = false,
+        )
+        compose.setContent { BudzetsTheme { MoveSurplusContent(editing, MoveSurplusActions()) } }
+        compose.onNodeWithText("Fun owes €30.00.").assertIsDisplayed()
+        compose.onNodeWithText("Moving it into a category in debt pays that debt off.", substring = true).assertIsDisplayed()
+    }
+
+    @Test
     fun `overview reminds about an unclosed past month and opens its review`() {
         var reviewed: YearMonth? = null
         val summary = MonthSummary(ym("2026-04"), eur(100), false, emptyMap())
@@ -157,7 +199,7 @@ class SurplusContentTest {
             pace = PaceCalculator.pace(summary, LocalDate.of(2026, 4, 15)),
             rows = emptyList<CategoryRow>(),
             closeStatus = CloseStatus.OPEN,
-            totalSurplus = eur(0),
+            savedSurplus = eur(0),
             hasCategories = true,
             unclosedPastMonths = listOf(ym("2026-03"), ym("2026-02")),
             canClose = true,
@@ -181,6 +223,8 @@ class SurplusContentTest {
     fun `one-off boosts are listed with a way to remove them, and in history and the breakdown`() {
         var removed: LedgerEntryId? = null
         val state = ready().copy(
+            saved = eur(200),
+            debt = eur(0),
             pockets = listOf(PocketRow(unallocated, PocketBreakdown(oneOff = eur(200)))),
             oneOffs = listOf(OneOffRow(LedgerEntryId("o1"), ym("2026-04"), eur(200), "Gift")),
             history = listOf(

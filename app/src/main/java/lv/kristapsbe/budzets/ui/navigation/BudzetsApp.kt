@@ -76,8 +76,11 @@ import kotlin.reflect.KClass
 /** Month-end review of [month] ("YYYY-MM"): close, close again, or reopen. */
 @Serializable data class MonthCloseRoute(val month: String)
 
-/** Moves surplus, optionally starting from the pocket keyed [from] (see `SurplusPocket.key`). */
-@Serializable data class MoveSurplusRoute(val from: String? = null)
+/**
+ * Moves surplus, optionally starting from the pocket keyed [from] (see `SurplusPocket.key`).
+ * With [to], it pays off that pocket's debt: the destination and the amount owed are filled in.
+ */
+@Serializable data class MoveSurplusRoute(val from: String? = null, val to: String? = null)
 
 /** Boosts a category's budget for a month with saved surplus. */
 @Serializable data class BoostRoute(val categoryId: String? = null, val month: String? = null)
@@ -199,6 +202,7 @@ fun BudzetsApp(
             composable<SurplusRoute> {
                 SurplusScreen(
                     onMove = { navController.navigate(MoveSurplusRoute(it?.key())) },
+                    onPayOff = { navController.navigate(MoveSurplusRoute(to = it.key())) },
                     onBoost = { navController.navigate(BoostRoute()) },
                     onOneOff = { navController.navigate(OneOffBoostRoute) },
                 )

@@ -296,7 +296,7 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
             }
         }
 
-        item { SurplusShortcut(state.totalSurplus, money, actions.onOpenSurplus) }
+        item { SurplusShortcut(state.savedSurplus, state.debt, money, actions.onOpenSurplus) }
 
         if (!state.hasSpending) {
             item {
@@ -316,7 +316,7 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
             )
         }
         items(state.rows, key = { it.id.value }) { row ->
-            CategoryRowItem(row, money, onClick = { actions.onOpenCategory(row.id, state.month) })
+            CategoryRowItem(row, money, state.hasBudget, onClick = { actions.onOpenCategory(row.id, state.month) })
         }
 
         if (state.isCurrentMonth && state.closeStatus == CloseStatus.OPEN) {
@@ -330,28 +330,33 @@ private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions,
 @Composable
 private fun SummaryCard(state: OverviewUiState.Ready, money: MoneyFormatter) {
     val summary = state.summary
-    val remaining = summary.overallRemaining
+    // After any debt carried into the month (Q43); the lines below show how it's made up.
+    val left = summary.overallLeft
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                if (remaining.isNegative) stringResource(R.string.over_by_amount, money.format(-remaining))
-                else stringResource(R.string.remaining_amount, money.format(remaining)),
+                if (left.isNegative) stringResource(R.string.over_by_amount, money.format(-left))
+                else stringResource(R.string.remaining_amount, money.format(left)),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = if (remaining.isNegative) MaterialTheme.colorScheme.error else Color.Unspecified,
+                color = if (left.isNegative) MaterialTheme.colorScheme.error else Color.Unspecified,
             )
             Text(
-                stringResource(R.string.spent_of_budget, money.format(summary.totalSpent), money.format(summary.overallEffective)),
+                stringResource(R.string.spent_of_budget, money.format(summary.totalSpent), money.format(summary.overallAvailable.orZero())),
                 style = MaterialTheme.typography.bodyLarge,
             )
-            BudgetProgress(summary.totalSpent, summary.overallEffective)
+            BudgetProgress(summary.totalSpent, summary.overallAvailable, over = left.isNegative)
 
             AmountLine(
                 stringResource(if (summary.overallDerived) R.string.base_budget_derived else R.string.base_budget),
                 money.format(summary.overallBase ?: Money.ZERO),
             )
             if (summary.totalBoosts.isPositive) {
-                AmountLine(stringResource(R.string.surplus_boosts), "+" + money.format(summary.totalBoosts), highlight = true)
+                AmountLine(stringResource(R.string.surplus_boosts), "+" + money.format(summary.totalBoosts), MaterialTheme.colorScheme.tertiary)
+            }
+            if (summary.debt.isPositive) {
+                // The label says "debt", so colour isn't the only signal.
+                AmountLine(stringResource(R.string.debt_to_repay), "−" + money.format(summary.debt), MaterialTheme.colorScheme.error)
             }
 
             HorizontalDivider()
@@ -398,8 +403,13 @@ private fun PaceLine(state: OverviewUiState.Ready, money: MoneyFormatter) {
     }
 }
 
+/**
+ * @param monthHasBudget in a month with a budget every category is measured against its amount,
+ *   and one with no amount set counts as zero (Q44). A month with no budget at all has nothing to
+ *   be over, so its rows only report spending.
+ */
 @Composable
-private fun CategoryRowItem(row: CategoryRow, money: MoneyFormatter, onClick: () -> Unit) {
+private fun CategoryRowItem(row: CategoryRow, money: MoneyFormatter, monthHasBudget: Boolean, onClick: () -> Unit) {
     val s = row.summary
     Column(
         Modifier
@@ -414,31 +424,31 @@ private fun CategoryRowItem(row: CategoryRow, money: MoneyFormatter, onClick: ()
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
-            if (s.base != null || s.boost.isPositive) {
+            if (monthHasBudget) {
                 if (s.isOver) {
                     Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        stringResource(R.string.over_by_amount, money.format(-s.remaining)),
+                        stringResource(R.string.over_by_amount, money.format(-s.left)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
                 } else {
-                    Text(stringResource(R.string.remaining_amount, money.format(s.remaining)), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.remaining_amount, money.format(s.left)), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
-        if (s.base == null && !s.boost.isPositive) {
+        if (!monthHasBudget) {
             Text(
                 stringResource(R.string.category_no_budget, money.format(s.spent)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            BudgetProgress(s.spent, s.effective)
+            BudgetProgress(s.spent, s.available, over = s.isOver)
             Row {
                 Text(
-                    stringResource(R.string.category_spent_of, money.format(s.spent), money.format(s.effective)),
+                    stringResource(R.string.category_spent_of, money.format(s.spent), money.format(s.available.orZero())),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -451,34 +461,51 @@ private fun CategoryRowItem(row: CategoryRow, money: MoneyFormatter, onClick: ()
                     )
                 }
             }
+            if (s.debt.isPositive) {
+                // On its own line: beside a boost it wouldn't fit at large font sizes.
+                Text(
+                    stringResource(R.string.amount_debt, money.format(s.debt)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
 
+/** Debt can take more than the budget; "spent of" then reads against zero rather than a negative. */
+private fun Money.orZero(): Money = if (isNegative) Money.ZERO else this
+
+/**
+ * @param budget what can be spent, after any debt; zero or less when there is nothing to spend.
+ * @param over stated by the caller, since a bar can be full without being over (exactly spent)
+ *   and over without a budget to fill (no amount set, or debt larger than the budget).
+ */
 @Composable
-private fun BudgetProgress(spent: Money, budget: Money) {
-    val fraction = if (budget.isPositive) (spent.minor.toDouble() / budget.minor).toFloat() else if (spent.isPositive) 1f else 0f
+private fun BudgetProgress(spent: Money, budget: Money, over: Boolean) {
+    val fraction = when {
+        budget.isPositive -> (spent.minor.toDouble() / budget.minor).toFloat()
+        over || spent.isPositive -> 1f
+        else -> 0f
+    }
     LinearProgressIndicator(
         progress = { fraction.coerceIn(0f, 1f) },
         modifier = Modifier.fillMaxWidth(),
-        color = if (fraction > 1f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
     )
 }
 
 @Composable
-private fun AmountLine(label: String, value: String, highlight: Boolean = false) {
+private fun AmountLine(label: String, value: String, color: Color = Color.Unspecified) {
     Row(Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (highlight) MaterialTheme.colorScheme.tertiary else Color.Unspecified,
-        )
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = color)
     }
 }
 
+/** Saved surplus and debt side by side, never netted: one pocket's savings don't pay another's debt (Q43). */
 @Composable
-private fun SurplusShortcut(total: Money, money: MoneyFormatter, onClick: () -> Unit) {
+private fun SurplusShortcut(saved: Money, debt: Money, money: MoneyFormatter, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -487,7 +514,18 @@ private fun SurplusShortcut(total: Money, money: MoneyFormatter, onClick: () -> 
         Column(Modifier.padding(16.dp)) {
             Row {
                 Text(stringResource(R.string.saved_surplus), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text(money.format(total), style = MaterialTheme.typography.titleSmall)
+                Text(money.format(saved), style = MaterialTheme.typography.titleSmall)
+            }
+            if (debt.isPositive) {
+                Row {
+                    Text(
+                        stringResource(R.string.debt),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(money.format(debt), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
+                }
             }
             Text(stringResource(R.string.saved_surplus_hint), style = MaterialTheme.typography.bodySmall)
         }

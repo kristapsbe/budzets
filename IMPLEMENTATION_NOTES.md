@@ -1685,6 +1685,95 @@ from how a debug build runs its first frame, and a release build stays far below
     months came through), and the surplus chart draws, with no crash.
 - **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
 
+## Debt, and amounts that aren't set (2026-11-15)
+
+- **Asked for:** negative surpluses should feel like debt that has to be paid down, and a category
+  with no amount set should be treated as if it were set to 0.
+- **Q43–Q44** (both the recommended options):
+  - **Q43 How debt bites:** it comes out of the month under way. The alternative was to show it and
+    leave the month's figures alone.
+  - **Q44 No amount = 0:** for categories only. A month with no budgets at all keeps its "No budget
+    for this month" card and still isn't offered for closing.
+- **No ledger, database or backup change.** Closing still posts `budget + boosts − spent` per pocket.
+  Debt is read from the pocket balances and applied when figures are shown.
+- **Rules:**
+  - Debt is the size of a pocket's negative balance, after deleted categories merge into
+    Unallocated (Q28).
+  - It comes out of the current calendar month only, while that month is open and has a budget.
+    Closed, past and future months show plain figures.
+  - A category's debt lowers that category's amount and the overall one. Unallocated debt lowers the
+    overall one only. Savings in other pockets are not netted against it.
+  - An archived category in debt gets a row in the current month.
+  - Debt is what the ledger says now. An earlier month that isn't closed has neither added to it
+    nor paid it off; the "isn't closed yet" banner sits above.
+  - A category with no amount counts as zero in any month that has a budget.
+- **Decided along the way:**
+  - In a month with no budget at all, every row keeps the grey "No budget · €X spent" and nothing
+    is "over", an explicit €0 included. Otherwise a fresh install would open with every category
+    red, next to a card that says the month has no budget.
+  - Saved surplus (pockets above zero) and debt (pockets below) are shown side by side on the
+    Overview, the Surplus tab and the widget, never netted. The surplus chart's running total is
+    still the net.
+  - "Debt" is used for a balance below zero. What a month took from a pocket in the review reads
+    "overspent", because it's debt only if the pocket ends below zero. The review says which:
+    "Pays off its €40.00 debt", "Pays off €25.00 of its debt; €15.00 is still owed", "Leaves it
+    €20.00 in debt". Only for a month that can be closed now.
+  - **Pay off** on a pocket in debt opens Move surplus with the pocket as destination and the amount
+    filled in: what it owes, or the source's balance if that is less. A pocket in debt is always a
+    destination, an archived category's included. The button is hidden while nothing is saved.
+  - The widget's last line is the debt while anything is owed, otherwise the saved surplus. Both on
+    one line would be cut off in Latvian.
+  - Debt larger than the budget reads "Over by", with "spent of" against zero rather than a negative
+    amount. Pace says "Over budget", not "No budget set": whether there is a budget is asked before
+    debt.
+  - The Budgets tab shows "No amount set" with €0.00 as the monthly amount.
+- **Code:**
+  - `CategorySummary.debt`, `available`, `left`; `isOver` reads `left`. `remaining` is unchanged and
+    is what `closingEffect` posts, so a summary with debt closes exactly like one without (tested).
+  - `MonthSummary.otherDebt`, `debt`, `overallAvailable`, `overallLeft`, `carrying(debts)`.
+  - `MonthSummaryCalculator.withDebt`: the one place that decides whether a month takes debt. The
+    Overview and the widget both call it.
+  - `SurplusLedger.debts`, `saved`, `owed`.
+  - `PaceCalculator.pace` and `dailyAllowance` read `overallAvailable` / `overallLeft`. Signatures
+    are unchanged.
+  - `OverviewViewModel` passes the ledger it already reads through `MonthFigures`; no new query.
+  - `MoveSurplusRoute.to`, `MoveSurplusViewModel.ARG_TO`, `Editing.payingOff`.
+  - `CloseLine.balanceBefore` and `DebtChange`; `isUnbudgetedSpending` is gone.
+  - Strings: `amount_debit` became `amount_debt` (balances) and `amount_overspent` (a month's
+    effect); `close_line_no_budget` is gone. `move_explanation` no longer says moving changes no
+    month's budget, since paying off a debt now does. New Latvian strings join the translation
+    awaiting the user's read ("parāds", "nomaksāt", "pārtērēts").
+- **Baseline Profiles:** not regenerated. Rules for the constructors and composables whose
+  signatures changed were rewritten by hand in both files, from `javap` on the compiled classes:
+  `CategorySummary`, `MonthSummary`, `OverviewUiState.Ready` (stale since the daily amount),
+  `MonthFigures`, `SurplusUiState.Ready`, `CategoryRowItem`, `SurplusShortcut`. Rules were added
+  for `withDebt`, `debts`, `saved`, `owed` and the new `MonthSummary` getters.
+- **Found, not changed: reopening a month that paid off a debt is refused.** `MonthFinalizer.reopen`
+  refuses whenever the reversal would leave a pocket below zero, and says its surplus "has already
+  been moved or used for a boost". When the pocket was in debt before the month closed, the
+  reversal only brings that debt back, and nothing was moved. This predates the change (the ledger
+  rules weren't touched). A fix that never refuses where today's rule allows: refuse only if, with
+  the month's closure entries left out, some transfer out or boost was larger than the pocket held
+  at the time. Awaiting the user's answer.
+- **Verified:**
+  - 481 tests (28 new), three clean full runs. Lint 0 errors.
+  - Emulator `Medium_Phone_API_37.0`, `-read-only`, debug build, seeded with October over in Eating
+    out (€40) and in Other, which has no amount (€25):
+    - October's review: "−€40.00 overspent · Leaves it €40.00 in debt", and Other as
+      "Budget €0.00 · spent €25.00".
+    - November: "€750.00 left", "€185.00 of €935.00 spent", "Debt to repay −€65.00", €47.81 a day.
+      Eating out "€20.00 left · €40.00 of €60.00 · −€40.00 debt". Other "Over by €35.00".
+    - October (closed), December and September (no budget, grey rows) show plain figures.
+    - Pay off from Unallocated: form prefilled; November back to €975 and Eating out to €60 left.
+    - Other given €50: the review says "Pays off its €25.00 debt". After closing November early it
+      shows €815 of €1,000, no debt line, saved surplus €1,200.
+    - Widget at 2×1, 2×2, 3×2 and 4×2; Latvian; dark mode with font scale 1.5.
+  - R8 release build with a throwaway key, data restored from a backup made in the debug build:
+    Overview, Surplus, Pay off, month review and the widget ("Other over by €10.00", "Debt €40.00"),
+    no crash.
+- **Not verified:** a real phone, TalkBack, landscape and tablets.
+
 ## Open questions
 
-None currently.
+- Reopening a month that paid off a debt (see "Debt, and amounts that aren't set"): change the
+  refusal rule as proposed there, or leave it?

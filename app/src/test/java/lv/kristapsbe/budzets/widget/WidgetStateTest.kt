@@ -21,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -36,7 +37,8 @@ class WidgetStateTest {
         balances: Map<SurplusPocket, Money> = emptyMap(),
         cats: List<Category> = categories,
         spentToday: Money = Money.ZERO,
-    ) = WidgetStates.build(summary, today, cats, balances, CurrencySpec.DEFAULT, spentToday)
+        closed: Set<YearMonth> = emptySet(),
+    ) = WidgetStates.build(summary, today, cats, balances, CurrencySpec.DEFAULT, spentToday, closed)
 
     @Test
     fun `no categories means not set up`() {
@@ -52,13 +54,50 @@ class WidgetStateTest {
     @Test
     fun `budgeted month - remaining, progress, status and days left`() {
         val summary = MonthSummary(april, eur(600), false, mapOf(FOOD to CategorySummary(FOOD, eur(300), Money.ZERO, eur(150))))
-        val state = build(summary, mapOf(FOOD_POCKET to eur(80), SurplusPocket.Unallocated to eur(-30))) as WidgetState.Month
+        val state = build(summary, mapOf(FOOD_POCKET to eur(80))) as WidgetState.Month
         assertEquals(eur(450), state.remaining)
         assertEquals(0.25f, state.progress)
         assertEquals(PaceStatus.ON_TRACK, state.status)
         assertEquals(15, state.daysLeft) // today counts as elapsed
-        assertEquals(eur(50), state.surplus)
+        assertEquals(eur(80), state.surplus)
+        assertEquals(Money.ZERO, state.debt)
         assertNull(state.topOver)
+    }
+
+    @Test
+    fun `debt comes out of the open month, and savings aren't netted against it`() {
+        val summary = MonthSummary(april, eur(600), false, mapOf(FOOD to CategorySummary(FOOD, eur(300), Money.ZERO, eur(150))))
+        val balances = mapOf(FOOD_POCKET to eur(-100), SurplusPocket.Unallocated to eur(80))
+        val state = build(summary, balances, spentToday = eur(20)) as WidgetState.Month
+        assertEquals(eur(600), state.budget)
+        assertEquals(eur(100), state.carried)
+        assertEquals(eur(500), state.available)
+        assertEquals(eur(350), state.remaining)
+        assertEquals(0.3f, state.progress)
+        assertEquals(eur(80), state.surplus)
+        assertEquals(eur(100), state.debt)
+        assertEquals(eur(23, 12), state.daily!!.perDay) // €370 left at the start of the 15th, over 16 days
+        assertNull(state.topOver) // Food: 300 − 100 − 150 is still above zero
+
+        // Closed: nothing comes out of it, but what's owed is still reported.
+        val closed = build(summary, balances, closed = setOf(april)) as WidgetState.Month
+        assertEquals(Money.ZERO, closed.carried)
+        assertEquals(eur(450), closed.remaining)
+        assertEquals(eur(100), closed.debt)
+    }
+
+    @Test
+    fun `debt larger than the budget is over budget with a full bar, not no budget`() {
+        val summary = MonthSummary(april, eur(100), false, mapOf(FOOD to CategorySummary(FOOD, eur(100), Money.ZERO, Money.ZERO)))
+        val state = build(summary, mapOf(FOOD_POCKET to eur(-130))) as WidgetState.Month
+        assertTrue(state.hasBudget)
+        assertTrue(state.isOver)
+        assertEquals(eur(-30), state.remaining)
+        assertEquals(Money.ZERO, state.available)
+        assertEquals(1f, state.progress)
+        assertEquals(PaceStatus.OVER, state.status)
+        assertEquals(TopOver("Food", eur(30)), state.topOver)
+        assertNull(state.daily)
     }
 
     @Test
@@ -79,17 +118,17 @@ class WidgetStateTest {
     }
 
     @Test
-    fun `most over-budget category, ignoring spending in categories without a budget`() {
+    fun `most over-budget category, a category with no amount set counting as zero`() {
         val summary = MonthSummary(
             april, eur(100), false,
             mapOf(
                 FOOD to CategorySummary(FOOD, eur(50), Money.ZERO, eur(60)), // over by 10
                 FUN to CategorySummary(FUN, eur(20), eur(5), eur(55)), // over by 30, boost counted
-                TRAVEL to CategorySummary(TRAVEL, null, Money.ZERO, eur(500)), // no budget: not "over"
+                TRAVEL to CategorySummary(TRAVEL, null, Money.ZERO, eur(45)), // no amount set: all of it is over
             ),
         )
         val state = build(summary) as WidgetState.Month
-        assertEquals(TopOver("Fun", eur(30)), state.topOver)
+        assertEquals(TopOver("Travel", eur(45)), state.topOver)
         assertEquals(1f, state.progress) // the bar is full once over
         assertTrue(state.isOver)
         assertEquals(PaceStatus.OVER, state.status)
@@ -101,6 +140,7 @@ class WidgetStateTest {
         val state = build(summary) as WidgetState.Month
         assertFalse(state.hasBudget)
         assertFalse(state.isOver) // a full bar, but not shown as over
+        assertNull(state.topOver) // with no budget at all, no category is over either
         assertEquals(PaceStatus.NO_BUDGET, state.status)
         assertEquals(eur(12), state.spent)
         assertEquals(0f, (build(MonthSummary(april, null, false, emptyMap())) as WidgetState.Month).progress)

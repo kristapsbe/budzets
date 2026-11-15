@@ -98,6 +98,13 @@ fun MoveSurplusContent(state: MoveSurplusState, actions: MoveSurplusActions) {
             }
             FormSection(stringResource(R.string.move_to), stringResource(R.string.error_choose_pocket).takeIf { editing.missingTo }) {
                 PocketChips(editing.destinations, editing.form.to, money, showBalance = false, onSelect = actions.onTo)
+                editing.payingOff?.let {
+                    Text(
+                        stringResource(R.string.move_to_owes, it.label.text(), money.format(-it.balance)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             AmountWithAll(
                 value = editing.form.amountText,

@@ -55,6 +55,7 @@ import java.util.Locale
 @Composable
 fun SurplusScreen(
     onMove: (SurplusPocket?) -> Unit,
+    onPayOff: (SurplusPocket) -> Unit,
     onBoost: () -> Unit,
     onOneOff: () -> Unit,
     viewModel: SurplusViewModel = viewModel(factory = SurplusViewModel.Factory),
@@ -78,6 +79,7 @@ fun SurplusScreen(
         state = state,
         actions = SurplusActions(
             onMove = onMove,
+            onPayOff = onPayOff,
             onBoost = onBoost,
             onOneOff = onOneOff,
             onFilter = viewModel::setFilter,
@@ -90,6 +92,8 @@ fun SurplusScreen(
 
 data class SurplusActions(
     val onMove: (SurplusPocket?) -> Unit = {},
+    /** Opens Move surplus aimed at a pocket in debt, with what it owes filled in. */
+    val onPayOff: (SurplusPocket) -> Unit = {},
     val onBoost: () -> Unit = {},
     val onOneOff: () -> Unit = {},
     val onFilter: (SurplusPocket?) -> Unit = {},
@@ -135,8 +139,23 @@ private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padd
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(stringResource(R.string.saved_surplus), style = MaterialTheme.typography.titleMedium)
-                    Text(money.format(state.total), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+                    Text(money.format(state.saved), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.saved_surplus_hint), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        // Q43: debt has a card of its own rather than being netted into the figure above.
+        if (state.debt.isPositive) {
+            item(key = "debt") {
+                Card(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(stringResource(R.string.debt), style = MaterialTheme.typography.titleMedium)
+                        Text(money.format(state.debt), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.debt_hint), style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -170,7 +189,10 @@ private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padd
         }
 
         item(key = "pockets-header") { Header(stringResource(R.string.surplus_by_category)) }
-        items(state.pockets, key = { "pocket-${it.label.pocket.key()}" }) { row -> PocketItem(row, money) }
+        items(state.pockets, key = { "pocket-${it.label.pocket.key()}" }) { row ->
+            // Paying off moves surplus in, so it needs a pocket that has some.
+            PocketItem(row, money, onPayOff = if (state.hasAvailable) actions.onPayOff else null)
+        }
 
         if (state.boosts.isNotEmpty()) {
             item(key = "boosts-header") { Header(stringResource(R.string.active_boosts)) }
@@ -204,8 +226,9 @@ private fun Header(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 12.dp).semantics { heading() })
 }
 
+/** @param onPayOff offered on a pocket in debt; null when no pocket has surplus to pay with. */
 @Composable
-private fun PocketItem(row: PocketRow, money: MoneyFormatter) {
+private fun PocketItem(row: PocketRow, money: MoneyFormatter, onPayOff: ((SurplusPocket) -> Unit)?) {
     val b = row.breakdown
     val parts = listOfNotNull(
         b.fromClosing.takeIf { !it.isZero }?.let { stringResource(R.string.breakdown_closing, signed(it, money)) },
@@ -218,12 +241,17 @@ private fun PocketItem(row: PocketRow, money: MoneyFormatter) {
         supportingContent = {
             Column {
                 if (parts.isNotEmpty()) Text(parts.joinToString(" · "))
-                if (b.available.isNegative) Text(stringResource(R.string.pocket_negative_hint), color = MaterialTheme.colorScheme.error)
+                if (b.available.isNegative) {
+                    Text(stringResource(R.string.pocket_negative_hint), color = MaterialTheme.colorScheme.error)
+                    if (onPayOff != null) {
+                        TextButton(onClick = { onPayOff(row.label.pocket) }) { Text(stringResource(R.string.pay_off)) }
+                    }
+                }
             }
         },
         trailingContent = {
             Text(
-                if (b.available.isNegative) stringResource(R.string.amount_debit, money.format(-b.available)) else money.format(b.available),
+                if (b.available.isNegative) stringResource(R.string.amount_debt, money.format(-b.available)) else money.format(b.available),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = if (b.available.isNegative) MaterialTheme.colorScheme.error else Color.Unspecified,

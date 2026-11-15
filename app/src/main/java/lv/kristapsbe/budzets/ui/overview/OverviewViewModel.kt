@@ -31,6 +31,7 @@ import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.domain.calculation.CategorySummary
 import lv.kristapsbe.budzets.domain.calculation.DailyAllowance
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
+import lv.kristapsbe.budzets.domain.calculation.MonthSummaryCalculator
 import lv.kristapsbe.budzets.domain.calculation.Pace
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
 import lv.kristapsbe.budzets.domain.model.Category
@@ -39,6 +40,7 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.sumMoney
 import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
+import lv.kristapsbe.budzets.domain.surplus.LedgerEntry
 import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import lv.kristapsbe.budzets.ui.components.MonthStates
 import java.time.Clock
@@ -76,8 +78,8 @@ sealed interface OverviewUiState {
         val pace: Pace,
         val rows: List<CategoryRow>,
         val closeStatus: CloseStatus,
-        /** Net of all surplus pockets; may be negative after overspending. */
-        val totalSurplus: Money,
+        /** The surplus pockets above zero, added up. Debt is kept apart in [debt], not netted. */
+        val savedSurplus: Money,
         val hasCategories: Boolean,
         /** Budgeted past months not closed yet, newest first (Q15 reminder). */
         val unclosedPastMonths: List<YearMonth> = emptyList(),
@@ -88,8 +90,14 @@ sealed interface OverviewUiState {
         val oneOffTotal: Money = Money.ZERO,
         /** What can be spent per day for the rest of the month (Q34); current month only. */
         val daily: DailyAllowance? = null,
+        /**
+         * What the surplus pockets below zero owe in all (Q43). In the month under way, while it is
+         * open, [summary] already has it taken out; any other month's figures are without it.
+         */
+        val debt: Money = Money.ZERO,
     ) : OverviewUiState {
 
+        /** Asked of the budget before debt: debt as large as the budget is "over", not "no budget". */
         val hasBudget: Boolean get() = summary.overallEffective.isPositive
         val hasSpending: Boolean get() = summary.totalSpent.isPositive
     }
@@ -137,13 +145,14 @@ class OverviewViewModel(
         val summary: MonthSummary,
         val status: CloseStatus,
         val closed: Set<YearMonth>,
-        val totalSurplus: Money,
+        /** Per pocket as posted. Deleted categories are merged once the categories are known. */
+        val ledger: List<LedgerEntry>,
         val oneOffTotal: Money,
     )
 
     private fun observeMonth(month: YearMonth) =
         combine(
-            // One subscription each: the close status and the surplus total share the ledger and summary.
+            // One subscription each: the close status and the surplus balances share the ledger and summary.
             combine(budgets.observeMonthSummary(month), surplus.ledger, surplus.closedMonths) { summary, ledger, closed ->
                 val status = when {
                     month !in closed -> CloseStatus.OPEN
@@ -151,7 +160,7 @@ class OverviewViewModel(
                     else -> CloseStatus.CLOSED
                 }
                 val oneOffs = SurplusLedger.activeOneOffs(ledger).filter { it.targetMonth == month }
-                MonthFigures(summary, status, closed, SurplusLedger.balances(ledger).values.sumMoney(), oneOffs.map { it.amount }.sumMoney())
+                MonthFigures(summary, status, closed, ledger, oneOffs.map { it.amount }.sumMoney())
             },
             categories.categories,
             combine(settings.currency, settings.lastBackupAt, expenses.hasMonetaryData) { currency, lastBackup, hasData ->
@@ -161,32 +170,39 @@ class OverviewViewModel(
             // Per day rather than for today alone: this flow outlives the date it was built on, and
             // today is read at each emission. A past month is never current again, so it skips the query.
             if (month < YearMonth.now(clock)) flowOf(emptyMap<LocalDate, Money>()) else expenses.observeDailySpending(month),
-        ) { (summary, status, closed, totalSurplus, oneOffTotal), allCategories, (currency, backupReminder), configs, byDay ->
+        ) { (plain, status, closed, ledger, oneOffTotal), allCategories, (currency, backupReminder), configs, byDay ->
             val today = LocalDate.now(clock)
+            val current = YearMonth.from(today)
+            val deleted = allCategories.filter { it.isDeleted }.map { it.id }.toSet()
+            val balances = SurplusLedger.balances(SurplusLedger.merged(ledger, deleted))
+            // Q43: debt comes out of the month under way; every other month reads as it was.
+            val summary = MonthSummaryCalculator.withDebt(plain, balances, current, closed)
             OverviewUiState.Ready(
                 month = month,
-                isCurrentMonth = month == YearMonth.from(today),
+                isCurrentMonth = month == current,
                 currency = currency,
                 summary = summary,
                 pace = PaceCalculator.pace(summary, today),
                 rows = rows(month, summary, allCategories, isClosed = month in closed),
                 closeStatus = status,
-                totalSurplus = totalSurplus,
+                savedSurplus = SurplusLedger.saved(balances),
                 hasCategories = allCategories.any { !it.isDeleted },
                 unclosedPastMonths = ClosingSchedule.unclosedBudgetedPastMonths(
-                    configs, allCategories.map { it.toRef() }, closed, YearMonth.from(today),
+                    configs, allCategories.map { it.toRef() }, closed, current,
                 ),
-                canClose = month <= YearMonth.from(today),
+                canClose = month <= current,
                 backupReminder = backupReminder,
                 oneOffTotal = oneOffTotal,
                 daily = PaceCalculator.dailyAllowance(summary, today, byDay[today] ?: Money.ZERO),
+                debt = SurplusLedger.owed(balances),
             ) as OverviewUiState
         }.catch { emit(OverviewUiState.Error(it.message)) }
 
     /**
-     * Categories active in [month] (in display order, even without a budget), followed by any
-     * archived category that still has spending or a boost in the month. A closed month lists what
-     * it was closed with, however categories have been added, archived or deleted since.
+     * Categories active in [month] (in display order, even with no amount set), followed by any
+     * archived category that still has spending or a boost in the month, or debt that comes out of
+     * it. A closed month lists what it was closed with, however categories have been added,
+     * archived or deleted since.
      */
     private fun rows(month: YearMonth, summary: MonthSummary, all: List<Category>, isClosed: Boolean): List<CategoryRow> {
         val active = all.filter { if (isClosed) it.id in summary.categories else it.toRef().isActiveIn(month) }

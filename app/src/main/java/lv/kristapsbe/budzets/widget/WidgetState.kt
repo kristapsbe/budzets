@@ -10,13 +10,14 @@ import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
 import lv.kristapsbe.budzets.domain.calculation.DailyAllowance
 import lv.kristapsbe.budzets.domain.calculation.MonthSummary
+import lv.kristapsbe.budzets.domain.calculation.MonthSummaryCalculator
 import lv.kristapsbe.budzets.domain.calculation.PaceCalculator
 import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.Category
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
-import lv.kristapsbe.budzets.domain.model.sumMoney
+import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -29,28 +30,36 @@ sealed interface WidgetState {
         val month: YearMonth,
         val currency: CurrencySpec,
         val spent: Money,
-        /** Base budget plus boosts; zero when no budget is set. */
+        /** Base budget plus boosts, before any debt; zero when no budget is set. */
         val budget: Money,
         val status: PaceStatus,
         val daysLeft: Int,
         /** The category furthest over its budget, if any is over (Q16). */
         val topOver: TopOver?,
-        /** Net of all surplus pockets; may be negative. */
+        /** The surplus pockets above zero, added up. Debt is kept apart in [debt], not netted. */
         val surplus: Money,
         /** What can be spent per day for the rest of the month (Q34); null with no budget or none left. */
         val daily: DailyAllowance? = null,
+        /** What the surplus pockets below zero owe in all (Q43). */
+        val debt: Money = Money.ZERO,
+        /** The debt that comes out of this month: all of it while the month is open, none once it's closed. */
+        val carried: Money = Money.ZERO,
     ) : WidgetState {
+        /** Asked of the budget before debt: debt as large as the budget is "over", not "no budget". */
         val hasBudget: Boolean get() = budget.isPositive
-        val remaining: Money get() = budget - spent
+
+        /** What the month can spend, after debt. Never shown below zero. */
+        val available: Money get() = (budget - carried).let { if (it.isNegative) Money.ZERO else it }
+        val remaining: Money get() = budget - carried - spent
 
         /** Over budget; spending with no budget set is never "over". */
         val isOver: Boolean get() = hasBudget && remaining.isNegative
 
-        /** Share of the budget spent, clamped to the bar; a full bar once over. */
+        /** Share of what can be spent that is spent, clamped to the bar; a full bar once over. */
         val progress: Float
             get() = when {
-                hasBudget -> (spent.minor.toDouble() / budget.minor).toFloat().coerceIn(0f, 1f)
-                spent.isPositive -> 1f
+                available.isPositive -> (spent.minor.toDouble() / available.minor).toFloat().coerceIn(0f, 1f)
+                isOver || spent.isPositive -> 1f
                 else -> 0f
             }
     }
@@ -75,17 +84,19 @@ object WidgetStates {
         combine(
             budgets.observeMonthSummary(YearMonth.from(today)),
             categories.categories,
-            surplus.balances,
+            // Paired to stay within combine's five typed flows.
+            combine(surplus.balances, surplus.closedMonths, ::Pair),
             settings.currency,
             expenses.observeDailySpending(YearMonth.from(today)),
-        ) { summary, all, balances, currency, byDay ->
-            build(summary, today, all, balances, currency, spentToday = byDay[today] ?: Money.ZERO)
+        ) { summary, all, (balances, closed), currency, byDay ->
+            build(summary, today, all, balances, currency, spentToday = byDay[today] ?: Money.ZERO, closedMonths = closed)
         }
             .distinctUntilChanged()
 
     /**
-     * Only categories with a budget (or a boost) count as "over"; spending in a category without
-     * one is shown as plain spending, as on the overview.
+     * As on the overview: debt comes out of the month while it is open (Q43), and in a month with
+     * a budget a category with no amount set counts as zero, so it can be the one furthest over
+     * (Q44). With no budget at all nothing is "over".
      */
     fun build(
         summary: MonthSummary,
@@ -94,23 +105,27 @@ object WidgetStates {
         balances: Map<SurplusPocket, Money>,
         currency: CurrencySpec,
         spentToday: Money = Money.ZERO,
+        closedMonths: Set<YearMonth> = emptySet(),
     ): WidgetState {
         if (categories.all { it.isDeleted }) return WidgetState.NotSetUp
         val names = categories.associate { it.id to it.name }
-        val pace = PaceCalculator.pace(summary, today)
-        val worst = summary.categories.values
-            .filter { (it.base != null || it.boost.isPositive) && it.isOver }
-            .minByOrNull { it.remaining }
+        val month = MonthSummaryCalculator.withDebt(summary, balances, YearMonth.from(today), closedMonths)
+        val pace = PaceCalculator.pace(month, today)
+        val worst = month.categories.values
+            .filter { month.overallEffective.isPositive && it.isOver }
+            .minByOrNull { it.left }
         return WidgetState.Month(
-            month = summary.month,
+            month = month.month,
             currency = currency,
-            spent = summary.totalSpent,
-            budget = summary.overallEffective,
+            spent = month.totalSpent,
+            budget = month.overallEffective,
             status = pace.status,
             daysLeft = pace.daysRemaining,
-            topOver = worst?.let { TopOver(names[it.categoryId] ?: "?", -it.remaining) },
-            surplus = balances.values.sumMoney(),
-            daily = PaceCalculator.dailyAllowance(summary, today, spentToday),
+            topOver = worst?.let { TopOver(names[it.categoryId] ?: "?", -it.left) },
+            surplus = SurplusLedger.saved(balances),
+            daily = PaceCalculator.dailyAllowance(month, today, spentToday),
+            debt = SurplusLedger.owed(balances),
+            carried = month.debt,
         )
     }
 }

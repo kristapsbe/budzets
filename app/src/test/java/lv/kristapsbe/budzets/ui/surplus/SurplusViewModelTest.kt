@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.BudgetScope
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
+import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.ok
 import lv.kristapsbe.budzets.domain.surplus.PocketBreakdown
@@ -46,8 +47,10 @@ class SurplusViewModelTest : ViewModelTest() {
 
         val vm = surplusVm()
         val state = vm.awaitReady { it.boosts.isNotEmpty() }
-        // Closing: 100 - 30 + 500 = 570. The move nets to zero; 25 is reserved for the boost.
-        assertEquals(eur(545), state.total)
+        // Closing: Food 100, Fun −30, Unallocated 500. The move nets to zero; 25 is reserved for
+        // the boost. What Fun owes is kept apart, not taken off what the others have saved.
+        assertEquals(eur(575), state.saved)
+        assertEquals(eur(30), state.debt)
         assertEquals(listOf(foodPocket, funPocket, SurplusPocket.Unallocated), state.pockets.map { it.label.pocket })
         assertEquals(PocketBreakdown(eur(100), eur(50), eur(-25)), state.pockets[0].breakdown)
         assertEquals(eur(-30), state.pockets[1].breakdown.available)
@@ -119,7 +122,8 @@ class SurplusViewModelTest : ViewModelTest() {
         val state = vm.awaitReady { it.pockets.isNotEmpty() }
         assertEquals(listOf(SurplusPocket.Category(food.id), SurplusPocket.Unallocated), state.pockets.map { it.label.pocket })
         assertEquals(eur(50), state.pockets.last().breakdown.available)
-        assertEquals(eur(150), state.total)
+        assertEquals(eur(150), state.saved)
+        assertEquals(Money.ZERO, state.debt)
         val entry = state.history.single { it.pocket.pocket == clothesPocket }
         assertTrue(entry.pocket.isDeleted)
 
@@ -141,7 +145,7 @@ class SurplusViewModelTest : ViewModelTest() {
         assertEquals(listOf(ym("2026-03"), ym("2026-04")), state.oneOffs.map { it.month })
         assertEquals(OneOffRow(gift.id, ym("2026-04"), eur(200), "Gift"), state.oneOffs.last())
         assertEquals(eur(230), state.pockets.single().breakdown.oneOff)
-        assertEquals(eur(230), state.total)
+        assertEquals(eur(230), state.saved)
         assertTrue(state.hasAvailable)
 
         vm.removeOneOff(gift.id)

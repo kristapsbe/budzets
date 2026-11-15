@@ -486,7 +486,8 @@ private fun CategoryRowItem(
             },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    plan?.let { Text(money.format(it.amount), style = MaterialTheme.typography.bodyLarge) }
+                    // With no amount set the category counts as zero (Q44), so that's what it shows.
+                    Text(money.format(plan?.amount ?: Money.ZERO), style = MaterialTheme.typography.bodyLarge)
                     if (menu.isNotEmpty()) OverflowMenu(row.name, menu)
                 }
             },

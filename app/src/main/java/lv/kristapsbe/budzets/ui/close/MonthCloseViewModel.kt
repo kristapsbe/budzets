@@ -53,15 +53,41 @@ enum class MonthStatus {
  * @property summary the category's budget and spending; null for the unallocated pocket.
  * @property effect the month's total effect on the pocket once closed (credit > 0, debit < 0).
  * @property pending what closing now would post; differs from [effect] only when re-closing.
+ * @property balanceBefore the pocket's balance now, for a month that isn't closed, so the line can
+ *   say what closing does to its debt (Q43). null once the month is closed, when the balance
+ *   already holds this month's effect, and for a deleted category, whose money counts elsewhere.
  */
 data class CloseLine(
     val label: PocketLabel,
     val summary: CategorySummary?,
     val effect: Money,
     val pending: Money,
+    val balanceBefore: Money? = null,
 ) {
-    /** Spending in a category with no budget (and no boost) can only become a debit. */
-    val isUnbudgetedSpending: Boolean get() = summary != null && summary.base == null && !summary.boost.isPositive && summary.spent.isPositive
+    /** What closing does to the pocket's debt, if anything. */
+    val debtChange: DebtChange?
+        get() {
+            val before = balanceBefore ?: return null
+            val after = before + effect
+            return when {
+                before.isNegative && effect.isPositive ->
+                    if (after.isNegative) DebtChange.PaysOffPart(paid = effect, stillOwed = -after) else DebtChange.PaysOff(-before)
+                after.isNegative && effect.isNegative -> DebtChange.Leaves(-after)
+                else -> null
+            }
+        }
+}
+
+/** Amounts are positive. */
+sealed interface DebtChange {
+    /** The month's unspent budget clears the whole debt. */
+    data class PaysOff(val debt: Money) : DebtChange
+
+    /** It clears some of it. */
+    data class PaysOffPart(val paid: Money, val stillOwed: Money) : DebtChange
+
+    /** The month's overspending leaves the pocket this far in debt. */
+    data class Leaves(val debt: Money) : DebtChange
 }
 
 sealed interface MonthCloseUiState {
@@ -112,32 +138,43 @@ class MonthCloseViewModel(
     val event: StateFlow<CloseEvent?> = _event.asStateFlow()
 
     val uiState: StateFlow<MonthCloseUiState> =
-        combine(surplus.observeCloseState(month), categories.categories, settings.currency, working) { state, all, currency, busy ->
-            ready(state, all, currency, busy) as MonthCloseUiState
+        combine(surplus.observeCloseState(month), categories.categories, settings.currency, working, surplus.balances) { state, all, currency, busy, balances ->
+            ready(state, all, currency, busy, balances) as MonthCloseUiState
         }
             .catch { emit(MonthCloseUiState.Error(it.message)) }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MonthCloseUiState.Loading)
 
-    private fun ready(state: MonthCloseState, all: List<Category>, currency: CurrencySpec, busy: Boolean): MonthCloseUiState.Ready {
+    private fun ready(
+        state: MonthCloseState,
+        all: List<Category>,
+        currency: CurrencySpec,
+        busy: Boolean,
+        balances: Map<SurplusPocket, Money>,
+    ): MonthCloseUiState.Ready {
         val review = state.review
         val byId = all.associateBy { it.id }
         val pending = review.pending
         val isClosed = state.latest?.isClosed == true
+        val current = YearMonth.now(clock)
+        // Only a month that can be closed now has a "before": a closed one is already in the
+        // balances, and a future one can't be closed.
+        val closesNow = !isClosed && month <= current
         val pockets = (review.summary.categories.keys.map { SurplusPocket.Category(it) } + review.target.keys + review.recorded.keys)
             .distinct()
             .sortedWith(pocketOrder(all))
         val lines = pockets.map { pocket ->
+            val label = pocket.label(byId)
             CloseLine(
                 // A closed month reads as it was closed, whatever has happened to its categories since.
-                label = pocket.label(byId).let { if (isClosed) it.copy(isArchived = false, isDeleted = false) else it },
+                label = if (isClosed) label.copy(isArchived = false, isDeleted = false) else label,
                 summary = (pocket as? SurplusPocket.Category)?.let { review.summary.categories[it.id] },
                 effect = review.target[pocket] ?: Money.ZERO,
                 pending = pending[pocket] ?: Money.ZERO,
+                balanceBefore = if (closesNow && !label.isDeleted) balances[pocket] ?: Money.ZERO else null,
             )
         }
         val latest = state.latest
-        val current = YearMonth.now(clock)
         return MonthCloseUiState.Ready(
             month = month,
             currency = currency,

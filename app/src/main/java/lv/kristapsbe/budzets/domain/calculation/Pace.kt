@@ -7,8 +7,8 @@ import java.time.YearMonth
 enum class PaceStatus { NO_BUDGET, ON_TRACK, WATCH, OVER }
 
 /**
- * @property expectedSpend pace guide: the effective budget × the fraction of days elapsed. It is a
- *   guide, not a daily allowance. null when there is no budget.
+ * @property expectedSpend pace guide: what the month can spend × the fraction of days elapsed. It
+ *   is a guide, not a daily allowance. null when there is no budget.
  */
 data class Pace(
     val daysInMonth: Int,
@@ -42,21 +42,26 @@ object PaceCalculator {
         }
     }
 
+    /**
+     * Measured against what the month can spend, which is the budget less any debt carried into it
+     * (Q43). Whether there is a budget at all is asked of the budget itself, so debt as large as
+     * the budget reads as "over", not as "no budget".
+     */
     fun pace(summary: MonthSummary, today: LocalDate): Pace {
         val days = summary.month.lengthOfMonth()
         val elapsed = daysElapsed(summary.month, today)
-        val effective = summary.overallEffective
-        if (!effective.isPositive) {
+        if (!summary.overallEffective.isPositive) {
             return Pace(days, elapsed, days - elapsed, null, PaceStatus.NO_BUDGET)
         }
-        // Rounded half-up: (2·E·elapsed + N) / 2N
-        val expected = Money(
-            Math.addExact(Math.multiplyExact(Math.multiplyExact(effective.minor, elapsed.toLong()), 2), days.toLong()) /
+        val available = summary.overallAvailable
+        // Rounded half-up: (2·A·elapsed + N) / 2N. Nothing is expected to be spent once debt has taken it all.
+        val expected = if (!available.isPositive) Money.ZERO else Money(
+            Math.addExact(Math.multiplyExact(Math.multiplyExact(available.minor, elapsed.toLong()), 2), days.toLong()) /
                 (2L * days)
         )
         val spent = summary.totalSpent
         val status = when {
-            summary.overallRemaining.isNegative -> PaceStatus.OVER
+            summary.overallLeft.isNegative -> PaceStatus.OVER
             Math.multiplyExact(spent.minor, 100) > Math.multiplyExact(expected.minor, WATCH_THRESHOLD_PERCENT) -> PaceStatus.WATCH
             else -> PaceStatus.ON_TRACK
         }
@@ -70,13 +75,12 @@ object PaceCalculator {
      * expense counts as already spent.
      *
      * null outside the month containing [today], with no budget, or when nothing was left at the
-     * start of today.
+     * start of today. Debt carried into the month has come out before anything is divided (Q43).
      */
     fun dailyAllowance(summary: MonthSummary, today: LocalDate, spentToday: Money): DailyAllowance? {
         if (summary.month != YearMonth.from(today)) return null
-        val effective = summary.overallEffective
-        if (!effective.isPositive) return null
-        val leftAtStart = effective - (summary.totalSpent - spentToday)
+        if (!summary.overallEffective.isPositive) return null
+        val leftAtStart = summary.overallAvailable - (summary.totalSpent - spentToday)
         if (!leftAtStart.isPositive) return null
         val days = summary.month.lengthOfMonth() - today.dayOfMonth + 1
         return DailyAllowance(Money(leftAtStart.minor / days), spentToday)

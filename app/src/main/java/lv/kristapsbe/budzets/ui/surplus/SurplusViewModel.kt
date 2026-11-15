@@ -80,7 +80,10 @@ sealed interface SurplusUiState {
     data class Error(val message: String?) : SurplusUiState
     data class Ready(
         val currency: CurrencySpec,
-        val total: Money,
+        /** The pockets above zero, added up. */
+        val saved: Money,
+        /** What the pockets below zero owe in all (Q43). Kept apart from [saved], not netted. */
+        val debt: Money = Money.ZERO,
         val pockets: List<PocketRow>,
         val boosts: List<BoostRow>,
         val oneOffs: List<OneOffRow> = emptyList(),
@@ -123,9 +126,11 @@ class SurplusViewModel(
                 val deleted = all.filter { it.isDeleted }.map { it.id }.toSet()
                 val breakdown = SurplusLedger.breakdown(SurplusLedger.merged(ledger, deleted))
                 val filter = key?.let(::pocketFromKey)?.let { SurplusLedger.effectivePocket(it, deleted) }
+                val balances = breakdown.mapValues { (_, b) -> b.available }
                 SurplusUiState.Ready(
                     currency = currency,
-                    total = breakdown.values.fold(Money.ZERO) { acc, b -> acc + b.available },
+                    saved = SurplusLedger.saved(balances),
+                    debt = SurplusLedger.owed(balances),
                     pockets = breakdown.keys.sortedWith(order).map { PocketRow(it.label(byId), breakdown.getValue(it)) },
                     boosts = boosts.filter { it.status == BoostStatus.ACTIVE }.sortedBy { it.targetMonth }.map { b ->
                         BoostRow(b.id, b.targetMonth, SurplusPocket.Category(b.destination).label(byId), b.source.label(byId), b.amount, b.targetMonth !in closed)

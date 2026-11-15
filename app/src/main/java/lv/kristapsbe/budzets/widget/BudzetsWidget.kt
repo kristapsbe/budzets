@@ -109,7 +109,7 @@ internal val SMALL = DpSize(100.dp, 48.dp)
 /** 2×2 / 3×2: adds the month, the + button, the daily amount (or spent of budget without one) and status. */
 internal val MEDIUM = DpSize(160.dp, 110.dp)
 
-/** 4×2 and up: adds spent of budget beside the daily amount, the most over-budget category and saved surplus. */
+/** 4×2 and up: adds spent of budget beside the daily amount, the most over-budget category and saved surplus (or debt). */
 internal val LARGE = DpSize(250.dp, 150.dp)
 
 /** Asks [MainActivity] for Add expense (Q17). The widget goes through [QuickAddActivity] (Q18). */
@@ -185,7 +185,7 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
     LinearProgressIndicator(
         progress = state.progress,
         modifier = GlanceModifier.fillMaxWidth().semantics {
-            contentDescription = context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.budget))
+            contentDescription = context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.available))
         },
         color = if (state.isOver) GlanceTheme.colors.error else GlanceTheme.colors.primary,
         backgroundColor = GlanceTheme.colors.surfaceVariant,
@@ -195,7 +195,7 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
     Spacer(GlanceModifier.height(6.dp))
     // Medium shows the daily amount instead of "spent of" (Q34); the bar's description still reads it.
     if (state.hasBudget && (large || state.daily == null)) {
-        Text(context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.budget)), style = bodyStyle(), maxLines = 2)
+        Text(context.getString(R.string.spent_of_budget, money.format(state.spent), money.format(state.available)), style = bodyStyle(), maxLines = 2)
     }
     state.daily?.let { DailyLines(it, money, context, oneLine = large) }
     StatusLine(state, context, textWidth - STATUS_ICON - STATUS_GAP)
@@ -208,7 +208,13 @@ private fun MonthContent(state: WidgetState.Month, context: Context, size: DpSiz
             maxLines = 1,
         )
     }
-    Text(context.getString(R.string.widget_saved_surplus, money.format(state.surplus)), style = bodyStyle(), maxLines = 1)
+    // One line for both would be cut off, so debt takes it while anything is owed (Q43): it's the
+    // figure that needs acting on, and the one the amounts above have had taken out.
+    if (state.debt.isPositive) {
+        Text(context.getString(R.string.widget_debt, money.format(state.debt)), style = bodyStyle(GlanceTheme.colors.error), maxLines = 1)
+    } else {
+        Text(context.getString(R.string.widget_saved_surplus, money.format(state.surplus)), style = bodyStyle(), maxLines = 1)
+    }
 }
 
 /**

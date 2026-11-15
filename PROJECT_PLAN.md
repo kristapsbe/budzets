@@ -123,7 +123,10 @@ Keep the assumptions easy to change.
     category's overspend is recorded as a debit against that category's
     own surplus balance, which may go negative and is repaid by later
     surplus or transfers in. A negative balance cannot fund transfers or
-    bumps.
+    bumps. (2026-11-15: a negative balance is shown as debt, apart from
+    saved surplus, and comes out of the current month's figures until it
+    is repaid. A category with no amount set counts as zero. See the
+    notes, Q43--Q44.)
 -   **Month finalization:** do not automatically lock a month merely
     because the date changes. Provide an explicit "Close month /
     finalize surplus" action, and explain that it snapshots the unused

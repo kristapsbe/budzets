@@ -41,6 +41,11 @@
     <string name="categories_exceed_overall">Category budgets add up to %1$s, more than the overall budget of %2$s.</string>
     <string name="saved_surplus">Saved surplus</string>
     <string name="saved_surplus_hint">Unspent budget from closed months, plus one-off boosts. Not a bank balance.</string>
+    <string name="debt">Debt</string>
+    <string name="debt_hint">Overspending that saved surplus didn’t cover. It comes out of this month’s budget until it’s paid off. Spend less in that category, or pay it off from saved surplus.</string>
+    <string name="debt_to_repay">Debt to repay</string>
+    <!-- A balance below zero, e.g. "−€40.00 debt". -->
+    <string name="amount_debt">−%1$s debt</string>
     <string name="overview_one_off">One-off boost this month: +%1$s, added to Unallocated surplus.</string>
 
     <!-- Overview: categories -->
@@ -119,7 +124,7 @@
     <string name="budget_per_month">%1$s/month</string>
     <string name="budget_since">Since %1$s</string>
     <string name="budget_changes_in">Changes in %1$s</string>
-    <string name="no_budget">No budget</string>
+    <string name="no_budget">No amount set</string>
     <string name="category_budgets_of_overall">Category budgets: %1$s of %2$s</string>
     <string name="budget_unallocated">%1$s isn’t assigned to a category. It becomes unallocated surplus when the month closes.</string>
     <string name="budgets_month_closed">%1$s is closed, so its budgets stay as they were. Changes start from the next open month. To change this month, reopen it.</string>
@@ -167,27 +172,30 @@
     <string name="monthly_plan_for">Plan for %1$s: %2$s</string>
     <string name="highest_rule">The highest one is used. They’re alternative ways to state one limit, so they aren’t added together.</string>
     <string name="sets_the_plan">Sets the plan</string>
-    <string name="no_budget_from">No budget from %1$s.</string>
+    <string name="no_budget_from">No amount from %1$s, so it counts as zero.</string>
     <string name="no_overall_budget_from">No overall budget from %1$s. The overall plan becomes the sum of category budgets.</string>
     <string name="preview_fix_errors">Fix the highlighted amount to see the plan.</string>
     <string name="categories_would_exceed_overall">Category budgets would add up to %1$s, more than the overall budget of %2$s.</string>
 
     <!-- Month close -->
     <string name="close_month_title">Close %1$s</string>
-    <string name="close_explanation">Closing saves each category’s unspent budget as surplus in that category. Overspending is recorded as a debit against the category’s surplus, which later surplus or a transfer repays. That includes all spending in categories without a budget.</string>
+    <string name="close_explanation">Closing saves each category’s unspent budget as surplus in that category. Overspending comes out of that surplus, and what the surplus can’t cover becomes debt, which comes out of your budget until it’s paid off. A category with no amount set counts as zero, so all its spending is overspending.</string>
     <string name="close_early_note">%1$s isn’t over yet. You can close it now; expenses added later are recorded by closing it again.</string>
-    <string name="close_no_budget_warning">This month has no budget, so closing it records all its spending as debits.</string>
+    <string name="close_no_budget_warning">This month has no budget, so closing it counts all its spending as overspending.</string>
     <string name="month_was_reopened">This month was reopened. Closing it records its surplus again.</string>
     <string name="month_closed_on">Closed on %1$s. Its surplus is recorded below.</string>
     <string name="month_changed_review">Expenses changed since this month was closed. Closing it again records only the differences shown.</string>
     <string name="close_line_budget">Budget %1$s · spent %2$s</string>
     <string name="close_line_budget_boost">Budget %1$s + %2$s boost · spent %3$s</string>
-    <string name="close_line_no_budget">No budget, so its %1$s spending is recorded as a debit</string>
     <string name="close_line_unallocated">Overall budget not assigned to any category</string>
     <string name="close_line_deleted">This category was deleted, so this counts under Unallocated</string>
     <string name="close_line_total_after">Total for this month after closing: %1$s</string>
+    <string name="close_line_pays_off">Pays off its %1$s debt</string>
+    <string name="close_line_pays_off_part">Pays off %1$s of its debt; %2$s is still owed</string>
+    <string name="close_line_leaves_debt">Leaves it %1$s in debt</string>
     <string name="amount_saved">+%1$s saved</string>
-    <string name="amount_debit">−%1$s debit</string>
+    <!-- What a month took from a pocket. It is debt only if the pocket ends up below zero. -->
+    <string name="amount_overspent">−%1$s overspent</string>
     <string name="close_net">Net surplus from this month</string>
     <string name="close_net_change">Net change</string>
     <string name="surplus_not_bank_balance">Surplus is a budgeting figure, not a bank balance.</string>
@@ -223,7 +231,8 @@
     <string name="breakdown_moved">Moved %1$s</string>
     <string name="breakdown_boosts">Boosts %1$s</string>
     <string name="breakdown_one_off">One-off boosts %1$s</string>
-    <string name="pocket_negative_hint">Overspent. Later surplus or a transfer in repays it.</string>
+    <string name="pocket_negative_hint">Overspent. It comes out of this month’s budget until it’s paid off.</string>
+    <string name="pay_off">Pay off</string>
     <string name="active_boosts">Active boosts</string>
     <string name="boost_row">+%1$s for %2$s, %3$s</string>
     <string name="boost_from">From %1$s</string>
@@ -248,9 +257,11 @@
 
     <!-- Move surplus / boost -->
     <string name="move">Move</string>
-    <string name="move_explanation">Move all or part of a category’s saved surplus to another category. Moving doesn’t change any month’s budget or spending.</string>
+    <string name="move_explanation">Move all or part of a category’s saved surplus to another category. Moving it into a category in debt pays that debt off.</string>
     <string name="move_from">From</string>
     <string name="move_to">To</string>
+    <!-- %1$s is a category, %2$s an amount: "Eating out owes €40.00." -->
+    <string name="move_to_owes">%1$s owes %2$s.</string>
     <string name="pocket_with_balance" translatable="false">%1$s · %2$s</string>
     <string name="use_all">All (%1$s)</string>
     <string name="error_more_than_available">Only %1$s is available</string>
@@ -273,6 +284,7 @@
     <string name="widget_not_set_up">Open Budzets to set up categories and a budget.</string>
     <string name="widget_top_over">%1$s over by %2$s</string>
     <string name="widget_saved_surplus">Saved surplus %1$s</string>
+    <string name="widget_debt">Debt %1$s</string>
 
     <!-- Overview: backup reminder -->
     <string name="reminder_backup_never">No backup yet. Save one to Google Drive or this phone, in case the phone is lost.</string>
@@ -343,7 +355,7 @@
         <item quantity="other">%d decimals</item>
     </plurals>
     <string name="settings_how_budgets_work">How budgets work</string>
-    <string name="how_budgets_work_text">Set a daily, weekly or monthly target. Daily and weekly targets are turned into a monthly amount for each month’s length; if you set more than one, the highest monthly amount is used. When you close a month, unspent budget becomes surplus.</string>
+    <string name="how_budgets_work_text">Set a daily, weekly or monthly target. Daily and weekly targets are turned into a monthly amount for each month’s length; if you set more than one, the highest monthly amount is used. When you close a month, unspent budget becomes surplus. Overspending the surplus can’t cover becomes debt, which comes out of your budget until it’s paid off.</string>
     <string name="settings_privacy">Privacy</string>
     <string name="privacy_text">Your data stays on this phone. Budzets has no account and no server, and Android’s own backup leaves it out. The only copies are the backup files you save yourself.</string>
     <string name="settings_about">About</string>

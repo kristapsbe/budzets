@@ -131,7 +131,7 @@ class SurplusFlowTest {
         // Through the accessibility action, not a tap: scrolled into view, the button can sit
         // under the floating Add expense button, which would take the tap.
         compose.onNodeWithText("Review & close").performSemanticsAction(SemanticsActions.OnClick)
-        waitForText("−€5.00 debit")
+        waitForText("−€5.00 overspent")
         scrollTo("Close again")
         compose.onNodeWithText("Close again").performClick()
         waitAndScrollTo("Month closed. Surplus has been recorded.")

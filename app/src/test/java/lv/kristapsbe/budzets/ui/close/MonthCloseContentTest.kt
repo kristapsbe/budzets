@@ -39,10 +39,17 @@ class MonthCloseContentTest {
     private val food = CategoryId("food")
     private val fun_ = CategoryId("fun")
 
-    private fun lines(pendingFood: Money = Money.ZERO) = listOf(
-        CloseLine(PocketLabel(SurplusPocket.Category(food), "Food", false), CategorySummary(food, eur(500), eur(50), eur(450)), eur(100), pendingFood),
-        CloseLine(PocketLabel(SurplusPocket.Category(fun_), "Fun", false), CategorySummary(fun_, null, Money.ZERO, eur(30)), eur(-30), Money.ZERO),
-        CloseLine(PocketLabel(SurplusPocket.Unallocated, null, false), null, eur(500), Money.ZERO),
+    /** While [open], Food owes €40 and the other pockets are empty; a closed month has no "before". */
+    private fun lines(pendingFood: Money = Money.ZERO, open: Boolean = false) = listOf(
+        CloseLine(
+            PocketLabel(SurplusPocket.Category(food), "Food", false), CategorySummary(food, eur(500), eur(50), eur(450)), eur(100), pendingFood,
+            balanceBefore = eur(-40).takeIf { open },
+        ),
+        CloseLine(
+            PocketLabel(SurplusPocket.Category(fun_), "Fun", false), CategorySummary(fun_, null, Money.ZERO, eur(30)), eur(-30), Money.ZERO,
+            balanceBefore = Money.ZERO.takeIf { open },
+        ),
+        CloseLine(PocketLabel(SurplusPocket.Unallocated, null, false), null, eur(500), Money.ZERO, balanceBefore = Money.ZERO.takeIf { open }),
     )
 
     private fun ready(status: MonthStatus, current: Boolean = false, pendingFood: Money = Money.ZERO) = MonthCloseUiState.Ready(
@@ -55,7 +62,7 @@ class MonthCloseContentTest {
         revision = if (status == MonthStatus.OPEN) null else 1,
         wasReopened = false,
         hasBudget = true,
-        lines = lines(pendingFood),
+        lines = lines(pendingFood, open = status == MonthStatus.OPEN),
         netEffect = eur(570),
         pendingNet = pendingFood,
         isWorking = false,
@@ -66,14 +73,16 @@ class MonthCloseContentTest {
     }
 
     @Test
-    fun `open month explains each line, including that unbudgeted spending becomes a debit`() {
+    fun `open month explains each line, a category with no amount like any other, and what happens to debt`() {
         var closed = 0
         show(ready(MonthStatus.OPEN), MonthCloseActions(onCloseMonth = { closed++ }))
         compose.onNodeWithText("Close March 2026").assertIsDisplayed() // title
         compose.onNodeWithText("Budget €500.00 + €50.00 boost · spent €450.00").assertIsDisplayed()
         compose.onNodeWithText("+€100.00 saved").assertIsDisplayed()
-        compose.onNodeWithText("No budget, so its €30.00 spending is recorded as a debit").assertIsDisplayed()
-        compose.onNodeWithText("−€30.00 debit").assertIsDisplayed()
+        compose.onNodeWithText("Pays off its €40.00 debt").assertIsDisplayed()
+        compose.onNodeWithText("Budget €0.00 · spent €30.00").assertIsDisplayed()
+        compose.onNodeWithText("−€30.00 overspent").assertIsDisplayed()
+        compose.onNodeWithText("Leaves it €30.00 in debt").assertIsDisplayed()
 
         val list = compose.onNode(hasScrollToIndexAction())
         list.performScrollToNode(hasText("Unallocated"))
@@ -90,7 +99,8 @@ class MonthCloseContentTest {
         show(ready(MonthStatus.CHANGED, pendingFood = eur(-20)), MonthCloseActions(onCloseMonth = { closed++ }))
         compose.onNodeWithText("Expenses changed since this month was closed. Closing it again records only the differences shown.")
             .assertIsDisplayed()
-        compose.onAllNodesWithText("−€20.00 debit")[0].assertIsDisplayed() // the line; the net change says the same
+        compose.onAllNodesWithText("−€20.00 overspent")[0].assertIsDisplayed() // the line; the net change says the same
+        compose.onNodeWithText("debt", substring = true).assertDoesNotExist() // nothing to say about debt once closed
         compose.onNodeWithText("Total for this month after closing: €100.00").assertIsDisplayed()
         val list = compose.onNode(hasScrollToIndexAction())
         list.performScrollToNode(hasText("Net change"))
@@ -110,6 +120,16 @@ class MonthCloseContentTest {
         assertEquals(0, reopened)
         compose.onNode(hasText("Reopen month") and hasAnyAncestor(isDialog())).performClick()
         assertEquals(1, reopened)
+    }
+
+    @Test
+    fun `a close that pays off only part of a debt says what is still owed`() {
+        val part = CloseLine(
+            PocketLabel(SurplusPocket.Category(food), "Food", false), CategorySummary(food, eur(500), Money.ZERO, eur(475)), eur(25), Money.ZERO,
+            balanceBefore = eur(-40),
+        )
+        show(ready(MonthStatus.OPEN).copy(lines = listOf(part)))
+        compose.onNodeWithText("Pays off €25.00 of its debt; €15.00 is still owed").assertIsDisplayed()
     }
 
     @Test

@@ -24,6 +24,7 @@ import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.surplus.SurplusError
+import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import lv.kristapsbe.budzets.util.amountInputChars
 import lv.kristapsbe.budzets.util.formatForInput
 import java.text.DecimalFormatSymbols
@@ -48,7 +49,7 @@ sealed interface MoveSurplusState {
         val form: MoveForm,
         /** Pockets with surplus to move (positive balance). */
         val sources: List<PocketChoice>,
-        /** Active categories and the unallocated pocket, except the source. */
+        /** Active categories, the unallocated pocket and any pocket in debt, except the source. */
         val destinations: List<PocketChoice>,
         val amountError: AmountError?,
         /** Set when the amount is more than the source has: its balance. */
@@ -59,13 +60,17 @@ sealed interface MoveSurplusState {
         val failed: Boolean = false,
     ) : MoveSurplusState {
         val available: Money? get() = sources.firstOrNull { it.label.pocket == form.from }?.balance
+
+        /** The chosen destination when it is in debt, so the form can say what it owes (Q43). */
+        val payingOff: PocketChoice? get() = destinations.firstOrNull { it.label.pocket == form.to }?.takeIf { it.balance.isNegative }
     }
 }
 
 /**
  * Moves all or part of one pocket's surplus to another (spec §6.6). The ledger records both legs
  * in one transaction. Compose state for the text fields, mirrored into [SavedStateHandle], as in
- * the other editors. Route argument: `from` (a pocket key) to preselect the source.
+ * the other editors. Route arguments, both pocket keys: `from` preselects the source; `to` pays
+ * off a pocket in debt, preselecting it and filling in what it owes (Q43).
  */
 class MoveSurplusViewModel(
     private val savedState: SavedStateHandle,
@@ -104,8 +109,12 @@ class MoveSurplusViewModel(
             val sources = ref.balances.filterValues { it.isPositive }.keys.sortedWith(order)
                 .map { PocketChoice(it.label(byId), ref.balances.getValue(it)) }
             val month = YearMonth.now(clock)
-            val destinations = (ref.categories.filter { !it.isDeleted && it.toRef().isActiveIn(month) }.map { SurplusPocket.Category(it.id) } + SurplusPocket.Unallocated)
+            // A pocket in debt can always be paid off, an archived category's included.
+            val active = ref.categories.filter { !it.isDeleted && it.toRef().isActiveIn(month) }.map { SurplusPocket.Category(it.id) }
+            val destinations = (active + SurplusPocket.Unallocated + SurplusLedger.debts(ref.balances).keys)
+                .distinct()
                 .filter { it != form.from }
+                .sortedWith(order)
                 .map { PocketChoice(it.label(byId), ref.balances[it] ?: Money.ZERO) }
             val parsed = AmountParser.parse(form.amountText, ref.currency)
             val amount = (parsed as? Outcome.Ok)?.value
@@ -134,7 +143,18 @@ class MoveSurplusViewModel(
                     val positive = ref.balances.filterValues { it.isPositive }.keys
                     val from = savedState.get<String>(ARG_FROM)?.let(::pocketFromKey)?.takeIf { it in positive }
                         ?: positive.singleOrNull()
-                    updateForm(form.copy(from = from))
+                    // Paying off: the pocket passed in, if it still owes, and what it owes, or as
+                    // much of that as the source has.
+                    val debts = SurplusLedger.debts(ref.balances)
+                    val to = savedState.get<String>(ARG_TO)?.let(::pocketFromKey)?.takeIf { it in debts }
+                    val amount = to?.let { debts.getValue(it) }?.let { owed -> from?.let { minOf(owed, ref.balances.getValue(it)) } ?: owed }
+                    updateForm(
+                        form.copy(
+                            from = from,
+                            to = to ?: form.to,
+                            amountText = amount?.let { formatForInput(it, ref.currency, decimalSeparator) } ?: form.amountText,
+                        ),
+                    )
                     initialized = true
                     savedState[KEY_INITIALIZED] = true
                 }
@@ -183,8 +203,9 @@ class MoveSurplusViewModel(
     }
 
     companion object {
-        /** Matches [lv.kristapsbe.budzets.ui.navigation.MoveSurplusRoute]'s property. */
+        /** These two match [lv.kristapsbe.budzets.ui.navigation.MoveSurplusRoute]'s properties. */
         const val ARG_FROM = "from"
+        const val ARG_TO = "to"
         private const val KEY_FROM = "form_from"
         private const val KEY_TO = "form_to"
         private const val KEY_AMOUNT = "form_amount"

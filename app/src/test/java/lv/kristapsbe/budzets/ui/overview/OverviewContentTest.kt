@@ -56,6 +56,7 @@ class OverviewContentTest {
         closeStatus: CloseStatus = CloseStatus.OPEN,
         backupReminder: BackupReminder? = null,
         daily: DailyAllowance? = null,
+        debt: Money = Money.ZERO,
     ) = OverviewUiState.Ready(
         month = april,
         isCurrentMonth = true,
@@ -64,10 +65,11 @@ class OverviewContentTest {
         pace = PaceCalculator.pace(summary, LocalDate.of(2026, 4, 15)),
         rows = rows,
         closeStatus = closeStatus,
-        totalSurplus = eur(42),
+        savedSurplus = eur(42),
         hasCategories = hasCategories,
         backupReminder = backupReminder,
         daily = daily,
+        debt = debt,
     )
 
     private fun show(state: OverviewUiState, actions: OverviewActions = OverviewActions()) {
@@ -117,6 +119,63 @@ class OverviewContentTest {
         compose.onNodeWithText("+€50.00 boost").assertIsDisplayed()
         list.performScrollToNode(hasText("€60.00 left"))
         compose.onNodeWithText("€60.00 left").assertIsDisplayed()
+    }
+
+    @Test
+    fun `debt comes out of the month's figures, and is named on the card, the row and the surplus card`() {
+        val foodSummary = CategorySummary(food, eur(300), Money.ZERO, eur(100))
+        val funSummary = CategorySummary(fun_, eur(100), Money.ZERO, eur(40), debt = eur(40))
+        val summary = MonthSummary(april, eur(600), false, mapOf(food to foodSummary, fun_ to funSummary))
+        show(ready(summary, listOf(CategoryRow(food, "Food", false, foodSummary), CategoryRow(fun_, "Fun", false, funSummary)), debt = eur(40)))
+
+        compose.onNodeWithText("€420.00 left").assertIsDisplayed() // 600 − 40 − 140
+        compose.onNodeWithText("€140.00 of €560.00 spent").assertIsDisplayed()
+        compose.onNodeWithText("Debt to repay").assertIsDisplayed()
+        compose.onNodeWithText("−€40.00").assertIsDisplayed()
+
+        val list = compose.onNode(verticalList)
+        list.performScrollToNode(hasText("Debt"))
+        compose.onNodeWithText("€40.00").assertIsDisplayed() // on the surplus card, beside what's saved
+        compose.onNodeWithText("€42.00").assertIsDisplayed()
+        list.performScrollToNode(hasText("−€40.00 debt"))
+        compose.onNodeWithText("€20.00 left").assertIsDisplayed() // 100 − 40 − 40
+        compose.onNodeWithText("€40.00 of €60.00").assertIsDisplayed()
+    }
+
+    @Test
+    fun `debt larger than a category's budget reads as over, against zero`() {
+        val funSummary = CategorySummary(fun_, eur(100), Money.ZERO, Money.ZERO, debt = eur(130))
+        val summary = MonthSummary(april, eur(600), false, mapOf(fun_ to funSummary))
+        show(ready(summary, listOf(CategoryRow(fun_, "Fun", false, funSummary)), debt = eur(130)))
+        val list = compose.onNode(verticalList)
+        list.performScrollToNode(hasText("Over by €30.00"))
+        list.performScrollToNode(hasText("€0.00 of €0.00"))
+        list.performScrollToNode(hasText("−€130.00 debt"))
+    }
+
+    @Test
+    fun `in a month with a budget, a category with no amount set counts as zero`() {
+        val foodSummary = CategorySummary(food, eur(300), Money.ZERO, eur(100))
+        val funSummary = CategorySummary(fun_, null, Money.ZERO, eur(25))
+        val summary = MonthSummary(april, eur(600), false, mapOf(food to foodSummary, fun_ to funSummary))
+        show(ready(summary, listOf(CategoryRow(food, "Food", false, foodSummary), CategoryRow(fun_, "Fun", false, funSummary))))
+
+        val list = compose.onNode(verticalList)
+        list.performScrollToNode(hasText("Over by €25.00"))
+        list.performScrollToNode(hasText("€25.00 of €0.00"))
+        compose.onNodeWithText("No budget", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Debt").assertDoesNotExist() // nothing owed, so the surplus card has no debt row
+    }
+
+    @Test
+    fun `in a month with no budget at all, rows only report spending`() {
+        val funSummary = CategorySummary(fun_, null, Money.ZERO, eur(25))
+        val summary = MonthSummary(april, null, false, mapOf(fun_ to funSummary))
+        show(ready(summary, listOf(CategoryRow(fun_, "Fun", false, funSummary))))
+
+        val list = compose.onNode(verticalList)
+        list.performScrollToNode(hasText("No budget · €25.00 spent"))
+        compose.onNodeWithText("Over by", substring = true).assertDoesNotExist()
     }
 
     private val budgeted = CategorySummary(food, eur(600), Money.ZERO, eur(130))

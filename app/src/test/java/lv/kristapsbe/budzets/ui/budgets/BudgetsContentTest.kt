@@ -143,7 +143,8 @@ class BudgetsContentTest {
         compose.onNodeWithText("Move down").performClick()
         assertEquals(food to false, moved)
 
-        list.performScrollToNode(hasText("No budget"))
+        list.performScrollToNode(hasText("No amount set"))
+        compose.onNodeWithText("€0.00").assertIsDisplayed() // it counts as zero, and says so
         compose.onNodeWithContentDescription("Actions for Fun").performClick()
         compose.onNodeWithText("Archive").performClick()
         assertEquals(fun_, archived)

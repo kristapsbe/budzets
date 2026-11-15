@@ -47,6 +47,10 @@
     <string name="categories_exceed_overall">Kategoriju budžetu summa ir %1$s, kas pārsniedz kopējo budžetu %2$s.</string>
     <string name="saved_surplus">Uzkrātais pārpalikums</string>
     <string name="saved_surplus_hint">Neiztērētais budžets no noslēgtajiem mēnešiem un vienreizējie papildinājumi. Tas nav bankas konta atlikums.</string>
+    <string name="debt">Parāds</string>
+    <string name="debt_hint">Pārtēriņš, ko uzkrātais pārpalikums nesedza. Tas tiek atskaitīts no šī mēneša budžeta, līdz ir nomaksāts. Tērējiet šajā kategorijā mazāk vai nomaksājiet to no uzkrātā pārpalikuma.</string>
+    <string name="debt_to_repay">Nomaksājamais parāds</string>
+    <string name="amount_debt">−%1$s parāds</string>
     <string name="overview_one_off">Šī mēneša vienreizējais papildinājums: +%1$s, pievienots nesadalītajam pārpalikumam.</string>
 
     <!-- Overview: categories -->
@@ -127,7 +131,7 @@
     <string name="budget_per_month">%1$s mēnesī</string>
     <string name="budget_since">Kopš: %1$s</string>
     <string name="budget_changes_in">Mainīsies: %1$s</string>
-    <string name="no_budget">Bez budžeta</string>
+    <string name="no_budget">Summa nav iestatīta</string>
     <string name="category_budgets_of_overall">Kategoriju budžeti: %1$s no %2$s</string>
     <string name="budget_unallocated">Nav piešķirts nevienai kategorijai: %1$s. Noslēdzot mēnesi, šī summa kļūst par nesadalītu pārpalikumu.</string>
     <string name="budgets_month_closed">%1$s ir noslēgts, tāpēc tā budžeti paliek nemainīgi. Izmaiņas sāksies no nākamā atvērtā mēneša. Lai mainītu šo mēnesi, atveriet to no jauna.</string>
@@ -178,27 +182,29 @@
     <string name="monthly_plan_for">Plāns (%1$s): %2$s</string>
     <string name="highest_rule">Tiek izmantots augstākais. Tie ir dažādi viena limita izteikšanas veidi, tāpēc tie netiek saskaitīti.</string>
     <string name="sets_the_plan">Nosaka plānu</string>
-    <string name="no_budget_from">Bez budžeta no: %1$s.</string>
+    <string name="no_budget_from">Bez summas no: %1$s. Tā tiek uzskatīta par nulli.</string>
     <string name="no_overall_budget_from">Bez kopējā budžeta no: %1$s. Kopējais plāns būs kategoriju budžetu summa.</string>
     <string name="preview_fix_errors">Izlabojiet iezīmēto summu, lai redzētu plānu.</string>
     <string name="categories_would_exceed_overall">Kategoriju budžetu summa būtu %1$s, kas pārsniedz kopējo budžetu %2$s.</string>
 
     <!-- Month close -->
     <string name="close_month_title">Noslēgt: %1$s</string>
-    <string name="close_explanation">Noslēdzot mēnesi, katras kategorijas neiztērētais budžets tiek saglabāts kā šīs kategorijas pārpalikums. Pārtēriņš tiek reģistrēts kā parāds pret kategorijas pārpalikumu, ko vēlāk sedz nākamais pārpalikums vai pārvietojums. Tas attiecas arī uz visiem izdevumiem kategorijās bez budžeta.</string>
+    <string name="close_explanation">Noslēdzot mēnesi, katras kategorijas neiztērētais budžets tiek saglabāts kā šīs kategorijas pārpalikums. Pārtēriņš tiek segts no šī pārpalikuma, un tas, ko pārpalikums nesedz, kļūst par parādu, kas tiek atskaitīts no budžeta, līdz ir nomaksāts. Kategorija bez iestatītas summas tiek uzskatīta par nulli, tāpēc visi tās izdevumi ir pārtēriņš.</string>
     <string name="close_early_note">%1$s vēl nav beidzies. Mēnesi var noslēgt jau tagad; vēlāk pievienotie izdevumi tiks ieskaitīti, noslēdzot to vēlreiz.</string>
-    <string name="close_no_budget_warning">Šim mēnesim nav budžeta, tāpēc, to noslēdzot, visi tā izdevumi tiks reģistrēti kā parāds.</string>
+    <string name="close_no_budget_warning">Šim mēnesim nav budžeta, tāpēc, to noslēdzot, visi tā izdevumi tiks uzskatīti par pārtēriņu.</string>
     <string name="month_was_reopened">Šis mēnesis tika atvērts no jauna. Noslēdzot to, pārpalikums tiks reģistrēts vēlreiz.</string>
     <string name="month_closed_on">Noslēgts: %1$s. Pārpalikums ir reģistrēts zemāk.</string>
     <string name="month_changed_review">Izdevumi ir mainījušies pēc mēneša noslēgšanas. Noslēdzot vēlreiz, tiks reģistrētas tikai šeit parādītās atšķirības.</string>
     <string name="close_line_budget">Budžets %1$s · iztērēts %2$s</string>
     <string name="close_line_budget_boost">Budžets %1$s + %2$s papildinājums · iztērēts %3$s</string>
-    <string name="close_line_no_budget">Bez budžeta, tāpēc iztērētais %1$s tiek reģistrēts kā parāds</string>
     <string name="close_line_unallocated">Kopējais budžets, kas nav piešķirts nevienai kategorijai</string>
     <string name="close_line_deleted">Šī kategorija ir dzēsta, tāpēc summa tiek uzskaitīta sadaļā „Nesadalīts”</string>
     <string name="close_line_total_after">Šī mēneša kopsumma pēc noslēgšanas: %1$s</string>
+    <string name="close_line_pays_off">Nomaksā parādu: %1$s</string>
+    <string name="close_line_pays_off_part">Nomaksā %1$s no parāda; vēl paliek %2$s</string>
+    <string name="close_line_leaves_debt">Paliek parāds: %1$s</string>
     <string name="amount_saved">+%1$s saglabāts</string>
-    <string name="amount_debit">−%1$s parāds</string>
+    <string name="amount_overspent">−%1$s pārtērēts</string>
     <string name="close_net">Mēneša neto pārpalikums</string>
     <string name="close_net_change">Neto izmaiņas</string>
     <string name="surplus_not_bank_balance">Pārpalikums ir budžeta rādītājs, nevis bankas konta atlikums.</string>
@@ -235,7 +241,8 @@
     <string name="breakdown_moved">Pārvietots %1$s</string>
     <string name="breakdown_boosts">Papildinājumi %1$s</string>
     <string name="breakdown_one_off">Vienreizēji papildinājumi %1$s</string>
-    <string name="pocket_negative_hint">Pārtērēts. To sedz vēlāks pārpalikums vai pārvietojums.</string>
+    <string name="pocket_negative_hint">Pārtērēts. Tas tiek atskaitīts no šī mēneša budžeta, līdz ir nomaksāts.</string>
+    <string name="pay_off">Nomaksāt</string>
     <string name="active_boosts">Aktīvie papildinājumi</string>
     <string name="boost_row">+%1$s: %2$s, %3$s</string>
     <string name="boost_from">No: %1$s</string>
@@ -260,9 +267,10 @@
 
     <!-- Move surplus / boost -->
     <string name="move">Pārvietot</string>
-    <string name="move_explanation">Pārvietojiet visu kategorijas saglabāto pārpalikumu vai tā daļu uz citu kategoriju. Pārvietošana nemaina neviena mēneša budžetu vai izdevumus.</string>
+    <string name="move_explanation">Pārvietojiet visu kategorijas saglabāto pārpalikumu vai tā daļu uz citu kategoriju. Pārvietojot to uz kategoriju ar parādu, parāds tiek nomaksāts.</string>
     <string name="move_from">No</string>
     <string name="move_to">Uz</string>
+    <string name="move_to_owes">%1$s ir parādā %2$s.</string>
     <string name="use_all">Viss (%1$s)</string>
     <string name="error_more_than_available">Pieejams tikai %1$s</string>
     <string name="error_choose_pocket">Izvēlieties vienu</string>
@@ -284,6 +292,7 @@
     <string name="widget_not_set_up">Atveriet Budzets, lai iestatītu kategorijas un budžetu.</string>
     <string name="widget_top_over">%1$s: pārsniegts par %2$s</string>
     <string name="widget_saved_surplus">Uzkrātais pārpalikums: %1$s</string>
+    <string name="widget_debt">Parāds: %1$s</string>
 
     <!-- Overview: backup reminder -->
     <string name="reminder_backup_never">Rezerves kopijas vēl nav. Saglabājiet to Google Drive vai šajā tālrunī, ja nu tālrunis pazūd.</string>
@@ -358,7 +367,7 @@
         <item quantity="other">%d decimālzīmes</item>
     </plurals>
     <string name="settings_how_budgets_work">Kā darbojas budžeti</string>
-    <string name="how_budgets_work_text">Iestatiet dienas, nedēļas vai mēneša mērķi. Dienas un nedēļas mērķi tiek pārrēķināti mēneša summā atbilstoši mēneša garumam; ja iestatīti vairāki, tiek izmantota lielākā mēneša summa. Noslēdzot mēnesi, neiztērētais budžets kļūst par pārpalikumu.</string>
+    <string name="how_budgets_work_text">Iestatiet dienas, nedēļas vai mēneša mērķi. Dienas un nedēļas mērķi tiek pārrēķināti mēneša summā atbilstoši mēneša garumam; ja iestatīti vairāki, tiek izmantota lielākā mēneša summa. Noslēdzot mēnesi, neiztērētais budžets kļūst par pārpalikumu. Pārtēriņš, ko pārpalikums nesedz, kļūst par parādu, kas tiek atskaitīts no budžeta, līdz ir nomaksāts.</string>
     <string name="settings_privacy">Privātums</string>
     <string name="privacy_text">Jūsu dati paliek šajā tālrunī. Budzets neizmanto ne kontus, ne serveri, un Android rezerves kopēšana tos neietver. Vienīgās kopijas ir rezerves faili, ko saglabājat paši.</string>
     <string name="settings_about">Par lietotni</string>

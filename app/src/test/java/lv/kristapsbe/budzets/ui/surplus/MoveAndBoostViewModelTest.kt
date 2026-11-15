@@ -18,6 +18,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class MoveAndBoostViewModelTest : ViewModelTest() {
 
@@ -80,6 +81,44 @@ class MoveAndBoostViewModelTest : ViewModelTest() {
         assertEquals(eur(0), balances[foodPocket])
         assertEquals(eur(100), balances[funPocket])
         assertEquals("for fun", surplus.ledger.first().last().note)
+    }
+
+    /** Fun spends [amount] in March with no amount set, and March is closed again: Fun owes it. */
+    private suspend fun funOwes(amount: Long) {
+        expenses.add(eur(amount), fun_.id, LocalDate.of(2026, 3, 9))
+        surplus.closeMonth(ym("2026-03")).ok()
+    }
+
+    @Test
+    fun `paying off preselects the pocket in debt and fills in what it owes`() = runTest {
+        setUp()
+        funOwes(30)
+        val state = move("to" to funPocket.key()).awaitEditing { it.form.to != null }
+        assertEquals(MoveForm(foodPocket, funPocket, "30.00", ""), state.form)
+        assertEquals(eur(-30), state.payingOff?.balance)
+        assertNull(state.exceedsAvailable)
+    }
+
+    @Test
+    fun `paying off a debt larger than the source fills in what the source has`() = runTest {
+        setUp()
+        funOwes(130)
+        assertEquals("100.00", move("to" to funPocket.key()).awaitEditing { it.form.to != null }.form.amountText)
+    }
+
+    @Test
+    fun `a pocket that owes nothing isn't preselected, and an archived one in debt can still be paid off`() = runTest {
+        setUp()
+        val plain = move("to" to funPocket.key()).awaitEditing()
+        assertNull(plain.form.to)
+        assertEquals("", plain.form.amountText)
+        assertNull(plain.payingOff)
+
+        funOwes(30)
+        categories.archive(fun_.id, ym("2026-04"))
+        val archived = move("to" to funPocket.key()).awaitEditing { it.form.to != null }
+        assertEquals(listOf(funPocket, SurplusPocket.Unallocated), archived.destinations.map { it.label.pocket })
+        assertEquals("30.00", archived.form.amountText)
     }
 
     @Test

@@ -33,7 +33,8 @@ class WidgetContentTest {
         status: PaceStatus = PaceStatus.ON_TRACK,
         topOver: TopOver? = null,
         daily: DailyAllowance? = tenADay,
-    ) = WidgetState.Month(ym("2026-10"), CurrencySpec.DEFAULT, eur(spent), eur(budget), status, 4, topOver, eur(410), daily)
+        debt: Long = 0,
+    ) = WidgetState.Month(ym("2026-10"), CurrencySpec.DEFAULT, eur(spent), eur(budget), status, 4, topOver, eur(410), daily, eur(debt), carried = eur(debt))
 
     @Test
     fun `small size shows only what's left`() = runGlanceAppWidgetUnitTest {
@@ -111,6 +112,17 @@ class WidgetContentTest {
         onNode(hasTextEqualTo("Over budget · 4 days left")).assertExists()
         onNode(hasTextEqualTo("Groceries over by €12.40")).assertExists()
         onNode(hasTextEqualTo("Saved surplus €410.00")).assertExists()
+    }
+
+    @Test
+    fun `debt comes out of what's left, and takes the saved surplus line`() = runGlanceAppWidgetUnitTest {
+        setAppWidgetSize(LARGE)
+        setContext(context)
+        provideComposable { WidgetContent(month(debt = 40)) }
+        onNode(hasTextEqualTo("€390.00 left")).assertExists()
+        onNode(hasTextEqualTo("€190.00 of €580.00 spent")).assertExists()
+        onNode(hasTextEqualTo("Debt €40.00")).assertExists()
+        onNode(hasText("Saved surplus")).assertDoesNotExist()
     }
 
     @Test
