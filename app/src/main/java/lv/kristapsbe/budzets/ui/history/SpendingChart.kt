@@ -4,13 +4,9 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -18,6 +14,8 @@ import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.calculation.MonthStack
 import lv.kristapsbe.budzets.domain.forecast.Estimate
 import lv.kristapsbe.budzets.domain.forecast.ForecastStack
+import lv.kristapsbe.budzets.domain.model.CategoryId
+import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.theme.chartColors
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -63,8 +61,8 @@ internal fun SpendingChart(
     modifier: Modifier = Modifier,
 ) {
     val colors = chartColors
+    // The budget lines and the whiskers.
     val budgetColor = MaterialTheme.colorScheme.onSurface
-    val whiskerColor = MaterialTheme.colorScheme.onSurface
     val forecast = state.forecast
     val descriptions = state.months.map { monthDescription(it, state, money, locale) } +
         forecast?.stacks.orEmpty().map { forecastDescription(it, state.currentMonth, money, locale) }
@@ -81,33 +79,31 @@ internal fun SpendingChart(
         locale = locale,
         modifier = modifier,
     ) { g ->
-        // Ribbons, then bars, then budget lines, so bars sit on top of the ribbons.
+        // Ribbons, then bars, then budget lines and whiskers, so bars sit on top of the ribbons.
         val gap = SegmentGap.toPx()
         val overhang = BudgetOverhang.toPx()
-
-        /** A segment's top and bottom, less half the gap where it meets another segment. */
-        fun extent(stack: MonthStack, index: Int): Pair<Float, Float> {
-            val segment = stack.segments[index]
-            val bottom = g.y(segment.below.minor) - if (index > 0) gap / 2 else 0f
-            val top = g.y(segment.top.minor) + if (index < stack.segments.lastIndex) gap / 2 else 0f
-            // A sliver still shows, a hairline thick.
-            return minOf(top, bottom - g.hairline) to bottom
-        }
-
         val highlighted = state.highlighted
         val colorOf = state.series.associate { it.key to colors[it.slot] }
+        val offset = state.months.size
+
+        /** A segment's top and bottom, less half the gap where it meets another. A sliver still shows, a hairline thick. */
+        fun extent(below: Money, top: Money, index: Int, count: Int): Pair<Float, Float> {
+            val bottom = g.y(below.minor) - if (index > 0) gap / 2 else 0f
+            val upper = g.y(top.minor) + if (index < count - 1) gap / 2 else 0f
+            return minOf(upper, bottom - g.hairline) to bottom
+        }
 
         class Ribbon(val path: Path, val color: Color, val isHighlighted: Boolean)
         val ribbons = buildList {
             for (i in 0 until state.months.lastIndex) {
-                val from = state.months[i]
-                val to = state.months[i + 1]
-                from.segments.forEachIndexed { a, segment ->
+                val from = state.months[i].segments
+                val to = state.months[i + 1].segments
+                from.forEachIndexed { a, segment ->
                     val key = seriesKey(segment.series)
-                    val b = to.segments.indexOfFirst { seriesKey(it.series) == key }
+                    val b = to.indexOfFirst { seriesKey(it.series) == key }
                     if (b < 0) return@forEachIndexed
-                    val (fromTop, fromBottom) = extent(from, a)
-                    val (toTop, toBottom) = extent(to, b)
+                    val (fromTop, fromBottom) = extent(segment.below, segment.top, a, from.size)
+                    val (toTop, toBottom) = extent(to[b].below, to[b].top, b, to.size)
                     val x0 = g.center(i) + g.bar / 2
                     val x1 = g.center(i + 1) - g.bar / 2
                     val mid = (x0 + x1) / 2
@@ -123,63 +119,44 @@ internal fun SpendingChart(
             }
         }.sortedBy { it.isHighlighted } // the highlighted band is drawn last, over the others
 
-        class Segment(val path: Path, val color: Color, val isHighlighted: Boolean)
+        // Real months' segments, then the forecast months' (hatched). Only a bar's top is rounded.
+        class Segment(val path: Path, val color: Color, val isHighlighted: Boolean, val isForecast: Boolean)
         val segments = buildList {
-            state.months.forEachIndexed { i, stack ->
-                val left = g.center(i) - g.bar / 2
-                stack.segments.forEachIndexed { index, segment ->
-                    val (top, bottom) = extent(stack, index)
-                    val rect = Rect(left, top, left + g.bar, bottom)
-                    // Only the top of the bar is rounded; it stands square on the baseline.
-                    val radius = if (index == stack.segments.lastIndex) CornerRadius(g.corner) else CornerRadius.Zero
-                    val path = Path().apply { addRoundRect(RoundRect(rect, topLeft = radius, topRight = radius, bottomRight = CornerRadius.Zero, bottomLeft = CornerRadius.Zero)) }
-                    val key = seriesKey(segment.series)
-                    add(Segment(path, colorOf[key] ?: colors.other, key == highlighted))
+            fun stack(i: Int, parts: List<Triple<CategoryId?, Money, Money>>, isForecast: Boolean) =
+                parts.forEachIndexed { index, (series, below, top) ->
+                    val (y0, y1) = extent(below, top, index, parts.size)
+                    val key = seriesKey(series)
+                    add(Segment(g.barPath(i, y0, y1, roundTop = index == parts.lastIndex), colorOf[key] ?: colors.other, key == highlighted, isForecast))
                 }
-            }
+            state.months.forEachIndexed { i, month -> stack(i, month.segments.map { Triple(it.series, it.below, it.top) }, isForecast = false) }
+            forecast?.stacks?.forEachIndexed { j, month -> stack(offset + j, month.segments.map { Triple(it.series, it.below, it.top) }, isForecast = true) }
         }
-        val dashes = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
 
-        // The forecast months, after the real ones.
-        class Mark(val path: Path, val color: Color, val isHighlighted: Boolean)
+        // A forecast month's whisker is the highlighted band's range, or with none highlighted the whole month's.
         class Whisker(val x: Float, val low: Float, val high: Float)
-        val marks = mutableListOf<Mark>()
-        val whiskers = mutableListOf<Whisker>()
-        val budgets = mutableListOf<Pair<Int, Long>>()
-        val offset = state.months.size
-        forecast?.stacks?.forEachIndexed { j, stack ->
-            val i = offset + j
-            val left = g.center(i) - g.bar / 2
-            stack.segments.forEachIndexed { index, segment ->
-                val bottom = g.y(segment.below.minor) - if (index > 0) gap / 2 else 0f
-                val top = minOf(g.y(segment.top.minor) + if (index < stack.segments.lastIndex) gap / 2 else 0f, bottom - g.hairline)
-                val radius = if (index == stack.segments.lastIndex) CornerRadius(g.corner) else CornerRadius.Zero
-                val path = Path().apply { addRoundRect(RoundRect(Rect(left, top, left + g.bar, bottom), topLeft = radius, topRight = radius)) }
-                val key = seriesKey(segment.series)
-                marks += Mark(path, colorOf[key] ?: colors.other, key == highlighted)
-            }
-            // The highlighted band's own range, or the whole month's.
+        val whiskers = forecast?.stacks.orEmpty().mapIndexedNotNull { j, stack ->
             val band = highlighted?.let { key -> stack.segments.firstOrNull { seriesKey(it.series) == key } }
+            val x = g.center(offset + j)
             when {
-                band != null -> whiskers += Whisker(g.center(i), g.y((band.below + band.estimate.low).minor), g.y((band.below + band.estimate.high).minor))
-                highlighted == null && stack.segments.isNotEmpty() -> whiskers += Whisker(g.center(i), g.y(stack.total.low.minor), g.y(stack.total.high.minor))
+                band != null -> Whisker(x, g.y((band.below + band.estimate.low).minor), g.y((band.below + band.estimate.high).minor))
+                highlighted == null && stack.segments.isNotEmpty() -> Whisker(x, g.y(stack.total.low.minor), g.y(stack.total.high.minor))
+                else -> null
             }
-            stack.budget?.let { budgets += i to it.minor }
-        }
+        }.toMutableList()
+
         // The month under way: what it will likely add before it ends, on top of what is spent.
         val currentIndex = state.months.indexOfFirst { it.month == state.currentMonth }
         val end = forecast?.currentEnd
         val extension = if (end != null && currentIndex >= 0) {
-            val spent = state.months[currentIndex].total
-            val left = g.center(currentIndex) - g.bar / 2
-            val bottom = g.y(spent.minor) - if (spent.isPositive) gap / 2 else 0f
-            // The whole month's range, so like the forecast months' it gives way to a highlight.
             if (highlighted == null) whiskers += Whisker(g.center(currentIndex), g.y(end.low.minor), g.y(end.high.minor))
-            if (end.expected > spent) {
-                val top = minOf(g.y(end.expected.minor), bottom - g.hairline)
-                Path().apply { addRoundRect(RoundRect(Rect(left, top, left + g.bar, bottom), topLeft = CornerRadius(g.corner), topRight = CornerRadius(g.corner))) }
-            } else null
+            val spent = state.months[currentIndex].total
+            val bottom = g.y(spent.minor) - if (spent.isPositive) gap / 2 else 0f
+            if (end.expected > spent) g.barPath(currentIndex, minOf(g.y(end.expected.minor), bottom - g.hairline), bottom, roundTop = true) else null
         } else null
+
+        val budgets = state.months.mapIndexedNotNull { i, month -> month.budget?.let { i to it } } +
+            forecast?.stacks.orEmpty().mapIndexedNotNull { j, stack -> stack.budget?.let { offset + j to it } }
+        val dashes = budgetDashes()
 
         onDrawBehind {
             ribbons.forEach { ribbon ->
@@ -191,15 +168,12 @@ internal fun SpendingChart(
                 drawPath(ribbon.path, ribbon.color, alpha = alpha)
             }
             segments.forEach { segment ->
-                drawPath(segment.path, segment.color, alpha = if (highlighted == null || segment.isHighlighted) 1f else BAR_FADED_ALPHA)
+                val alpha = if (highlighted == null || segment.isHighlighted) 1f else BAR_FADED_ALPHA
+                if (segment.isForecast) drawHatched(segment.path, segment.color, alpha) else drawPath(segment.path, segment.color, alpha = alpha)
             }
             extension?.let { drawHatched(it, colors.other, alpha = if (highlighted == null) 1f else BAR_FADED_ALPHA) }
-            marks.forEach { mark ->
-                drawHatched(mark.path, mark.color, alpha = if (highlighted == null || mark.isHighlighted) 1f else BAR_FADED_ALPHA)
-            }
-            val budgetLines = state.months.mapIndexedNotNull { i, stack -> stack.budget?.let { i to it.minor } } + budgets
-            budgetLines.forEach { (i, budget) ->
-                val y = g.y(budget)
+            budgets.forEach { (i, budget) ->
+                val y = g.y(budget.minor)
                 drawLine(
                     budgetColor,
                     Offset(g.center(i) - g.bar / 2 - overhang, y),
@@ -208,7 +182,7 @@ internal fun SpendingChart(
                     pathEffect = dashes,
                 )
             }
-            whiskers.forEach { drawWhisker(it.x, it.low, it.high, whiskerColor) }
+            whiskers.forEach { drawWhisker(it.x, it.low, it.high, budgetColor) }
         }
     }
 }

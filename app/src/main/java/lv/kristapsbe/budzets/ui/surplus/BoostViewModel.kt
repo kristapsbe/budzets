@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -15,7 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
@@ -30,6 +29,7 @@ import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.surplus.SurplusError
+import lv.kristapsbe.budzets.ui.components.showsWhileTyping
 import lv.kristapsbe.budzets.util.amountInputChars
 import lv.kristapsbe.budzets.util.formatForInput
 import java.text.DecimalFormatSymbols
@@ -142,7 +142,7 @@ class BoostViewModel(
                 sources = sources,
                 currentBudget = form.destination?.let { ref.summary.categories[it]?.effective ?: Money.ZERO },
                 amount = amount,
-                amountError = error?.takeIf { attempted || it == AmountError.TOO_MANY_DECIMALS || it == AmountError.TOO_LARGE },
+                amountError = error?.takeIf { attempted || it.showsWhileTyping },
                 exceedsAvailable = available?.takeIf { amount != null && amount > it },
                 missingDestination = attempted && form.destination == null,
                 missingSource = attempted && form.source == null,
@@ -236,7 +236,6 @@ class BoostViewModel(
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 BoostViewModel(createSavedStateHandle(), container.surplus, container.budgets, container.categories, container.settings, container.clock)
             }
         }

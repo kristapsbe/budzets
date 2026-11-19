@@ -42,7 +42,7 @@ class BudgetEditorViewModelTest : ViewModelTest() {
         assertEquals(TargetForm(daily = "20.50", monthly = "600.00"), state.form)
         assertFalse(state.isChanged)
         assertEquals(eur(615), state.preview!!.amount) // 20.50 × 30 beats 600
-        assertEquals(setOf(TargetKind.DAILY), state.preview!!.determinedBy)
+        assertEquals(setOf(TargetKind.DAILY), state.preview.determinedBy)
 
         vm.save() // nothing to store
         assertEquals(1, budgets.configs.first().size)
@@ -61,9 +61,9 @@ class BudgetEditorViewModelTest : ViewModelTest() {
         val state = vm.awaitEditing { it.form.monthly == "350" }
         assertEquals(BudgetTarget(1_000, 7_000, 35_000), state.draft)
         assertEquals(eur(350), state.preview!!.amount)
-        assertEquals(eur(300), state.preview!!.dailyEquivalent)
-        assertEquals(eur(300), state.preview!!.weeklyEquivalent)
-        assertEquals(setOf(TargetKind.MONTHLY), state.preview!!.determinedBy)
+        assertEquals(eur(300), state.preview.dailyEquivalent)
+        assertEquals(eur(300), state.preview.weeklyEquivalent)
+        assertEquals(setOf(TargetKind.MONTHLY), state.preview.determinedBy)
         assertTrue(state.isChanged)
     }
 

@@ -65,11 +65,13 @@ echo "tests $(grep -ho '<testsuite [^>]*' $f/*.xml | grep -o ' tests="[0-9]*"' |
      "failed $(grep -ho '<testsuite [^>]*' $f/*.xml | grep -o ' failures="[0-9]*"\| errors="[0-9]*"' | tr -dc '0-9\n' | paste -sd+ - | bc)"
 ```
 
-Run the full suite **three times** before reporting a change as done; the last change ended at 556
+Run the full suite **three times** before reporting a change as done; the last change ended at 553
 tests.
 
 Known flakes:
 - `WidgetStateFlowTest` is occasionally €0.50 off. It is pre-existing and passes alone.
+- `BudgetFlowTest` once timed out waiting for Compose to go idle in a full run, and
+  `TransactionsViewModelTest` once failed on `main`. Both pass alone; neither was looked into.
 - "Dispatchers.Main is used concurrently with setting it" is a ViewModel scope racing `resetMain`.
   To avoid it, wrap every ViewModel a test creates in `.clearedAfterTest()` (`ui/ViewModelTest.kt`).
 
@@ -79,7 +81,7 @@ Known flakes:
 |---|---|
 | `domain` | Pure Kotlin with no Android code: `Money` in minor units, budget planning (the plan is the highest monthly equivalent of the targets), pace, the daily amount, month close (`MonthFinalizer`), the append-only surplus ledger (`domain/surplus`), and spending forecasts (`domain/forecast`). |
 | `data` | Room (`local`, DB version 3), repositories exposing `Flow`s, DataStore settings (`SettingsRepository`), and `backup`. |
-| `ui` | Compose screens, each with a ViewModel; navigation in `ui/navigation/BudzetsApp.kt`. |
+| `ui` | Compose screens, each with a ViewModel; navigation in `ui/navigation/BudzetsApp.kt`. Shared pieces are in `ui/components` (`ErrorState`, `WarningText`, `SelectedMonth`, `rememberMoneyFormatter`). Chart drawing helpers are in `ui/history/MonthChartFrame.kt`. |
 | `widget` | Glance widget, reading the same repositories; `QuickAddActivity` is the widget's "+". |
 
 Dependency wiring:

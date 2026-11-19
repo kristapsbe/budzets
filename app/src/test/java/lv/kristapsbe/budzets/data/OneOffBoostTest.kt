@@ -3,8 +3,8 @@ package lv.kristapsbe.budzets.data
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.err
+import lv.kristapsbe.budzets.domain.eur
 import lv.kristapsbe.budzets.domain.model.BudgetScope
 import lv.kristapsbe.budzets.domain.model.BudgetTarget
 import lv.kristapsbe.budzets.domain.model.Category
@@ -13,6 +13,7 @@ import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.ok
 import lv.kristapsbe.budzets.domain.surplus.SurplusError
 import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
+import lv.kristapsbe.budzets.domain.surplus.closingEffect
 import lv.kristapsbe.budzets.domain.ym
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,7 +78,7 @@ class OneOffBoostTest : DbTest() {
     @Test
     fun `closing a month ignores it`() = runTest {
         surplus.addOneOff(april, eur(200)).ok()
-        val preview = surplus.previewClose(april)
+        val preview = closingEffect(budgets.loadMonthSummary(april))
         surplus.closeMonth(april).ok()
 
         assertEquals(preview, SurplusLedger.closureNet(surplus.ledger.first(), april))

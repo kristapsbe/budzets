@@ -97,7 +97,7 @@ object SurplusLedger {
 
     fun breakdown(entries: Iterable<LedgerEntry>): Map<SurplusPocket, PocketBreakdown> =
         entries.groupBy { it.pocket }.mapValues { (_, list) ->
-            fun net(filter: (LedgerEntryType) -> Boolean) = list.filter { filter(it.type) }.fold(Money.ZERO) { acc, e -> acc + e.signedAmount }
+            fun net(filter: (LedgerEntryType) -> Boolean) = list.filter { filter(it.type) }.map { it.signedAmount }.sumMoney()
             PocketBreakdown(
                 fromClosing = net { it.isClosure },
                 moved = net { it == LedgerEntryType.TRANSFER_IN || it == LedgerEntryType.TRANSFER_OUT },
@@ -107,11 +107,10 @@ object SurplusLedger {
         }
 
     fun balances(entries: Iterable<LedgerEntry>): Map<SurplusPocket, Money> =
-        entries.groupBy { it.pocket }
-            .mapValues { (_, list) -> list.fold(Money.ZERO) { acc, e -> acc + e.signedAmount } }
+        entries.groupBy { it.pocket }.mapValues { (_, list) -> list.map { it.signedAmount }.sumMoney() }
 
     fun balance(entries: Iterable<LedgerEntry>, pocket: SurplusPocket): Money =
-        entries.filter { it.pocket == pocket }.fold(Money.ZERO) { acc, e -> acc + e.signedAmount }
+        entries.filter { it.pocket == pocket }.map { it.signedAmount }.sumMoney()
 
     /** What each pocket below zero owes, as a positive amount (Q43). Other pockets are omitted. */
     fun debts(balances: Map<SurplusPocket, Money>): Map<SurplusPocket, Money> =

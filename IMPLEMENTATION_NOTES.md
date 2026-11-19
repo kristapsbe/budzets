@@ -2211,6 +2211,115 @@ from how a debug build runs its first frame, and a release build stays far below
   about February 2027 if spending started in October 2026. The seed backup above can be restored to
   look at them now, and Undo restore brings your data back.
 
+## Code cleanup (2026-11-19)
+
+- **Asked for:** a critical review of the codebase that removes comments adding no information,
+  and removes or simplifies code where that makes sense. No behaviour was to change.
+- **What the review found:**
+  - The comments were mostly worth keeping: they explain *why* (gesture workarounds, accessibility,
+    the Q-numbered decisions, R8 and platform quirks). There were no TODOs. The only commented-out
+    code was the Android Studio template in the theme files.
+  - Most of the gain was in dead code and duplication.
+- **Removed: code only tests used** (the tests now use what the app uses):
+  - `ExpenseLine`, `spendingByCategory` and `Expense.toLine()`: a Phase 1 aggregation that SQL has
+    long done. Its 3 test cases went with it; the repository tests already cover month boundaries
+    by local date.
+  - `SurplusRepository.previewClose`: its KDoc said "for the review screen", but only a test called
+    it. That test now uses `closingEffect`.
+  - `MonthFinalizer.preview`: a second name for `closingEffect`.
+  - `MonthSummary.overallRemaining` and `spentRatio`: the screens use `overallLeft` and their own
+    ratio.
+  - `SpendingForecast.estimates`.
+- **Theme:**
+  - `Color.kt` is gone; its six fallback colours (below Android 12) are inline in `Theme.kt`.
+  - The template's commented-out styles and colours went, along with "Dynamic color is available
+    on Android 12+".
+  - `BudzetsTheme` lost its `dynamicColor` parameter, which nothing passed: it was always on.
+  - `Typography` keeps its `bodyLarge` override. Switching to M3's default would quietly change
+    the line-height style.
+- **Repeated code, now shared:**
+  - **`SelectedMonth`** (`ui/components/MonthStates.kt`): the month a pager screen shows. The
+    Overview, Budgets and Spending ViewModels each had the same saved-state code for it, and they now
+    delegate.
+    - The saved key stays `month`, which is also `CategorySpendingRoute`'s argument name; the KDoc
+      says so.
+    - Previous and next still store the month explicitly, even the current one, as before. A first
+      version routed them through `select`, which stores the current month as null; that was caught
+      and undone, since it would have changed behaviour across a month's end.
+  - **`MonthStates.following`:** the "keep the previous month until the new one loads" state,
+    written out in the same three ViewModels.
+  - **`ErrorState`** (`ui/components`): the "Couldn't load" screen, in 7 places, 4 of them with
+    Retry.
+  - **`WarningText`** (`ui/components`): text in red behind a warning icon, in 5 places. Its KDoc
+    carries the "in words as well as red" reason, so the call sites' copies of that comment went.
+  - **`rememberMoneyFormatter`** (`ui/components`): the remembered `MoneyFormatter`, built by hand
+    in 12 places. Two screens had kept a `locale` they no longer needed; those lines went too.
+  - **`CreationExtras.container`** (`BudzetsApplication.kt`): the application lookup in the 12
+    ViewModel factories.
+  - **`AmountError.showsWhileTyping`** (`ui/components/FormParts.kt`): which amount errors show
+    before saving is tried. The rule was written out 5 times.
+- **Charts:**
+  - `PlotGeometry.barPath` and `barFromZero` replace four hand-built rounded-rect paths.
+    `SpendingChart` now builds real and forecast segments in one list.
+  - `polyline`, `drawRingedDot` and `budgetDashes` (next to `forecastDots` in `MonthChartFrame.kt`)
+    replace repeated path-building, ringed-dot and dash code across the three charts.
+  - `LineKey` replaces 7 hand-drawn legend marks. `LegendKey(besideChips = true)` replaces the
+    chip-height boxes.
+  - `BandRow` is shared by the real and forecast breakdowns.
+  - The burn-down's day-label height is measured in one place.
+- **Small fixes:**
+  - A KDoc in `BudzetsApp.kt` ("Switches tabs keeping one copy of each tab…") had been left on
+    `ICONS_ONLY_FONT_SCALE`; it is back on `navigateTopLevel`.
+  - `Ledger` sums with `sumMoney()` instead of three hand-written folds.
+  - `summarize` builds its key set the way `summarizeClosed` does.
+  - `BudgetPlanning.categoryPlansExceedOverall` reuses `categoryTotal`.
+  - Unused imports went, 3 of them already there before this change.
+  - In the tests: the compiler's unnecessary `!!` and redundant-cast warnings are gone, and
+    `Fixtures.ok()`/`err()` throw instead of `fail(...) as Nothing`.
+- **Kept on purpose:**
+  - `SMALL` in the widget: the widget tests use it as the small size. The first scan wrongly listed
+    it as unreferenced.
+  - The repeated SQL fragments in `Daos.kt`: Room annotations read best as plain SQL.
+  - The four form ViewModels as they are: a base class would tie four screens together.
+  - The two empty-state cards (Overview, Budgets): they differ in buttons and footer.
+  - The deprecated Compose test rules and Robolectric alarm API (compiler warnings in the tests):
+    moving to the v2 rules changes how test coroutines are dispatched, so it's a migration of its
+    own, not a cleanup.
+- **Gotcha:** this build reports no unused local variables. Two now-unused `locale` lines only
+  showed up through a script.
+- **Size:** the app code went from 14,218 to 14,054 lines (164 fewer, the three new small files
+  included), and the tests from 10,906 to 10,862.
+- **Baseline Profiles:** regenerated on the emulator (`generateBaselineProfile`, API 37,
+  `-read-only`), because start-up classes moved (`SelectedMonth`, `MonthStates.following`, the
+  factories).
+  - The rules went from 23,904 to 26,681: library rules 21,759 → 24,262, the app's own 2,145 →
+    2,419.
+  - The profiles were last generated on 2026-10-31 and only hand-edited since. The growth is the
+    library updates and Overview code added since then. The charts screen isn't on the journey, so
+    it has none.
+  - No obfuscated names. The new start-up classes are in.
+- **Verified:**
+  - 553 tests: the three `spendingByCategory` cases went, and every other test passes unchanged
+    or as adjusted.
+  - Lint 0 errors; the two warnings are the old version notices. The main code compiles with no
+    warnings; the tests have only the deprecations listed above.
+  - Six full runs: five clean. One failed in `BudgetFlowTest` with "Compose did not get idle after
+    60 SECONDS"; that class then passed 8 runs in a row on its own.
+  - For comparison, `main` (before this change) in six full runs failed twice: once in
+    `TransactionsViewModelTest` (details overwritten) and once with the known €0.50
+    `WidgetStateFlowTest` flake. Load-related flakes predate this change, but the `BudgetFlowTest`
+    one hasn't been seen on `main` yet.
+  - Emulator `Medium_Phone_API_37.0`, `-read-only`, debug build, with the two-year forecast seed:
+    - The Overview's previous, next, Go to current month and swipe all work.
+    - October's "Over by €31.68" row draws as before.
+    - The Budgets and Spending pagers swipe.
+    - The charts screen shows the same figures and the same pictures as before the cleanup
+      (November €43.40 left, likely over by €174.50; December €1,594.87, €1,547.79 to €1,641.95),
+      and highlighting and the forecast breakdown work.
+  - R8 release with a throwaway key and the regenerated profiles: the same figures on the same
+    screens, and nothing in the crash log.
+  - The widget wasn't re-added: none of its code changed.
+
 ## Open questions
 
 - Reopening a month that paid off a debt (see "Debt, and amounts that aren't set"): change the

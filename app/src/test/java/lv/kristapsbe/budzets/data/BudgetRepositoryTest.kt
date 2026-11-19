@@ -70,7 +70,7 @@ class BudgetRepositoryTest : DbTest() {
         expenses.add(eur(12), food.id, LocalDate.of(2026, 4, 15))
         val updated = next.await()
         assertEquals(eur(12), updated.totalSpent)
-        assertEquals(eur(288), updated.overallRemaining)
+        assertEquals(eur(288), updated.overallLeft)
     }
 
     @Test
@@ -92,7 +92,7 @@ class BudgetRepositoryTest : DbTest() {
 
         val target = budgets.configs.first().single { it.effectiveFrom == ym("2026-04") }.target
         assertEquals(BudgetTarget(weeklyMinor = 7_000, monthlyMinor = 25_000), target)
-        val foodId = (food as BudgetScope.Category).id
+        val foodId = food.id
         assertEquals(eur(310), budgets.loadMonthSummary(ym("2026-03")).categories.getValue(foodId).base) // Jan version
         assertEquals(eur(300), budgets.loadMonthSummary(ym("2026-04")).categories.getValue(foodId).base) // max(300, 250)
         assertEquals(eur(310), budgets.loadMonthSummary(ym("2026-08")).categories.getValue(foodId).base) // max(310, 250)

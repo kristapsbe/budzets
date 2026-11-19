@@ -103,9 +103,6 @@ class SpendingForecast internal constructor(
      */
     fun estimate(month: YearMonth, ids: Collection<CategoryId> = categoriesIn(month)): Estimate =
         estimateOf(models, ids.filter { it in models }, month, currentMonth.minusMonths(1))
-
-    /** Each category's [estimate] for [month]. */
-    fun estimates(month: YearMonth): Map<CategoryId, Estimate> = categoriesIn(month).associateWith { estimate(month, listOf(it)) }
 }
 
 /**

@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -13,12 +12,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
-import lv.kristapsbe.budzets.domain.calculation.AmountError
 import lv.kristapsbe.budzets.domain.expense.DraftErrors
 import lv.kristapsbe.budzets.domain.expense.ExpenseDraft
 import lv.kristapsbe.budzets.domain.expense.validate
@@ -28,6 +26,7 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Expense
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.domain.model.Outcome
+import lv.kristapsbe.budzets.ui.components.showsWhileTyping
 import lv.kristapsbe.budzets.util.amountInputChars
 import lv.kristapsbe.budzets.util.formatForInput
 import java.text.DecimalFormatSymbols
@@ -174,7 +173,7 @@ class ExpenseEditorViewModel(
         val errors = (form.toDraft().validate(currency, today) as? Outcome.Err)?.error ?: return DraftErrors()
         if (attemptedSave) return errors
         return errors.copy(
-            amount = errors.amount?.takeIf { it == AmountError.TOO_MANY_DECIMALS || it == AmountError.TOO_LARGE },
+            amount = errors.amount?.takeIf { it.showsWhileTyping },
             missingCategory = false,
         )
     }
@@ -246,7 +245,6 @@ class ExpenseEditorViewModel(
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 ExpenseEditorViewModel(
                     createSavedStateHandle(),
                     container.expenses,

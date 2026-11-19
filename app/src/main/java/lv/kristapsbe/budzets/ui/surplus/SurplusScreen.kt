@@ -1,7 +1,6 @@
 package lv.kristapsbe.budzets.ui.surplus
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -45,7 +43,9 @@ import lv.kristapsbe.budzets.domain.model.BoostId
 import lv.kristapsbe.budzets.domain.model.LedgerEntryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
 import lv.kristapsbe.budzets.util.displayName
@@ -118,9 +118,7 @@ fun SurplusContent(
     ) { padding ->
         when (state) {
             SurplusUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is SurplusUiState.Error -> Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), Alignment.Center) {
-                Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-            }
+            is SurplusUiState.Error -> ErrorState(stringResource(R.string.error_loading), Modifier.padding(padding))
             is SurplusUiState.Ready -> ReadyList(state, actions, padding)
         }
     }
@@ -129,7 +127,7 @@ fun SurplusContent(
 @Composable
 private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padding: PaddingValues) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

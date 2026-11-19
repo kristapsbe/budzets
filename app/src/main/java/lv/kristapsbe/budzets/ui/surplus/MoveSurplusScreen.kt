@@ -19,17 +19,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
+import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.ui.components.FormSection
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
-import lv.kristapsbe.budzets.domain.model.SurplusPocket
-import lv.kristapsbe.budzets.util.MoneyFormatter
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 
 @Composable
 fun MoveSurplusScreen(
@@ -87,8 +85,7 @@ fun MoveSurplusContent(state: MoveSurplusState, actions: MoveSurplusActions) {
             LoadingIndicator(Modifier.padding(padding))
             return@Scaffold
         }
-        val locale = LocalConfiguration.current.locales[0]
-        val money = remember(editing.currency, locale) { MoneyFormatter(editing.currency, locale) }
+        val money = rememberMoneyFormatter(editing.currency)
         Column(
             Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

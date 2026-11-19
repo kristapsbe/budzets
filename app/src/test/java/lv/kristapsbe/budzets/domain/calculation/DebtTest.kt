@@ -82,7 +82,6 @@ class DebtTest {
     fun `what closing posts is the same with or without debt`() {
         val carried = month.carrying(mapOf(FUN_POCKET to eur(40), TRAVEL_POCKET to eur(60), SurplusPocket.Unallocated to eur(15)))
         assertEquals(eur(200), carried.categories.getValue(FUN).remaining)
-        assertEquals(month.overallRemaining, carried.overallRemaining)
         assertEquals(closingEffect(month), closingEffect(carried))
     }
 
@@ -90,7 +89,7 @@ class DebtTest {
     fun `no debt leaves the month as it is`() {
         assertSame(month, month.carrying(emptyMap()))
         assertEquals(month.overallEffective, month.overallAvailable)
-        assertEquals(month.overallRemaining, month.overallLeft)
+        assertEquals(month.overallEffective - month.totalSpent, month.overallLeft)
         val food = month.categories.getValue(FOOD)
         assertEquals(food.remaining, food.left)
     }

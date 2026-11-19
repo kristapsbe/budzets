@@ -83,7 +83,7 @@ class OverviewViewModelTest : ViewModelTest() {
 
         val before = awaitReady { it.summary.totalSpent == eur(100) }
         assertEquals(eur(600), before.summary.overallBase)
-        assertEquals(eur(500), before.summary.overallRemaining)
+        assertEquals(eur(500), before.summary.overallLeft)
         assertEquals(listOf(food.id, fun_.id), before.rows.map { it.id })
         assertNull(before.rows[1].summary.base) // Fun: active, no budget, still listed
         assertEquals(eur(300), before.pace.expectedSpend) // 15 of 30 days

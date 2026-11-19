@@ -45,7 +45,6 @@ data class MonthSummary(
     /** Boosts raise the overall cap as well as the category's, because they are funded by saved surplus. */
     val overallEffective: Money get() = (overallBase ?: Money.ZERO) + totalBoosts
     val totalSpent: Money get() = categories.values.map { it.spent }.sumMoney()
-    val overallRemaining: Money get() = overallEffective - totalSpent
 
     /** All the debt that comes out of this month; zero unless it came through [carrying]. */
     val debt: Money get() = categories.values.map { it.debt }.sumMoney() + otherDebt
@@ -70,10 +69,6 @@ data class MonthSummary(
         }
         return copy(categories = rows, otherDebt = debts[SurplusPocket.Unallocated] ?: Money.ZERO)
     }
-
-    /** Display-only ratio (not money). null when there is no positive effective budget. */
-    val spentRatio: Double?
-        get() = if (overallEffective.isPositive) totalSpent.minor.toDouble() / overallEffective.minor else null
 
     /** Warning only; neither value is changed. */
     val categoryPlansExceedOverall: Boolean
@@ -102,12 +97,7 @@ object MonthSummaryCalculator {
         val month = resolved.month
         val boostByCategory = activeBoosts(boosts, month)
 
-        val ids = LinkedHashSet<CategoryId>().apply {
-            addAll(resolved.categoryPlans.keys)
-            addAll(boostByCategory.keys)
-            addAll(spending.keys)
-        }
-        val categories = ids.associateWith { id ->
+        val categories = (resolved.categoryPlans.keys + boostByCategory.keys + spending.keys).associateWith { id ->
             CategorySummary(
                 categoryId = id,
                 base = resolved.categoryPlans[id]?.amount,

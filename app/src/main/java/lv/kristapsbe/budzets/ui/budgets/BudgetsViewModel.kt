@@ -2,7 +2,6 @@ package lv.kristapsbe.budzets.ui.budgets
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -11,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
@@ -22,10 +20,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
@@ -44,6 +41,7 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.surplus.ClosingSchedule
 import lv.kristapsbe.budzets.ui.components.MonthStates
+import lv.kristapsbe.budzets.ui.components.SelectedMonth
 import java.time.Clock
 import java.time.YearMonth
 
@@ -119,19 +117,16 @@ class BudgetsViewModel(
     private val clock: Clock,
 ) : ViewModel() {
 
-    private val savedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
     private val reload = MutableStateFlow(0)
 
     private val _message = MutableStateFlow<BudgetsMessage?>(null)
     /** One-off feedback for a snackbar. Call [messageShown] once shown. */
     val message: StateFlow<BudgetsMessage?> = _message.asStateFlow()
 
-    private val month: YearMonth get() = savedState.get<String>(KEY_MONTH)?.let(YearMonth::parse) ?: YearMonth.now(clock)
+    private val selection = SelectedMonth(savedState, clock, viewModelScope)
 
     /** The month on screen, known at once, before its budgets have loaded. */
-    val selectedMonth: StateFlow<YearMonth> =
-        savedMonth.map { it?.let(YearMonth::parse) ?: YearMonth.now(clock) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, month)
+    val selectedMonth: StateFlow<YearMonth> = selection.flow
 
     private val months = MonthStates<BudgetsUiState>(viewModelScope, BudgetsUiState.Loading) { month ->
         reload.flatMapLatest { observeMonth(month) }.flowOn(Dispatchers.Default)
@@ -141,9 +136,7 @@ class BudgetsViewModel(
     fun stateFor(month: YearMonth): StateFlow<BudgetsUiState> = months[month]
 
     /** The selected month's state. It keeps the previous month until the new one has loaded. */
-    val uiState: StateFlow<BudgetsUiState> =
-        selectedMonth.flatMapLatest { month -> stateFor(month).filterNot { it is BudgetsUiState.Loading } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BudgetsUiState.Loading)
+    val uiState: StateFlow<BudgetsUiState> = months.following(selectedMonth)
 
     private fun observeMonth(month: YearMonth): Flow<BudgetsUiState> =
         surplus.closedMonths.map { month in it }.distinctUntilChanged()
@@ -234,12 +227,11 @@ class BudgetsViewModel(
         )
     }
 
-    fun previousMonth() { savedState[KEY_MONTH] = month.minusMonths(1).toString() }
-    fun nextMonth() { savedState[KEY_MONTH] = month.plusMonths(1).toString() }
-    fun goToCurrentMonth() { savedState[KEY_MONTH] = null }
+    fun previousMonth() = selection.previous()
+    fun nextMonth() = selection.next()
+    fun goToCurrentMonth() = selection.current()
 
-    /** From a swipe. The current month is stored as null, so it goes on following the date. */
-    fun selectMonth(month: YearMonth) { savedState[KEY_MONTH] = month.takeUnless { it == YearMonth.now(clock) }?.toString() }
+    fun selectMonth(month: YearMonth) = selection.select(month)
 
     fun retry() = reload.update { it + 1 }
 
@@ -283,11 +275,8 @@ class BudgetsViewModel(
     }
 
     companion object {
-        private const val KEY_MONTH = "month"
-
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 BudgetsViewModel(createSavedStateHandle(), container.budgets, container.categories, container.surplus, container.settings, container.clock)
             }
         }

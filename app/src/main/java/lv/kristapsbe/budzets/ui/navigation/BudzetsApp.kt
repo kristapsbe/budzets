@@ -24,8 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -47,10 +47,10 @@ import lv.kristapsbe.budzets.ui.expenses.ExpenseEditorScreen
 import lv.kristapsbe.budzets.ui.expenses.TransactionsScreen
 import lv.kristapsbe.budzets.ui.history.SpendingHistoryScreen
 import lv.kristapsbe.budzets.ui.overview.OverviewScreen
+import lv.kristapsbe.budzets.ui.settings.SettingsScreen
 import lv.kristapsbe.budzets.ui.surplus.BoostScreen
 import lv.kristapsbe.budzets.ui.surplus.MoveSurplusScreen
 import lv.kristapsbe.budzets.ui.surplus.OneOffBoostScreen
-import lv.kristapsbe.budzets.ui.settings.SettingsScreen
 import lv.kristapsbe.budzets.ui.surplus.SurplusScreen
 import lv.kristapsbe.budzets.ui.surplus.key
 import kotlin.reflect.KClass
@@ -240,13 +240,12 @@ fun BudzetsApp(
 }
 
 private val MIN_LABEL_FONT_SIZE = 8.sp
+private const val ICONS_ONLY_FONT_SCALE = 1.5f
 
 /** 200 ms quicker than the library's default fade. */
 private val navFade = tween<Float>(durationMillis = 500)
 
 /** Switches tabs keeping one copy of each tab on the back stack, restoring its state. */
-private const val ICONS_ONLY_FONT_SCALE = 1.5f
-
 private fun NavHostController.navigateTopLevel(route: Any) {
     navigate(route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }

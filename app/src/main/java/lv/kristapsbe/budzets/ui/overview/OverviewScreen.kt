@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,7 +36,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,10 +57,13 @@ import lv.kristapsbe.budzets.domain.calculation.PaceStatus
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
-import lv.kristapsbe.budzets.ui.components.categoryName
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.MonthPager
 import lv.kristapsbe.budzets.ui.components.MonthSelector
+import lv.kristapsbe.budzets.ui.components.WarningText
+import lv.kristapsbe.budzets.ui.components.categoryName
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
 import java.time.YearMonth
@@ -161,15 +161,7 @@ fun OverviewContent(
         MonthPager(month, actions.onSelectMonth, pageState, OverviewUiState.Loading, Modifier.fillMaxSize()) { page ->
             when (page) {
                 OverviewUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-                is OverviewUiState.Error -> Column(
-                    Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
-                }
+                is OverviewUiState.Error -> ErrorState(stringResource(R.string.error_loading), Modifier.padding(padding), onRetry = actions.onRetry)
                 is OverviewUiState.Ready -> ReadyContent(page, actions, padding)
             }
         }
@@ -179,7 +171,7 @@ fun OverviewContent(
 @Composable
 private fun ReadyContent(state: OverviewUiState.Ready, actions: OverviewActions, padding: PaddingValues) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -425,17 +417,12 @@ private fun CategoryRowItem(row: CategoryRow, money: MoneyFormatter, monthHasBud
                 modifier = Modifier.weight(1f),
             )
             if (monthHasBudget) {
-                if (s.isOver) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        stringResource(R.string.over_by_amount, money.format(-s.left)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else {
-                    Text(stringResource(R.string.remaining_amount, money.format(s.left)), style = MaterialTheme.typography.bodyMedium)
-                }
+                WarningText(
+                    if (s.isOver) stringResource(R.string.over_by_amount, money.format(-s.left))
+                    else stringResource(R.string.remaining_amount, money.format(s.left)),
+                    warning = s.isOver,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
         if (!monthHasBudget) {

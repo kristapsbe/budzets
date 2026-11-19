@@ -1,7 +1,6 @@
 package lv.kristapsbe.budzets.ui.close
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -51,7 +50,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.ui.surplus.text
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -104,8 +105,7 @@ fun MonthCloseScreen(
 @Composable
 private fun reopenRefusedText(event: CloseEvent.ReopenRefused, state: MonthCloseUiState): String {
     val currency = (state as? MonthCloseUiState.Ready)?.currency ?: return ""
-    val locale = LocalConfiguration.current.locales[0]
-    val money = remember(currency, locale) { MoneyFormatter(currency, locale) }
+    val money = rememberMoneyFormatter(currency)
     val pockets = event.pockets.map { (label, balance) -> stringResource(R.string.pocket_would_be, label.text(), money.format(-balance)) }
     return stringResource(R.string.reopen_refused_body, pockets.joinToString("\n"))
 }
@@ -142,9 +142,7 @@ fun MonthCloseContent(
     ) { padding ->
         when (state) {
             MonthCloseUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is MonthCloseUiState.Error -> Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), Alignment.Center) {
-                Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-            }
+            is MonthCloseUiState.Error -> ErrorState(stringResource(R.string.error_loading), Modifier.padding(padding))
             is MonthCloseUiState.Ready -> ReviewList(state, actions, padding, onReopen = { confirmReopen = true })
         }
     }
@@ -165,7 +163,7 @@ fun MonthCloseContent(
 @Composable
 private fun ReviewList(state: MonthCloseUiState.Ready, actions: MonthCloseActions, padding: PaddingValues, onReopen: () -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
     val month = state.month.displayName(locale)
     val showPending = state.status == MonthStatus.CHANGED
 

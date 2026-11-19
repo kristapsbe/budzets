@@ -4,7 +4,6 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
-import org.junit.Assert.fail
 import java.time.Instant
 import java.time.YearMonth
 
@@ -28,10 +27,10 @@ val FIXED_NOW: Instant = Instant.parse("2026-03-01T10:00:00Z")
 
 fun <T, E> Outcome<T, E>.ok(): T = when (this) {
     is Outcome.Ok -> value
-    is Outcome.Err -> fail("expected Ok but was $error") as Nothing
+    is Outcome.Err -> throw AssertionError("expected Ok but was $error")
 }
 
 fun <T, E> Outcome<T, E>.err(): E = when (this) {
-    is Outcome.Ok -> fail("expected Err but was $value") as Nothing
+    is Outcome.Ok -> throw AssertionError("expected Err but was $value")
     is Outcome.Err -> error
 }

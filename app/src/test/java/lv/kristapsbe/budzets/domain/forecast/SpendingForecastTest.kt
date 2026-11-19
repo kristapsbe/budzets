@@ -113,7 +113,7 @@ class SpendingForecastTest {
         assertEquals(foodOnly.expected + funOnly.expected, both.expected)
         val parts = (foodOnly.high - foodOnly.low) + (funOnly.high - funOnly.low)
         assertTrue("together ${both.high - both.low} < apart $parts", (both.high - both.low) < parts)
-        assertEquals(f.estimates(month).values.map { it.expected }.reduce { a, b -> a + b }, both.expected)
+        assertEquals(f.categoriesIn(month).map { f.estimate(month, listOf(it)).expected }.reduce { a, b -> a + b }, both.expected)
     }
 
     @Test

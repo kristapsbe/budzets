@@ -22,11 +22,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -68,6 +71,24 @@ internal class PlotGeometry(density: Density, size: Size, val scale: ChartScale)
 
     fun y(minor: Long): Float = plotTop + plotHeight * (1f - scale.fraction(minor))
     fun center(index: Int): Float = slot * index + slot / 2
+
+    /** Month [index]'s bar from [top] to [bottom] (y, in px), rounded at the end that has [roundTop] or [roundBottom]. */
+    fun barPath(index: Int, top: Float, bottom: Float, roundTop: Boolean = false, roundBottom: Boolean = false): Path {
+        val left = center(index) - bar / 2
+        val topCorner = if (roundTop) CornerRadius(corner) else CornerRadius.Zero
+        val bottomCorner = if (roundBottom) CornerRadius(corner) else CornerRadius.Zero
+        return Path().apply {
+            addRoundRect(RoundRect(Rect(left, top, left + bar, bottom), topCorner, topCorner, bottomCorner, bottomCorner))
+        }
+    }
+
+    /** A bar from zero to [minor], rounded at the end away from zero; it shows as a hairline when tiny. */
+    fun barFromZero(index: Int, minor: Long): Path {
+        val zero = y(0)
+        val end = y(minor)
+        return if (minor > 0) barPath(index, minOf(end, zero - hairline), zero, roundTop = true)
+        else barPath(index, zero, maxOf(end, zero + hairline), roundBottom = true)
+    }
 }
 
 @Composable
@@ -146,8 +167,26 @@ internal fun DrawScope.drawWhisker(x: Float, low: Float, high: Float, color: Col
     drawLine(color, Offset(x - cap, high), Offset(x + cap, high), strokeWidth = width, alpha = alpha)
 }
 
+internal fun polyline(points: List<Offset>): Path = Path().apply {
+    points.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
+}
+
+/**
+ * A 4 dp dot in a 2 dp ring of [ringColor] (the surface), which keeps it clear of the marks behind
+ * it. A [hollow] one marks a forecast, so it doesn't read as something that happened.
+ */
+internal fun DrawScope.drawRingedDot(center: Offset, color: Color, ringColor: Color, hollow: Boolean = false) {
+    val dot = 4.dp.toPx()
+    drawCircle(ringColor, radius = dot + 2.dp.toPx(), center = center)
+    if (hollow) drawCircle(color, radius = dot - 0.75.dp.toPx(), center = center, style = Stroke(width = 1.5.dp.toPx()))
+    else drawCircle(color, radius = dot, center = center)
+}
+
 /** Dots, for a forecast line: on this screen dashes mean "budget". Draw with a round cap. */
 internal fun Density.forecastDots(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(0.01f, 4.dp.toPx()))
+
+/** Dashes, for a budget line or the pace guide. */
+internal fun Density.budgetDashes(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
 
 /**
  * What every month chart has: y-axis labels that stay put, a plot that scrolls sideways with

@@ -171,11 +171,6 @@ class SurplusRepository(
         dao.getLatestClosure(month.toDb())?.let { it.toDomain(dao.getClosureCategories(it.month, it.revision)) }
     }
 
-    /** The month's total surplus effect per pocket if it were closed now (for the review screen). */
-    suspend fun previewClose(month: YearMonth): Map<SurplusPocket, Money> = db.withTransaction {
-        finalizer.preview(budgets.loadMonthSummary(month))
-    }
-
     suspend fun hasChangesSinceClosing(month: YearMonth): Boolean = db.withTransaction {
         latestClosure(month)?.isClosed == true &&
             finalizer.hasChangesSinceClosing(loadLedger(), budgets.loadMonthSummary(month))

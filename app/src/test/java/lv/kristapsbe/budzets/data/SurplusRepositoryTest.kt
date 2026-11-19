@@ -201,7 +201,7 @@ class SurplusRepositoryTest : DbTest() {
         surplus.closeMonth(ym("2026-03")).ok()
         val closed = flow.first { it.latest != null }
         assertTrue(closed.latest!!.isClosed)
-        assertEquals(1, closed.latest!!.revision)
+        assertEquals(1, closed.latest.revision)
         assertTrue(closed.review.pending.isEmpty())
         assertEquals(mapOf(pocket to eur(10)), closed.review.recorded)
 

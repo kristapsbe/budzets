@@ -2,14 +2,11 @@ package lv.kristapsbe.budzets.ui.expenses
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -22,7 +19,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -73,11 +69,13 @@ import kotlinx.coroutines.flow.StateFlow
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.ExpenseId
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
-import lv.kristapsbe.budzets.ui.components.categoryName
 import lv.kristapsbe.budzets.ui.components.MonthPager
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.ui.components.SwipeToDelete
+import lv.kristapsbe.budzets.ui.components.categoryName
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
 import lv.kristapsbe.budzets.util.displayName
@@ -218,15 +216,7 @@ fun TransactionsContent(
         MonthPager(month, actions.onSelectMonth, pageState, TransactionsUiState.Loading, Modifier.fillMaxSize()) { page ->
             when (page) {
                 TransactionsUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-                is TransactionsUiState.Error -> Column(
-                    Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
-                }
+                is TransactionsUiState.Error -> ErrorState(stringResource(R.string.error_loading), Modifier.padding(padding), onRetry = actions.onRetry)
                 is TransactionsUiState.Ready -> ReadyList(
                     state = page,
                     actions = actions,
@@ -253,7 +243,7 @@ private fun ReadyList(
     onSearchFocused: () -> Unit,
 ) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

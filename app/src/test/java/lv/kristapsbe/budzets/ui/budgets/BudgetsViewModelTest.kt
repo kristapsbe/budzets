@@ -51,7 +51,7 @@ class BudgetsViewModelTest : ViewModelTest() {
         vm.nextMonth(); vm.nextMonth()
         val june = awaitReady { it.month == ym("2026-06") }
         assertEquals(eur(500), june.overall.plan!!.amount)
-        assertEquals(setOf(TargetKind.MONTHLY), june.overall.plan!!.determinedBy)
+        assertEquals(setOf(TargetKind.MONTHLY), june.overall.plan.determinedBy)
         assertNull(june.overall.since) // started this month
         assertNull(june.overall.nextChange)
 

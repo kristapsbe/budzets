@@ -2,7 +2,6 @@ package lv.kristapsbe.budzets.ui.settings
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -19,7 +18,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.backup.Backup
 import lv.kristapsbe.budzets.data.backup.BackupCodec
 import lv.kristapsbe.budzets.data.backup.BackupDocuments
@@ -242,7 +241,6 @@ class SettingsViewModel(
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 SettingsViewModel(container.settings, container.expenses, container.backups, container.backupDocuments, container.clock, container.appVersion)
             }
         }
