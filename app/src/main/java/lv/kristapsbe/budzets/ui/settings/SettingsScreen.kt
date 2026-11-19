@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -43,12 +42,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -65,6 +63,7 @@ import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.canSwitchCurrency
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.util.dateTimeText
 import java.time.Instant
@@ -132,9 +131,7 @@ fun SettingsContent(
     ) { padding ->
         when (state) {
             SettingsUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is SettingsUiState.Error -> Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), Alignment.Center) {
-                Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-            }
+            is SettingsUiState.Error -> ErrorState(stringResource(R.string.error_loading), Modifier.padding(padding))
             is SettingsUiState.Ready -> ReadyList(state, actions, padding, zone)
         }
     }

@@ -39,8 +39,7 @@ object BudgetPlanning {
 
     /** Same rule as [MonthSummary.categoryPlansExceedOverall], applied to a resolved (possibly draft) budget. */
     fun categoryPlansExceedOverall(resolved: ResolvedBudget): Boolean =
-        !resolved.overallDerived && resolved.overallBase != null &&
-            resolved.categoryPlans.values.map { it.amount }.sumMoney() > resolved.overallBase
+        !resolved.overallDerived && resolved.overallBase != null && categoryTotal(resolved) > resolved.overallBase
 
     fun categoryTotal(resolved: ResolvedBudget): Money = resolved.categoryPlans.values.map { it.amount }.sumMoney()
 

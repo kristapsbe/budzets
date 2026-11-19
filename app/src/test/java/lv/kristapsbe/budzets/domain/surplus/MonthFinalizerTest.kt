@@ -49,7 +49,7 @@ class MonthFinalizerTest {
         val s = summary(march, eur(1000), cat(FOOD, 500, 400), cat(FUN, 300, 350))
         assertEquals(
             mapOf(FOOD_POCKET to eur(100), FUN_POCKET to eur(-50), SurplusPocket.Unallocated to eur(200)),
-            finalizer.preview(s),
+            closingEffect(s),
         )
         val result = finalizer.close(emptyList(), null, s, current).ok()
         assertEquals(1, result.closure.revision)
@@ -109,7 +109,7 @@ class MonthFinalizerTest {
         assertEquals(eur(30), byPocket.getValue(FUN_POCKET).amount)
 
         val ledger = first.entries + second.entries
-        assertEquals(finalizer.preview(after), SurplusLedger.closureNet(ledger, march))
+        assertEquals(closingEffect(after), SurplusLedger.closureNet(ledger, march))
         assertEquals(eur(130), balance(ledger, FOOD_POCKET))
         assertEquals(eur(-30), balance(ledger, FUN_POCKET))
     }

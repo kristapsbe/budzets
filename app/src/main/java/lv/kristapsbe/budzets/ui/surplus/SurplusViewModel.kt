@@ -2,7 +2,6 @@ package lv.kristapsbe.budzets.ui.surplus
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -17,7 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.data.repository.SurplusRepository
@@ -226,7 +225,6 @@ class SurplusViewModel(
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 SurplusViewModel(createSavedStateHandle(), container.surplus, container.categories, container.settings, container.clock)
             }
         }

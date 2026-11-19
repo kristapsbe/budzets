@@ -24,6 +24,9 @@ fun FormSection(title: String, error: String?, content: @Composable () -> Unit) 
     }
 }
 
+/** An amount error that shows while typing; the others wait until saving is tried. */
+val AmountError.showsWhileTyping: Boolean get() = this == AmountError.TOO_MANY_DECIMALS || this == AmountError.TOO_LARGE
+
 /** The message for an amount that didn't parse, in terms of the currency's precision. */
 @Composable
 fun amountErrorText(error: AmountError, fractionDigits: Int): String = when (error) {

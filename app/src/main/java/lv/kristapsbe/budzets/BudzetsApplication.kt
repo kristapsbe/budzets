@@ -1,6 +1,8 @@
 package lv.kristapsbe.budzets
 
 import android.app.Application
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.work.Configuration
 import kotlinx.coroutines.launch
 import lv.kristapsbe.budzets.widget.WidgetRefresher
@@ -26,3 +28,6 @@ class BudzetsApplication : Application(), Configuration.Provider {
 
     override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder().build()
 }
+
+/** The app's [AppContainer], for a ViewModel factory's initializer. */
+val CreationExtras.container: AppContainer get() = (this[APPLICATION_KEY] as BudzetsApplication).container

@@ -79,11 +79,8 @@ class MonthFinalizer(
     private val now: () -> Instant,
 ) {
 
-    /** The net ledger effect closing [summary] should have, per pocket. Zero pockets are omitted. */
-    fun preview(summary: MonthSummary): Map<SurplusPocket, Money> = closingEffect(summary)
-
     fun review(ledger: List<LedgerEntry>, summary: MonthSummary): CloseReview =
-        CloseReview(summary, preview(summary), SurplusLedger.closureNet(ledger, summary.month))
+        CloseReview(summary, closingEffect(summary), SurplusLedger.closureNet(ledger, summary.month))
 
     /** True when closing [summary] now would post anything new for its month. */
     fun hasChangesSinceClosing(ledger: List<LedgerEntry>, summary: MonthSummary): Boolean =

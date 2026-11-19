@@ -24,8 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -52,7 +50,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -67,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.first
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.calculation.BurnDown
 import lv.kristapsbe.budzets.domain.calculation.MonthStack
@@ -74,14 +72,16 @@ import lv.kristapsbe.budzets.domain.forecast.ForecastBasis
 import lv.kristapsbe.budzets.domain.forecast.ForecastRules
 import lv.kristapsbe.budzets.domain.forecast.ForecastStack
 import lv.kristapsbe.budzets.domain.model.Money
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
+import lv.kristapsbe.budzets.ui.components.WarningText
 import lv.kristapsbe.budzets.ui.components.categoryName
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.ui.surplus.signed
 import lv.kristapsbe.budzets.ui.theme.chartColors
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import java.time.YearMonth
 import java.util.Locale
-import kotlinx.coroutines.flow.first
 
 @Composable
 fun SpendingHistoryScreen(
@@ -125,15 +125,7 @@ fun SpendingHistoryContent(state: SpendingHistoryUiState, actions: SpendingHisto
     ) { padding ->
         when (state) {
             SpendingHistoryUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-            is SpendingHistoryUiState.Error -> Column(
-                Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(stringResource(R.string.error_loading_history), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
-            }
+            is SpendingHistoryUiState.Error -> ErrorState(stringResource(R.string.error_loading_history), Modifier.padding(padding), onRetry = actions.onRetry)
             is SpendingHistoryUiState.Ready -> ReadyContent(state, actions, Modifier.padding(padding))
         }
     }
@@ -142,7 +134,7 @@ fun SpendingHistoryContent(state: SpendingHistoryUiState, actions: SpendingHisto
 @Composable
 private fun ReadyContent(state: SpendingHistoryUiState.Ready, actions: SpendingHistoryActions, modifier: Modifier) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
     val unit = unitMinor(state.currency.fractionDigits)
     val spendingScale = remember(state.months, state.forecast, unit) { spendingScale(state.months, unit, state.forecast) }
     val surplusScale = remember(state.surplus, state.forecast, unit) { surplusScale(state.surplus, unit, state.forecast) }
@@ -274,17 +266,7 @@ private fun BurnDownSection(
         Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(burnDownStart(burnDown, money), style = MaterialTheme.typography.bodyMedium)
             burnDownBoosts(burnDown, money)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-            val left = burnDownLeft(burnDown, money)
-            if (burnDown.left.isNegative) {
-                // In words as well as red, so colour isn't the only signal.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(left, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
-                }
-            } else {
-                Text(left, style = MaterialTheme.typography.bodyLarge)
-            }
+            WarningText(burnDownLeft(burnDown, money), warning = burnDown.left.isNegative, style = MaterialTheme.typography.bodyLarge)
             burnDownGuide(burnDown, money)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -306,25 +288,8 @@ private fun BurnDownLegend(burnDown: BurnDown, modifier: Modifier) {
     val lineColor = MaterialTheme.colorScheme.onSurface
     val guideColor = MaterialTheme.colorScheme.onSurfaceVariant
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LegendKey(stringResource(R.string.burn_down_legend_left)) {
-            Canvas(Modifier.width(20.dp).height(12.dp)) {
-                val y = size.height / 2
-                drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.dp.toPx())
-                drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(size.width, y))
-            }
-        }
-        LegendKey(stringResource(R.string.burn_down_legend_guide)) {
-            Canvas(Modifier.width(20.dp).height(12.dp)) {
-                val y = size.height / 2
-                drawLine(
-                    guideColor,
-                    Offset(0f, y),
-                    Offset(size.width, y),
-                    strokeWidth = 1.5.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
-                )
-            }
-        }
+        LegendKey(stringResource(R.string.burn_down_legend_left)) { LineKey(lineColor, dotAt = 1f) }
+        LegendKey(stringResource(R.string.burn_down_legend_guide)) { LineKey(guideColor, LineStyle.DASHED, width = 1.5.dp) }
         if (burnDown.boostsAdded.isPositive) {
             LegendKey(stringResource(R.string.burn_down_legend_boost)) {
                 Canvas(Modifier.width(12.dp).height(16.dp)) {
@@ -336,21 +301,10 @@ private fun BurnDownLegend(burnDown: BurnDown, modifier: Modifier) {
             }
         }
         if (burnDown.projection != null) {
-            LegendKey(stringResource(R.string.forecast_legend)) {
-                Canvas(Modifier.width(20.dp).height(12.dp)) {
-                    val y = size.height / 2
-                    drawRect(lineColor, Offset(0f, 0f), size, alpha = 0.12f)
-                    drawLine(lineColor, Offset(2.dp.toPx(), y), Offset(size.width - 2.dp.toPx(), y), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = forecastDots())
-                }
-            }
+            LegendKey(stringResource(R.string.forecast_legend)) { LineKey(lineColor, LineStyle.DOTTED, wash = true) }
         }
         if (burnDown.days.any { it.left.isNegative }) {
-            LegendKey(stringResource(R.string.status_over)) {
-                Canvas(Modifier.width(20.dp).height(12.dp)) {
-                    val y = size.height / 2
-                    drawLine(colors.negative, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.dp.toPx())
-                }
-            }
+            LegendKey(stringResource(R.string.status_over)) { LineKey(colors.negative) }
         }
     }
 }
@@ -378,37 +332,49 @@ private fun SurplusLegend(state: SpendingHistoryUiState.Ready, modifier: Modifie
                 )
             }
         }
-        LegendKey(stringResource(R.string.history_legend_total)) {
-            Canvas(Modifier.width(20.dp).height(12.dp)) {
-                val y = size.height / 2
-                drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.dp.toPx())
-                drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(size.width / 2, y))
-            }
-        }
+        LegendKey(stringResource(R.string.history_legend_total)) { LineKey(lineColor, dotAt = 0.5f) }
         val forecast = state.forecast ?: return@FlowRow
         LegendKey(stringResource(R.string.forecast_legend)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                HatchedSwatch(colors.positive)
-                Spacer(Modifier.width(4.dp))
-                Canvas(Modifier.width(20.dp).height(12.dp)) {
-                    val y = size.height / 2
-                    drawLine(lineColor, Offset(2.dp.toPx(), y), Offset(size.width - 2.dp.toPx(), y), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = forecastDots())
-                }
-            }
+            HatchedSwatch(colors.positive)
+            Spacer(Modifier.width(4.dp))
+            LineKey(lineColor, LineStyle.DOTTED)
         }
         LegendKey(stringResource(R.string.forecast_legend_range)) { WhiskerKey() }
         if (forecast.monthEnd != null) {
-            LegendKey(stringResource(R.string.forecast_legend_month_end)) {
-                Canvas(Modifier.width(20.dp).height(12.dp)) {
-                    val y = size.height / 2
-                    drawLine(lineColor, Offset(2.dp.toPx(), y), Offset(size.width - 2.dp.toPx(), y), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-                }
-            }
+            LegendKey(stringResource(R.string.forecast_legend_month_end)) { LineKey(lineColor, width = 3.dp) }
         }
     }
 }
 
-/** A forecast's swatch: hatched like the forecast marks. */
+private enum class LineStyle { SOLID, DASHED, DOTTED }
+
+/**
+ * A line mark for a legend key, 20 dp long, with a dot [dotAt] that fraction of the way along, or
+ * a [wash] behind it for a range. Dotted and thick lines have round ends, so they stop short.
+ */
+@Composable
+private fun LineKey(color: Color, style: LineStyle = LineStyle.SOLID, width: Dp = 2.dp, dotAt: Float? = null, wash: Boolean = false) {
+    Canvas(Modifier.width(20.dp).height(12.dp)) {
+        val y = size.height / 2
+        if (wash) drawRect(color, alpha = 0.12f)
+        val round = style == LineStyle.DOTTED || width > 2.dp
+        val inset = if (round) 2.dp.toPx() else 0f
+        drawLine(
+            color,
+            Offset(inset, y),
+            Offset(size.width - inset, y),
+            strokeWidth = width.toPx(),
+            cap = if (round) StrokeCap.Round else StrokeCap.Butt,
+            pathEffect = when (style) {
+                LineStyle.SOLID -> null
+                LineStyle.DASHED -> budgetDashes()
+                LineStyle.DOTTED -> forecastDots()
+            },
+        )
+        dotAt?.let { drawCircle(color, radius = 4.dp.toPx(), center = Offset(size.width * it, y)) }
+    }
+}
+
 @Composable
 private fun HatchedSwatch(color: Color) {
     Canvas(Modifier.size(12.dp)) {
@@ -417,7 +383,6 @@ private fun HatchedSwatch(color: Color) {
     }
 }
 
-/** The likely range's key: a whisker. */
 @Composable
 private fun WhiskerKey() {
     val color = MaterialTheme.colorScheme.onSurface
@@ -425,8 +390,9 @@ private fun WhiskerKey() {
 }
 
 @Composable
-private fun LegendKey(label: String, mark: @Composable () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+/** A [mark] and its [label]. [besideChips] makes it as tall as a chip with its touch target, so it lines up with them. */
+private fun LegendKey(label: String, besideChips: Boolean = false, mark: @Composable () -> Unit) {
+    Row(if (besideChips) Modifier.height(48.dp) else Modifier, verticalAlignment = Alignment.CenterVertically) {
         mark()
         Spacer(Modifier.width(8.dp))
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -451,36 +417,13 @@ private fun Legend(state: SpendingHistoryUiState.Ready, onToggle: (String) -> Un
                 } else null,
             )
         }
-        // Only when some month has a line to explain. As tall as a chip with its touch target, so
-        // the key lines up with the chips beside it.
-        if (state.months.any { it.budget != null }) Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val lineColor = MaterialTheme.colorScheme.onSurface
-                Canvas(Modifier.width(20.dp).height(2.dp)) {
-                    drawLine(
-                        lineColor,
-                        Offset(0f, size.height / 2),
-                        Offset(size.width, size.height / 2),
-                        strokeWidth = size.height,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.history_budget_key),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        // The budget key only when some month has a line to explain.
+        if (state.months.any { it.budget != null }) {
+            LegendKey(stringResource(R.string.history_budget_key), besideChips = true) { LineKey(MaterialTheme.colorScheme.onSurface, LineStyle.DASHED) }
         }
-        // As tall as a chip, like the budget key.
         if (state.forecast != null) {
-            Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-                LegendKey(stringResource(R.string.forecast_legend)) { HatchedSwatch(colors.other) }
-            }
-            Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-                LegendKey(stringResource(R.string.forecast_legend_range)) { WhiskerKey() }
-            }
+            LegendKey(stringResource(R.string.forecast_legend), besideChips = true) { HatchedSwatch(colors.other) }
+            LegendKey(stringResource(R.string.forecast_legend_range), besideChips = true) { WhiskerKey() }
         }
     }
 }
@@ -511,16 +454,12 @@ private fun MonthBreakdown(
         } else {
             Text(stringResource(R.string.spent_of_budget, money.format(stack.total), money.format(budget)), style = MaterialTheme.typography.bodyLarge)
             val left = budget - stack.total
-            if (left.isNegative) {
-                // In words as well as red, so colour isn't the only signal.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.over_by_amount, money.format(-left)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                }
-            } else {
-                Text(stringResource(R.string.remaining_amount, money.format(left)), style = MaterialTheme.typography.bodyMedium)
-            }
+            WarningText(
+                if (left.isNegative) stringResource(R.string.over_by_amount, money.format(-left))
+                else stringResource(R.string.remaining_amount, money.format(left)),
+                warning = left.isNegative,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         // Where the month under way will likely end (Q54).
         state.forecast?.currentEnd?.takeIf { stack.month == state.currentMonth }?.let { end ->
@@ -528,19 +467,7 @@ private fun MonthBreakdown(
             forecastRange(end, money)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         state.selectedSurplus?.let { surplus ->
-            val taken = surplus.result?.isNegative == true
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Taking from the surplus is said in words as well as red.
-                if (taken) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(
-                    surplusSentence(surplus, money),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (taken) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            WarningText(surplusSentence(surplus, money), warning = surplus.result?.isNegative == true, style = MaterialTheme.typography.bodyMedium)
             // With boosts or one-offs in it, the result isn't what the close screen shows, so it's split.
             val closing = surplus.closing
             if (closing != null && (!surplus.boosts.isZero || !surplus.oneOffs.isZero)) {
@@ -568,26 +495,7 @@ private fun MonthBreakdown(
         }
         stack.segments.asReversed().forEach { segment ->
             val series = state.seriesFor(segment.series) ?: return@forEach
-            val selected = series.key == state.highlighted
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .selectable(selected = selected, role = Role.Checkbox) { onToggle(series.key) }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Swatch(colors[series.slot])
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    seriesName(series),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (selected) FontWeight.SemiBold else null,
-                    modifier = Modifier.weight(1f),
-                )
-                if (selected) {
-                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                }
+            BandRow(series, state.highlighted, onToggle, swatch = { Swatch(colors[series.slot]) }) {
                 Text(money.format(segment.amount), style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -614,19 +522,7 @@ private fun ForecastBreakdown(
         Text(forecastSpent(stack, money), style = MaterialTheme.typography.bodyLarge)
         forecastRange(stack.total, money)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         state.selectedProjection?.let { projection ->
-            val taking = projection.result?.expected?.isNegative == true
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Taking from the surplus is said in words as well as red.
-                if (taking) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(
-                    projectionSentence(projection, money),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (taking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            WarningText(projectionSentence(projection, money), warning = projection.result?.expected?.isNegative == true, style = MaterialTheme.typography.bodyMedium)
             Text(
                 stringResource(R.string.forecast_surplus_after, money.format(projection.runningTotal)),
                 style = MaterialTheme.typography.bodyMedium,
@@ -639,26 +535,7 @@ private fun ForecastBreakdown(
         HorizontalDivider()
         stack.segments.asReversed().forEach { segment ->
             val series = state.seriesFor(segment.series) ?: return@forEach
-            val selected = series.key == state.highlighted
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .selectable(selected = selected, role = Role.Checkbox) { onToggle(series.key) }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                HatchedSwatch(colors[series.slot])
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    seriesName(series),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (selected) FontWeight.SemiBold else null,
-                    modifier = Modifier.weight(1f),
-                )
-                if (selected) {
-                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                }
+            BandRow(series, state.highlighted, onToggle, swatch = { HatchedSwatch(colors[series.slot]) }) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(money.format(segment.estimate.expected), style = MaterialTheme.typography.bodyLarge)
                     // Left out when there is no spread, as for a rent that never changes.
@@ -672,6 +549,39 @@ private fun ForecastBreakdown(
                 }
             }
         }
+    }
+}
+
+/** A band in a month's breakdown: its [swatch], name and [amount]. Tapping it toggles its highlight, marked with a tick too. */
+@Composable
+private fun BandRow(
+    series: ChartSeries,
+    highlighted: String?,
+    onToggle: (String) -> Unit,
+    swatch: @Composable () -> Unit,
+    amount: @Composable () -> Unit,
+) {
+    val selected = series.key == highlighted
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.Checkbox) { onToggle(series.key) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        swatch()
+        Spacer(Modifier.width(12.dp))
+        Text(
+            seriesName(series),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else null,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        amount()
     }
 }
 

@@ -48,8 +48,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -59,11 +59,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.ui.components.Banner
-import lv.kristapsbe.budzets.ui.components.categoryName
 import lv.kristapsbe.budzets.ui.components.FormSection
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.amountErrorText
-import lv.kristapsbe.budzets.util.MoneyFormatter
+import lv.kristapsbe.budzets.ui.components.categoryName
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.util.dayName
 import lv.kristapsbe.budzets.util.displayName
 import lv.kristapsbe.budzets.util.pickerMillisToDate
@@ -163,7 +163,7 @@ fun ExpenseEditorContent(state: ExpenseEditorState, actions: EditorActions) {
 @Composable
 private fun EditorForm(state: ExpenseEditorState.Editing, actions: EditorActions, modifier: Modifier) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
     val form = state.form
     val amountFocus = remember { FocusRequester() }
     if (state.isNew) {

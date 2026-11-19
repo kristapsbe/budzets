@@ -5,14 +5,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
@@ -31,6 +30,7 @@ import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
+import lv.kristapsbe.budzets.ui.components.showsWhileTyping
 import lv.kristapsbe.budzets.util.amountInputChars
 import lv.kristapsbe.budzets.util.formatForInput
 import java.text.DecimalFormatSymbols
@@ -172,7 +172,7 @@ class BudgetEditorViewModel(
     private fun visibleErrors(parsed: Outcome<BudgetTarget, TargetErrors>): TargetErrors {
         val errors = (parsed as? Outcome.Err)?.error ?: return TargetErrors()
         if (attemptedSave) return errors
-        fun keep(e: AmountError?) = e?.takeIf { it == AmountError.TOO_MANY_DECIMALS || it == AmountError.TOO_LARGE }
+        fun keep(e: AmountError?) = e?.takeIf { it.showsWhileTyping }
         return TargetErrors(keep(errors.daily), keep(errors.weekly), keep(errors.monthly))
     }
 
@@ -216,7 +216,6 @@ class BudgetEditorViewModel(
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 BudgetEditorViewModel(createSavedStateHandle(), container.budgets, container.categories, container.settings, container.surplus)
             }
         }

@@ -2,7 +2,6 @@ package lv.kristapsbe.budzets.ui.history
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -19,7 +18,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.BudgetRepository
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.ExpenseRepository
@@ -270,7 +269,6 @@ class SpendingHistoryViewModel(
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 SpendingHistoryViewModel(
                     createSavedStateHandle(),
                     container.budgets,

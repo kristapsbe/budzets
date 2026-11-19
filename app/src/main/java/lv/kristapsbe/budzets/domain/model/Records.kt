@@ -34,6 +34,4 @@ data class Expense(
     val note: String?,
     val createdAt: Instant,
     val updatedAt: Instant,
-) {
-    fun toLine() = ExpenseLine(categoryId, date, amount)
-}
+)

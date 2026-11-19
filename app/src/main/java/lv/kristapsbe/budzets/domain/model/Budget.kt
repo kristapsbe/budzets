@@ -1,6 +1,5 @@
 package lv.kristapsbe.budzets.domain.model
 
-import java.time.LocalDate
 import java.time.YearMonth
 
 /**
@@ -33,13 +32,3 @@ data class BudgetConfig(
 data class CategoryRef(val id: CategoryId, val archivedFrom: YearMonth? = null) {
     fun isActiveIn(month: YearMonth) = archivedFrom == null || month < archivedFrom
 }
-
-/** An expense counts against the calendar month of its local [date], never a UTC timestamp. */
-data class ExpenseLine(val categoryId: CategoryId, val date: LocalDate, val amount: Money) {
-    val month: YearMonth get() = YearMonth.from(date)
-}
-
-fun spendingByCategory(month: YearMonth, expenses: Iterable<ExpenseLine>): Map<CategoryId, Money> =
-    expenses.filter { it.month == month }
-        .groupBy { it.categoryId }
-        .mapValues { (_, lines) -> lines.map { it.amount }.sumMoney() }

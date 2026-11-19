@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,9 +65,9 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -83,10 +81,12 @@ import lv.kristapsbe.budzets.domain.model.BudgetTarget
 import lv.kristapsbe.budzets.domain.model.CategoryId
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.Banner
+import lv.kristapsbe.budzets.ui.components.ErrorState
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.MonthPager
 import lv.kristapsbe.budzets.ui.components.MonthSelector
 import lv.kristapsbe.budzets.ui.components.SwipeToDelete
+import lv.kristapsbe.budzets.ui.components.rememberMoneyFormatter
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
 import sh.calvin.reorderable.ReorderableItem
@@ -186,15 +186,7 @@ fun BudgetsContent(
         MonthPager(month, actions.onSelectMonth, pageState, BudgetsUiState.Loading, Modifier.fillMaxSize()) { page ->
             when (page) {
                 BudgetsUiState.Loading -> LoadingIndicator(Modifier.padding(padding))
-                is BudgetsUiState.Error -> Column(
-                    Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(stringResource(R.string.error_loading), style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
-                }
+                is BudgetsUiState.Error -> ErrorState(stringResource(R.string.error_loading), Modifier.padding(padding), onRetry = actions.onRetry)
                 is BudgetsUiState.Ready -> ReadyList(
                     page,
                     actions,
@@ -245,7 +237,7 @@ private fun ReadyList(
     onDelete: (CategoryId) -> Unit,
 ) {
     val locale = LocalConfiguration.current.locales[0]
-    val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
+    val money = rememberMoneyFormatter(state.currency)
     val listState = rememberLazyListState()
 
     // Rows follow the drag here and are saved once, on drop. Each list from the database replaces it.

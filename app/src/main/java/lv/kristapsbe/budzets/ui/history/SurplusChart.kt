@@ -4,10 +4,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -77,26 +74,15 @@ internal fun SurplusChart(
         locale = locale,
         modifier = modifier,
     ) { g ->
-        val zero = g.y(0)
         class Bar(val path: Path, val positive: Boolean, val closed: Boolean)
         val bars = state.surplus.mapIndexedNotNull { i, month ->
             val result = month.result?.takeUnless { it.isZero } ?: return@mapIndexedNotNull null
-            val left = g.center(i) - g.bar / 2
-            val end = g.y(result.minor)
-            // Rounded at the end away from zero, square where it meets the zero line.
-            val path = if (result.isPositive) {
-                Path().apply { addRoundRect(RoundRect(Rect(left, minOf(end, zero - g.hairline), left + g.bar, zero), topLeft = CornerRadius(g.corner), topRight = CornerRadius(g.corner))) }
-            } else {
-                Path().apply { addRoundRect(RoundRect(Rect(left, zero, left + g.bar, maxOf(end, zero + g.hairline)), bottomLeft = CornerRadius(g.corner), bottomRight = CornerRadius(g.corner))) }
-            }
-            Bar(path, result.isPositive, month.isClosed)
+            Bar(g.barFromZero(i, result.minor), result.isPositive, month.isClosed)
         }
         val points = state.surplus.mapIndexed { i, month -> Offset(g.center(i), g.y(month.runningTotal.minor)) }
-        val line = Path().apply { points.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) } }
+        val line = polyline(points)
         val outline = Stroke(width = g.hairline)
         val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        val dot = 4.dp.toPx()
-        val ring = 2.dp.toPx()
 
         // The forecast: hatched bars after the real months, the tick on the month under way, and a
         // dotted total from the tick on.
@@ -105,14 +91,7 @@ internal fun SurplusChart(
         val projected = forecast?.surplus.orEmpty().mapIndexedNotNull { j, month ->
             val result = month.result?.takeUnless { it.expected.isZero } ?: return@mapIndexedNotNull null
             val i = offset + j
-            val left = g.center(i) - g.bar / 2
-            val end = g.y(result.expected.minor)
-            val path = if (result.expected.isPositive) {
-                Path().apply { addRoundRect(RoundRect(Rect(left, minOf(end, zero - g.hairline), left + g.bar, zero), topLeft = CornerRadius(g.corner), topRight = CornerRadius(g.corner))) }
-            } else {
-                Path().apply { addRoundRect(RoundRect(Rect(left, zero, left + g.bar, maxOf(end, zero + g.hairline)), bottomLeft = CornerRadius(g.corner), bottomRight = CornerRadius(g.corner))) }
-            }
-            Projected(path, result.expected.isPositive, g.center(i), g.y(result.low.minor), g.y(result.high.minor))
+            Projected(g.barFromZero(i, result.expected.minor), result.expected.isPositive, g.center(i), g.y(result.low.minor), g.y(result.high.minor))
         }
         val currentIndex = state.surplus.indexOfFirst { it.month == state.currentMonth }
         val monthEnd = forecast?.monthEnd?.takeIf { currentIndex >= 0 }
@@ -122,12 +101,10 @@ internal fun SurplusChart(
             else -> null
         }
         val dottedPoints = forecast?.surplus.orEmpty().mapIndexed { j, month -> Offset(g.center(offset + j), g.y(month.runningTotal.minor)) }
-        val dotted = Path().apply {
-            (listOfNotNull(dottedStart) + dottedPoints).forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
-        }
+        val dotted = polyline(listOfNotNull(dottedStart) + dottedPoints)
         val dottedStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = forecastDots())
-        val hollow = Stroke(width = 1.5.dp.toPx())
         val tickHalf = g.bar / 2 + 4.dp.toPx()
+        val tick = 3.dp.toPx()
 
         onDrawBehind {
             bars.forEach { bar ->
@@ -147,21 +124,14 @@ internal fun SurplusChart(
                 val x = g.center(currentIndex)
                 val y = g.y(end.result.expected.minor)
                 drawWhisker(x, g.y(end.result.low.minor), g.y(end.result.high.minor), lineColor)
-                drawLine(ringColor, Offset(x - tickHalf, y), Offset(x + tickHalf, y), strokeWidth = 3.dp.toPx() + 2 * ring, cap = StrokeCap.Round)
-                drawLine(lineColor, Offset(x - tickHalf, y), Offset(x + tickHalf, y), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                // In a ring of the surface, like the dots.
+                drawLine(ringColor, Offset(x - tickHalf, y), Offset(x + tickHalf, y), strokeWidth = tick + 4.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(lineColor, Offset(x - tickHalf, y), Offset(x + tickHalf, y), strokeWidth = tick, cap = StrokeCap.Round)
             }
             if (dottedPoints.isNotEmpty()) drawPath(dotted, lineColor, style = dottedStroke)
             if (points.size > 1) drawPath(line, lineColor, style = lineStroke)
-            points.forEach { p ->
-                // A ring of the surface keeps each dot clear of the bar and line behind it.
-                drawCircle(ringColor, radius = dot + ring, center = p)
-                drawCircle(lineColor, radius = dot, center = p)
-            }
-            // Forecast totals are hollow, so they don't read as months that happened.
-            (listOfNotNull(dottedStart.takeIf { monthEnd != null }) + dottedPoints).forEach { p ->
-                drawCircle(ringColor, radius = dot + ring, center = p)
-                drawCircle(lineColor, radius = dot - 0.75.dp.toPx(), center = p, style = hollow)
-            }
+            points.forEach { drawRingedDot(it, lineColor, ringColor) }
+            (listOfNotNull(dottedStart.takeIf { monthEnd != null }) + dottedPoints).forEach { drawRingedDot(it, lineColor, ringColor, hollow = true) }
         }
     }
 }

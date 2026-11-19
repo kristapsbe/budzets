@@ -2,7 +2,6 @@ package lv.kristapsbe.budzets.ui.expenses
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -10,19 +9,16 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import lv.kristapsbe.budzets.BudzetsApplication
+import lv.kristapsbe.budzets.container
 import lv.kristapsbe.budzets.data.repository.CategoryRepository
 import lv.kristapsbe.budzets.data.repository.ExpenseRepository
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
@@ -37,6 +33,7 @@ import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.model.sumMoney
 import lv.kristapsbe.budzets.domain.surplus.SurplusDraw
 import lv.kristapsbe.budzets.ui.components.MonthStates
+import lv.kristapsbe.budzets.ui.components.SelectedMonth
 import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
@@ -110,7 +107,6 @@ class TransactionsViewModel(
     private val clock: Clock,
 ) : ViewModel() {
 
-    private val savedMonth = savedState.getStateFlow<String?>(KEY_MONTH, null)
     private val selectedCategory = savedState.getStateFlow<String?>(KEY_CATEGORY, null)
     private val query = savedState.getStateFlow(KEY_QUERY, "")
     private val reload = MutableStateFlow(0)
@@ -119,12 +115,10 @@ class TransactionsViewModel(
     /** Drives the undo snackbar. Call [eventHandled] once it has been shown. */
     val deleteEvent: StateFlow<DeleteEvent?> = _deleteEvent.asStateFlow()
 
-    private val month: YearMonth get() = savedState.get<String>(KEY_MONTH)?.let(YearMonth::parse) ?: YearMonth.now(clock)
+    private val selection = SelectedMonth(savedState, clock, viewModelScope)
 
     /** The month on screen, known at once, before its expenses have loaded. */
-    val selectedMonth: StateFlow<YearMonth> =
-        savedMonth.map { it?.let(YearMonth::parse) ?: YearMonth.now(clock) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, month)
+    val selectedMonth: StateFlow<YearMonth> = selection.flow
 
     private val months = MonthStates<TransactionsUiState>(viewModelScope, TransactionsUiState.Loading) { month ->
         reload.flatMapLatest { observeMonth(month) }.flowOn(Dispatchers.Default)
@@ -134,9 +128,7 @@ class TransactionsViewModel(
     fun stateFor(month: YearMonth): StateFlow<TransactionsUiState> = months[month]
 
     /** The selected month's state. It keeps the previous month until the new one has loaded. */
-    val uiState: StateFlow<TransactionsUiState> =
-        selectedMonth.flatMapLatest { month -> stateFor(month).filterNot { it is TransactionsUiState.Loading } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TransactionsUiState.Loading)
+    val uiState: StateFlow<TransactionsUiState> = months.following(selectedMonth)
 
     private fun observeMonth(month: YearMonth) =
         combine(
@@ -194,12 +186,11 @@ class TransactionsViewModel(
         return ExpenseRow(id, amount, category?.name ?: "?", !isClosed && category?.isArchived == true, note, !isClosed && category?.isDeleted == true)
     }
 
-    fun previousMonth() { savedState[KEY_MONTH] = month.minusMonths(1).toString() }
-    fun nextMonth() { savedState[KEY_MONTH] = month.plusMonths(1).toString() }
-    fun goToCurrentMonth() { savedState[KEY_MONTH] = null }
+    fun previousMonth() = selection.previous()
+    fun nextMonth() = selection.next()
+    fun goToCurrentMonth() = selection.current()
 
-    /** From a swipe. The current month is stored as null, so it goes on following the date. */
-    fun selectMonth(month: YearMonth) { savedState[KEY_MONTH] = month.takeUnless { it == YearMonth.now(clock) }?.toString() }
+    fun selectMonth(month: YearMonth) = selection.select(month)
 
     fun selectCategory(id: CategoryId?) { savedState[KEY_CATEGORY] = id?.value }
     fun setQuery(text: String) { savedState[KEY_QUERY] = text }
@@ -227,13 +218,11 @@ class TransactionsViewModel(
 
     companion object {
         /** Same names as [lv.kristapsbe.budzets.ui.navigation.CategorySpendingRoute]'s properties. */
-        private const val KEY_MONTH = "month"
         private const val KEY_CATEGORY = "categoryId"
         private const val KEY_QUERY = "query"
 
         val Factory = viewModelFactory {
             initializer {
-                val container = (this[APPLICATION_KEY] as BudzetsApplication).container
                 TransactionsViewModel(createSavedStateHandle(), container.expenses, container.categories, container.settings, container.surplus, container.clock)
             }
         }

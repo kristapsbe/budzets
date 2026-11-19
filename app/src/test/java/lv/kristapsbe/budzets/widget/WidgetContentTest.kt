@@ -2,7 +2,6 @@ package lv.kristapsbe.budzets.widget
 
 import android.content.Context
 import android.content.Intent
-import androidx.compose.ui.unit.DpSize
 import androidx.glance.appwidget.testing.unit.hasStartActivityClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasContentDescription
