@@ -112,6 +112,10 @@ interface ExpenseDao {
     )
     fun observeDailySpending(fromDate: String, toDateExclusive: String): Flow<List<DateSpendRow>>
 
+    /** Every day's total that has expenses, over all months (the burn-down chart reads any month from it). */
+    @Query("SELECT expenseDate AS date, SUM(amountMinor) AS totalMinor FROM expenses GROUP BY expenseDate")
+    fun observeAllDailySpending(): Flow<List<DateSpendRow>>
+
     /** Every month's total per category. The first 7 characters of an ISO date are its month. */
     @Query(
         """

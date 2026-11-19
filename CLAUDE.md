@@ -28,7 +28,7 @@ Read these before changing behaviour:
   - Avoid unrelated refactors and new dependencies.
 - **Ask before building product behaviour that isn't settled.**
   - Put the question with a recommended option first.
-  - Record the answer in `IMPLEMENTATION_NOTES.md` as the next Q number (next: **Q50**).
+  - Record the answer in `IMPLEMENTATION_NOTES.md` as the next Q number (next: **Q57**).
   - Mark any answer it supersedes.
 - **Write up each change in `IMPLEMENTATION_NOTES.md`.**
   - Add a dated section with the decisions, deviations and verification.
@@ -65,7 +65,7 @@ echo "tests $(grep -ho '<testsuite [^>]*' $f/*.xml | grep -o ' tests="[0-9]*"' |
      "failed $(grep -ho '<testsuite [^>]*' $f/*.xml | grep -o ' failures="[0-9]*"\| errors="[0-9]*"' | tr -dc '0-9\n' | paste -sd+ - | bc)"
 ```
 
-Run the full suite **three times** before reporting a change as done; the last change ended at 512
+Run the full suite **three times** before reporting a change as done; the last change ended at 556
 tests.
 
 Known flakes:
@@ -77,7 +77,7 @@ Known flakes:
 
 | Package | What it holds |
 |---|---|
-| `domain` | Pure Kotlin with no Android code: `Money` in minor units, budget planning (the plan is the highest monthly equivalent of the targets), pace, the daily amount, month close (`MonthFinalizer`), and the append-only surplus ledger (`domain/surplus`). |
+| `domain` | Pure Kotlin with no Android code: `Money` in minor units, budget planning (the plan is the highest monthly equivalent of the targets), pace, the daily amount, month close (`MonthFinalizer`), the append-only surplus ledger (`domain/surplus`), and spending forecasts (`domain/forecast`). |
 | `data` | Room (`local`, DB version 3), repositories exposing `Flow`s, DataStore settings (`SettingsRepository`), and `backup`. |
 | `ui` | Compose screens, each with a ViewModel; navigation in `ui/navigation/BudzetsApp.kt`. |
 | `widget` | Glance widget, reading the same repositories; `QuickAddActivity` is the widget's "+". |
@@ -223,5 +223,7 @@ Release smoke test:
   - Google Drive backup and restore on a real phone (the AVD has no Google account)
   - the Latvian translation
   - gesture feel and TalkBack on a real phone
+- **Per-category forecasts (Q56):** built so the owner can judge them; they may go back to total-only
+  bars. The model's constants are in `ForecastRules`.
 - **Possibly revisited later:** the widget's `setWindow` 15-minute alarm window has no measured
   gain on API 37 and may be dropped.

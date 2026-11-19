@@ -403,7 +403,11 @@ Primary screen and default destination.
     between months by a ribbon, and a dashed line at the month's budget.
     Under it (Q39–Q42), what each finished month added to or took from
     the saved surplus, with the running total. See
-    `IMPLEMENTATION_NOTES.md`.)
+    `IMPLEMENTATION_NOTES.md`. Q50–Q52, 2026-11-19: above them, a
+    burn-down of the selected month's budget, day by day, rising when
+    a boost is added, with an even-pace guide line. Q54–Q56, same
+    day: forecasts for the next 12 months on all three charts, per
+    category on the spending chart.)
 
 ### 7.2 Add/edit expense
 

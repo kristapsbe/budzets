@@ -1879,7 +1879,341 @@ from how a debug build runs its first frame, and a release build stays far below
     category line and the note all work, with nothing in the crash log.
 - **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
 
+## Budget burn-down, and whether spending can be forecast (2026-11-19)
+
+- **Asked for:**
+  1. A chart of the budget during the current month, burning down from the starting budget and
+     jumping up whenever a boost is added.
+  2. A look at whether trend lines can forecast spending, from the trends over all months and how
+     spending changes through the year. Only the write-up below; nothing of it is built.
+- **Q50–Q53** (all the recommended options, except Q53, which the user widened):
+  - **Q50 Where:** at the top of the charts screen. It opens on the current month and follows any
+    month tapped in the two charts below, so past months have one too.
+  - **Q51 Guide line:** a dashed even-pace guide that rises with each boost.
+  - **Q52 One-off boosts:** no jump. They change no budget figure (Q29), so the line rises only
+    when the money is used for a boost, and its end always matches the Overview's "left".
+  - **Q53 Forecasts, if feasible:** on all three charts. That means the rest of the month on the
+    burn-down, future months on the spending chart, and future months on the surplus/debt chart.
+    (The user added the surplus/debt chart to the two options offered.)
+- **The figures** (`BurnDownCalculator.of`, pure domain):
+  - **Start:** what the month could spend before its first day. That is the base budget (a closed
+    month's from its snapshot) and the boosts added before the 1st, less debt. Debt comes off only
+    where Q43 takes it out: the open month under way that has a budget (`withDebt`, as on the
+    Overview). It is worked out as `overallAvailable` less the boosts added during the month, so
+    the last day always ends at `overallLeft`.
+  - **Boosts:** an active boost lifts the line on the day it was added (`createdAt` in the clock's
+    zone).
+    - One dated after the last day shown (only after a clock change) counts on that day.
+    - Released boosts are left out, as `MonthSummary` leaves them out. A boost released mid-month
+      therefore leaves no trace on the line, rather than a rise and a fall.
+  - **Days:** day 1 to today in the month under way, the whole month in a past one. Spending dated
+    after today counts on today, as the daily amount counts it (Q34).
+  - **Guide:** `available(d) − expectedSpend(available(d), d, N)`.
+    - The half-up rounding is now `PaceCalculator.expectedSpend`, shared with `pace`, so on today
+      the guide is the Overview's pace guide as an amount left, to the cent. "Above the line" and
+      the Overview's status agree, apart from Watch's 10% margin.
+    - A boost raises it by boost × (N − d) / N, and it still reaches zero at the month's end.
+    - With debt as large as the budget there is nothing to spend evenly, so it stays at the start.
+  - **No budget** (`overallEffective` not positive, as for the pace guide): no chart, the words "No
+    budget set" in its place.
+- **Limits, not changed:**
+  - A budget edited mid-month isn't dated (a config is updated in place), so the base applies from
+    day 1.
+  - The debt is today's. A payoff made mid-month moves the whole line instead of showing as a step.
+  - The breakdown at the bottom of the screen still measures the month against its budget before
+    debt, as the spending chart's dashed line does (Q37). With debt in the month under way its
+    "left" is therefore larger than the burn-down's. The burn-down names the debt in its first
+    line ("Started with €780.00, after €120.00 of debt").
+- **Marks** (dataviz):
+  - The line is 2 dp in `onSurface`, ending in a ringed dot. Below zero it is drawn in
+    `ChartColors.negative`, clipped at the zero line, and the words say "Over by …" with an icon.
+  - Each boost is a 3 dp rise in `ChartColors.positive` with a ringed dot at its top.
+  - The guide is 1.5 dp dashed in `onSurfaceVariant`. On this screen dashes already mean "budget".
+  - Grid, zero line, y-axis labels and their width are shared with the month charts, so all three
+    plots start at the same x.
+  - The plot is 180 dp high, full width, with no sideways scroll. Day labels are 1, 8, 15, 22 and
+    29 under the middle of their day.
+  - The key shows "Boost added" only with a boost, and "Over budget" only once the line goes below
+    zero.
+- **Words:**
+  - Under the chart: the start (with the debt, if any), "Boosts +€60.00" on a line of its own, then
+    "€320.00 left" or "Over by €20.00".
+  - In the month under way, also "At an even pace, €308.00 would be left by today".
+  - The chart is one TalkBack node with all of that in one sentence.
+- **Found on the emulator and fixed:**
+  - Tapping a month without a budget collapsed the section, so the spending chart jumped about
+    400 px up under the finger that tapped it.
+    - The fix: the no-budget placeholder is as tall as the plot. The section also never shrinks
+      once shown (`heightIn(min)` from its tallest height so far).
+    - A test checks that the "Spending" heading doesn't move.
+  - "Boosts +€60.00" wrapped between "+" and the amount, so it is now a line of its own.
+  - `LocalDate.ofInstant` needs API 34 (lint, minSdk 28). Replaced by
+    `atZone(zone).toLocalDate()`.
+- **Code:**
+  - `domain/calculation/BurnDown.kt`: `BurnDown`, `BurnDownDay`, `BurnDownCalculator`.
+    `PaceCalculator.expectedSpend` was extracted; `Pace` itself is unchanged.
+  - `ExpenseDao.observeAllDailySpending` and `ExpenseRepository.dailySpending`: a read-only query,
+    no schema change.
+    - *Deviation from the plan,* which was to read `observeDailySpending(month)` for the selected
+      month. One query for every day lets the chart flow work out every month's burn-down at once,
+      off the main thread. The selection then just picks one, with no second subscription and no
+      race between the selection and a per-month flow.
+    - It is a point a day; 36 months is about 1,100 points. The forecast needs the same rows.
+  - `SpendingHistoryViewModel` also takes `ExpenseRepository` and reads `surplus.boosts`. Nested
+    `combine`s keep it at five flows. Balances come from `SurplusLedger.merged` as on the Overview.
+    `Ready.burnDown` is the selected month's.
+  - `ui/history/BurnDownChart.kt`: the chart, `NoBurnDown`, `burnDownScale`, and the sentences.
+    `YAxisLabels` and `drawGrid` were pulled out of `MonthChartFrame`, which uses them unchanged.
+  - Nine new strings, with Latvian, join the translation awaiting the user's read:
+    - "Atlikušais budžets"
+    - "Sākumā: … (pēc parāda …)"
+    - "Papildinājumi: …"
+    - "Tērējot vienmērīgi, līdz šodienai paliktu …"
+    - "Atlikums"
+    - "Tempa orientieris"
+    - "Papildinājums"
+  - Baseline Profiles: the history screen isn't in them; no edit.
+- **Verified:**
+  - 533 tests (21 new): `BurnDownTest` 12, `SpendingHistoryViewModelTest` +4,
+    `SpendingHistoryContentTest` +5. Two existing content tests changed: the month title now shows
+    twice (heading matched with `isHeading()`), and the budget key moved below the fold (scroll to
+    it).
+  - The full suite ran clean three times before the emulator fixes, and three times after them.
+    Lint 0 errors; the two warnings are the existing Gradle and work-runtime version notices.
+  - Emulator `Medium_Phone_API_37.0`, `-read-only`, debug build. Seed: a backup in format 3,
+    written by a temporary Robolectric test with a moving clock, restored through Settings and
+    Downloads, then the test deleted.
+    - The seed: August with no budget; September closed (€690 of €900); October closed over
+      (€920, Eating out €260 of €150, Groceries €470 of €400), which left €120 of debt. November so
+      far: €520 spent, a €50 boost on the 10th, a €100 one-off on the 12th and a €10 boost on the
+      16th.
+    - **November:** "Started with €780.00, after €120.00 of debt · Boosts +€60.00. €320.00 left.
+      At an even pace, €308.00 would be left by today". The Overview says €320.00 left of €840.00
+      and pace guide €532.00, and €840 − €532 = €308. The line rises on the 10th and the 16th, and
+      not on the 12th. The guide steps up with the boosts and runs on to zero on the 30th.
+    - **October:** "Started with €900.00. Over by €20.00", red below zero on the last days, with the
+      "Over budget" key.
+    - **August:** "No budget set". The "Spending" heading stays at the same y as with November
+      selected.
+    - Dark mode, Latvian and font scale 1.5 all hold up; nothing is cut off.
+  - R8 release build with a throwaway key: the seed restored from Downloads, and November, October
+    and August all match the debug build, with nothing in the crash log.
+- **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
+
+### Forecasting: what is feasible (written up, not built)
+
+- **Verdict:** feasible with no new dependency and no change to the database or the backup format.
+  It would all be pure Kotlin in a new `domain/forecast`, unit-tested on made-up series.
+  - The data is there. Monthly totals per category come from `observeMonthlySpending`; per-day
+    totals for every month from `observeAllDailySpending`, added above.
+- **The limit is history, not code.** The app has been in use since October 2026.
+  - A yearly pattern (December higher, summer lower, …) needs at least 12 finished months before it
+    can say anything.
+  - About 24 are needed before one odd month stops deciding it.
+  - Until then a forecast can only be the trend plus how a month usually unfolds, and the chart has
+    to say so.
+- **Proposed model:**
+  1. **Inputs:** finished months' totals from the first month with spending. The month under way is
+     left out of the fitting.
+  2. **Yearly pattern:** each month's total ÷ the average of the 12 months around it, averaged per
+     calendar month.
+     - Shrunk towards 1 by n / (n + 2), where n is how many times that calendar month has been seen.
+     - Normalised to average 1.
+     - Used only from 12 finished months.
+  3. **Trend:** a robust (Theil–Sen) slope over the last ≤24 months, with the pattern taken out. It
+     is damped going forward (×0.9 a month), so it flattens instead of running away.
+  4. **Within a month:** the usual share of a month's total spent by each point in it, taken as a
+     fraction of the month so 28–31 days compare, as the median over finished months.
+     - The projected month end is spent so far + the expected month total × (1 − the usual share
+       by today).
+     - That copes with rent on the 1st, and it leans on what was actually spent as the month goes
+       on.
+  5. **Range:** an 80% band from the spread of past errors (MAD-based), wider the further ahead.
+  6. **Minimums:**
+
+     | Finished months | Forecast shown |
+     |---|---|
+     | fewer than 3 | none |
+     | 3–11 | trend only, and said so |
+     | 12 or more | with the yearly pattern |
+- **Per chart:**
+  - **Burn-down:**
+    - A dotted line from today to the month's end (dashes already mean budget), with a shaded band.
+    - It ends at "likely €X left" or "likely over by €X".
+  - **Spending by month:**
+    - Outlined, unfilled bars for the coming months, with a range whisker.
+    - The current "(so far)" bar gets an outlined extension up to its projected total.
+    - The total only: eight stacked category bands, each uncertain, would mislead.
+  - **Surplus/debt:**
+    - A coming month's projected result is its planned budget (from configs via `BudgetResolver`:
+      the overall amount or the categories' sum, whichever is higher) less its forecast spending,
+      plus one-offs already added for it.
+    - Its bars are lighter and outlined, and the total line continues dotted.
+    - This needs `observeMonthSummaries` to run past the current month.
+- **To settle before building it** (Q54+): answered the same day, below.
+
+## Spending forecasts (2026-11-19)
+
+- **Asked for:** the forecasts from the write-up above, on all three charts (Q53).
+- **Q54–Q56:**
+  - **Q54 How far ahead:** a fixed 12 months after the current one. The write-up had recommended
+    the year's end.
+  - **Q55 The current month in the surplus chart:**
+    - The bar stays "if closed now" (Q45).
+    - A tick marks where the month will likely end.
+    - The dotted forecast of the total runs on from the tick, so this month's still-unspent budget
+      isn't counted as saved.
+  - **Q56 Per category:** built so the user can see it before deciding whether it's too confusing.
+    - Forecast months are stacked by band like real months, with a whisker for the total's likely
+      range.
+    - Highlighting a band shows its own range instead.
+    - The write-up had recommended against this.
+- **The model** (`domain/forecast/SpendingForecast.kt`, constants in `ForecastRules`), as in the
+  write-up, with these differences:
+  - **Tiers per series:**
+
+    | Months | Forecast |
+    |---|---|
+    | fewer than 3 | flat at the mean |
+    | 3–5 | flat at the median |
+    | 6–11 | damped Theil–Sen trend |
+    | 12 or more | trend × yearly pattern |
+
+    *Deviation:* the write-up had a trend from 3 months. A slope from 3–5 points swings too far.
+  - **Series:** every category is a series of its own, from its first month with spending. Later
+    months without spending count as zero.
+  - **Which categories count:** only those active in the month being forecast
+    (`CategoryRef.isActiveIn`), so archived and deleted ones drop out after their archive month.
+  - **Yearly pattern shrink:** n/(n+1), so one year of history gives half the pattern and two years
+    two thirds. The write-up said n/(n+2).
+  - **Any group** (a band, the folded band, the total):
+    - Its expected amount is the members' amounts, each rounded, added up, so groups add up to the
+      cent.
+    - Its range comes from the spread of the *sum* of the members' past errors, so a total is less
+      uncertain than its parts added up.
+    - The band is ±1.2816·σ·(1 + 0.05·(h − 1)) with σ = 1.4826·MAD, and never goes below zero.
+  - **The month under way** (`MonthEnd`):
+    - Its rest is the h = 1 total × (1 − p(today)), where p is the median share of a month spent by
+      that fraction of it, over the last ≤24 finished months.
+    - With fewer than 3 such months it falls back to an even month.
+    - Spending dated after today is already in "so far".
+    - Found on the way: when every month so far was spent on the 3rd, nothing more is expected
+      after the 15th. That is right, and a ViewModel test now checks it.
+- **Surplus** (`domain/forecast/SurplusForecast.kt`):
+  - **A coming month:** its plan (`categoryBaseTotal` + `unallocatedBase`) less the likely
+    spending, plus one-offs already added for it. Boosts already reserved for it come back in its
+    closing, so they cancel out.
+  - **Without a budget,** only its boosts and one-offs count, and with none of those it gives
+    nothing, as in `SurplusHistory`.
+  - **The tick:** the "closed now" result less the rest of the month. More spending means less
+    added, so the range turns round.
+- **Data:**
+  - `BudgetRepository.observeMonthSummaries(until, planThrough)` adds planned-only months after
+    `until`: budgets from configs and reserved boosts, no spending.
+    - It is a second parameter because `until` also fixes where the range starts with no data.
+    - With nothing logged the range is still just the current month; a test checks this.
+  - The ViewModel asks for 12 months ahead and splits real months from planned ones. It runs the
+    forecaster in the existing chart flow on `Default`, with `expenses.dailySpending` (added for the
+    burn-down) for the profile.
+  - No new query, no schema or backup change.
+- **The charts:**
+  - **Forecast marks:**
+    - Forecasts are hatched: the colour at 25%, with 1 dp diagonal lines 6 dp apart, on one grid so
+      neighbouring marks line up.
+    - Ranges are whiskers in `onSurface`.
+    - Forecast lines are dotted, because dashes stay "budget".
+    - The helpers (`drawHatched`, `drawWhisker`, `forecastDots`) are next to `drawGrid` in
+      `MonthChartFrame.kt`.
+  - **Spending:**
+    - 12 hatched stacks after the current month, ordered like real months, with no ribbons into
+      them.
+    - The planned budget's dashes, a total whisker, or the highlighted band's whisker on its
+      segment.
+    - The month under way gets one neutral (grey) hatched extension up to its likely end, with the
+      total's whisker. It is total only, so real and forecast bands don't mix in one bar, and the
+      whisker gives way to a highlight like the others.
+  - **Surplus:**
+    - Hatched bars with whiskers.
+    - The tick on the current bar.
+    - A hollow dot under the current total, and a dotted line through hollow dots onward.
+  - **Burn-down** (current month only): a dotted path from today with a shaded band, ending in a
+    hollow dot. The words are:
+    - "Likely €X left at the month's end" or "Likely over by …", in red.
+    - "Likely range: -€40.00 to €280.00 left", or "Likely range: over by €20.00 to €90.00" when all
+      of it is over.
+  - **Scroll:** the screen opens with the current month and 3 forecast months in view
+    (`OpenOnCurrentMonth`), instead of at the far end, which would now be the last forecast month.
+    A restored screen keeps its place.
+- **Decided along the way:**
+  - **Forecast months are selectable.** Their breakdown lists:
+    - "Likely €X of €Y spent" and its range
+    - what the month would do to the surplus, and the likely total after it
+    - the basis
+    - each band, largest first, with its own range, and the highlight works as for real months
+  - **The burn-down for a forecast month** says "Hasn't started yet", at the same height.
+  - **The current month's breakdown** adds "Likely €X spent by the month's end" and "At the
+    month's end it would likely add …". TalkBack gets the same.
+  - **The basis under the Spending heading:** "Forecast from a typical month so far / the trend so
+    far / the trend and the time of year".
+  - **Without enough history:** "Forecasts start once 3 months are finished (1 so far)", a plural
+    resource (lint asked for one).
+  - A range with no spread (a rent that never changes) isn't printed.
+- **Code:**
+  - New: `domain/forecast/SpendingForecast.kt`, `ForecastStacks.kt`, `SurplusForecast.kt`.
+  - `BurnDown.projection` and `withProjection`.
+  - `ChartForecast` in the ViewModel, and `Ready.chartMonths`.
+  - `monthTitle` gives "(forecast)" after the current month.
+  - `spendingScale` and `surplusScale` take the forecast.
+  - 22 new strings and one plural, with Latvian, join the translation awaiting the user's read:
+    "prognoze", "Iespējamais diapazons", "Paredzams: iztērēti … no …", "Mēneša beigās,
+    visticamāk, …", "Vēl nav sācies".
+  - Baseline Profiles: not on the start-up path; no edit.
+- **Verified:**
+  - 556 tests (23 new):
+    - `SpendingForecastTest` 11
+    - `SurplusForecastTest` 3
+    - `MonthSummariesTest` +2
+    - `SpendingHistoryViewModelTest` +2
+    - `SpendingHistoryContentTest` +5
+  - The full suite ran three times clean. Lint 0 errors; the two warnings are the old version
+    notices.
+  - Emulator `Medium_Phone_API_37.0`, `-read-only`, debug build. Seed: 26 months from Oct 2024,
+    written by a temporary Robolectric test (deleted afterwards), restored through Downloads. It
+    has:
+    - rent on the 1st
+    - groceries rising, high in December and lower in summer
+    - a noisy Eating out, and Fun high in summer
+    - a Gym archived from June 2026, and a Pet new in September 2026
+    - a budget raise planned for March 2027
+  - **Checked on the emulator:**
+    - It opens on November with December–February beside it.
+    - The stacks are hatched in the category colours.
+    - The Gym is gone from the forecast, and the Pet is flat at its mean.
+    - December is €1,594.87 (€1,547.79 to €1,641.95) against €1,500.
+    - March's budget line moves up to €1,600.
+    - Highlighting Groceries puts its own whisker on its segment in each month.
+    - December's breakdown lists each band with its range; Rent has none.
+    - The surplus tick is at +€162.22 on a "closed now" bar of +€380.12, and the dotted total runs
+      on from there.
+    - The burn-down says "Likely over by €174.50 at the month's end".
+    - Dark mode, Latvian and font scale 1.5 hold up, and the selection and scroll survived the
+      language change.
+  - **Second seed**, one finished month: no forecast marks, and "Forecasts start once 3 months are
+    finished (1 so far)".
+  - **R8 release** with a throwaway key: the same figures, and nothing in the crash log.
+- **Seen, not changed:**
+  - The surplus chart's axis runs to −€2,000 for a −€95 bar. That is `ChartScale`'s 4-step rule,
+    already the case before.
+  - Next to a €4,000 running total the monthly bars are small. That comes from the seed, not the
+    forecast.
+- **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
+- **Your data:** forecasts need 3 finished months with spending, so on your phone they appear from
+  about February 2027 if spending started in October 2026. The seed backup above can be restored to
+  look at them now, and Undo restore brings your data back.
+
 ## Open questions
 
 - Reopening a month that paid off a debt (see "Debt, and amounts that aren't set"): change the
   refusal rule as proposed there, or leave it?
+- Per-category forecasts (Q56): keep them stacked on the spending chart, or go back to total-only
+  bars, once you've seen them?

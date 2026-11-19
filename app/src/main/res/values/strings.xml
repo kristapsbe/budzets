@@ -399,6 +399,47 @@
     <string name="history_surplus_part_closing">Closing the month: %1$s</string>
     <string name="history_surplus_part_boosts">Boosts from the surplus: %1$s</string>
     <string name="history_surplus_part_one_offs">One-off boosts: %1$s</string>
+    <!-- Budget burn-down: what is left of the selected month's budget, day by day. -->
+    <string name="burn_down_heading">Budget left</string>
+    <string name="burn_down_started">Started with %1$s</string>
+    <!-- %2$s is the debt that came out of the month's budget. -->
+    <string name="burn_down_started_after_debt">Started with %1$s, after %2$s of debt</string>
+    <!-- %1$s is signed, e.g. "+€50.00". -->
+    <string name="burn_down_boosts">Boosts %1$s</string>
+    <string name="burn_down_guide">At an even pace, %1$s would be left by today</string>
+    <string name="burn_down_legend_left">Left to spend</string>
+    <string name="burn_down_legend_guide">Pace guide</string>
+    <string name="burn_down_legend_boost">Boost added</string>
+    <string name="burn_down_likely_left">Likely %1$s left at the month’s end</string>
+    <string name="burn_down_likely_over">Likely over by %1$s at the month’s end</string>
+    <!-- Either amount can be below zero, e.g. "Likely range: -€40.00 to €120.00 left". -->
+    <string name="burn_down_likely_range">Likely range: %1$s to %2$s left</string>
+    <string name="burn_down_likely_range_over">Likely range: over by %1$s to %2$s</string>
+    <string name="burn_down_not_started">Hasn’t started yet</string>
+    <!-- Spending forecasts for the coming months. -->
+    <!-- %1$s is a month and year, e.g. "December 2026". -->
+    <string name="forecast_month">%1$s (forecast)</string>
+    <string name="forecast_spent_of_budget">Likely %1$s of %2$s spent</string>
+    <string name="forecast_spent">Likely %1$s spent</string>
+    <string name="forecast_range">Likely range %1$s to %2$s</string>
+    <string name="forecast_range_short">%1$s to %2$s</string>
+    <string name="forecast_month_end_spent">Likely %1$s spent by the month’s end</string>
+    <string name="forecast_surplus_would_add">Would likely add %1$s to the surplus</string>
+    <string name="forecast_surplus_would_take">Would likely take %1$s from the surplus</string>
+    <string name="forecast_surplus_after">Likely surplus after this month: %1$s</string>
+    <string name="forecast_month_end_add">At the month’s end it would likely add %1$s</string>
+    <string name="forecast_month_end_take">At the month’s end it would likely take %1$s</string>
+    <string name="forecast_basis_typical">Forecast from a typical month so far</string>
+    <string name="forecast_basis_trend">Forecast from the trend so far</string>
+    <string name="forecast_basis_season">Forecast from the trend and the time of year</string>
+    <!-- %1$d is how many finished months are needed, %2$d how many there are. -->
+    <plurals name="forecast_not_yet">
+        <item quantity="one">Forecasts start once %1$d month is finished (%2$d so far)</item>
+        <item quantity="other">Forecasts start once %1$d months are finished (%2$d so far)</item>
+    </plurals>
+    <string name="forecast_legend">Forecast</string>
+    <string name="forecast_legend_range">Likely range</string>
+    <string name="forecast_legend_month_end">Likely month end</string>
 
     <string-array name="starter_categories">
         <item>Groceries</item>

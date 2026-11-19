@@ -23,6 +23,11 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -42,6 +47,7 @@ import java.time.Month
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.floor
 
 /** A month's slot: the bar plus the space either side (where the spending chart's ribbons run). */
 internal val SlotWidth = 56.dp
@@ -81,6 +87,68 @@ internal fun axisWidth(labels: List<String>): Dp {
     return with(LocalDensity.current) { labels.maxOf { measurer.measure(it, style).size.width }.toDp() } + AxisLabelGap
 }
 
+/** The y-axis labels at [scale]'s ticks, right-aligned against the plot, which stay put while it scrolls. */
+@Composable
+internal fun YAxisLabels(scale: ChartScale, tickLabels: List<String>, axisWidth: Dp, plotHeight: Dp) {
+    val textMeasurer = rememberTextMeasurer()
+    val axisStyle = axisLabelStyle()
+    Canvas(Modifier.width(axisWidth).height(plotHeight).clearAndSetSemantics {}) {
+        val geometry = PlotGeometry(this, size, scale)
+        scale.ticks.forEachIndexed { i, tick ->
+            val layout = textMeasurer.measure(tickLabels[i], axisStyle)
+            val y = geometry.y(tick)
+            drawText(layout, topLeft = Offset(size.width - AxisLabelGap.toPx() - layout.size.width, y - layout.size.height / 2f))
+        }
+    }
+}
+
+/** Hairlines at the scale's ticks across the whole width; zero a step stronger, as the line the marks stand on. */
+internal fun DrawScope.drawGrid(geometry: PlotGeometry, gridColor: Color, zeroColor: Color) {
+    geometry.scale.ticks.forEach { tick ->
+        val y = geometry.y(tick)
+        drawLine(if (tick == 0L) zeroColor else gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = geometry.hairline)
+    }
+}
+
+private val HatchSpacing = 6.dp
+private val HatchStroke = 1.dp
+private val WhiskerStroke = 1.5.dp
+private val WhiskerCap = 8.dp
+private const val HATCH_FILL_ALPHA = 0.25f
+
+/**
+ * A forecast mark (Q54–Q56): [color] faint, crossed by fine diagonal lines in full. The lines are
+ * on one grid across the whole plot, so neighbouring marks' hatching lines up.
+ */
+internal fun DrawScope.drawHatched(path: Path, color: Color, alpha: Float = 1f) {
+    drawPath(path, color, alpha = HATCH_FILL_ALPHA * alpha)
+    val bounds = path.getBounds()
+    val step = HatchSpacing.toPx()
+    val stroke = HatchStroke.toPx()
+    clipPath(path) {
+        // The lines x + y = k·step, running up and to the right.
+        var k = floor((bounds.left + bounds.top) / step)
+        val last = (bounds.right + bounds.bottom) / step
+        while (k <= last) {
+            val c = k * step
+            drawLine(color, Offset(c - bounds.bottom, bounds.bottom), Offset(c - bounds.top, bounds.top), strokeWidth = stroke, alpha = alpha)
+            k += 1
+        }
+    }
+}
+
+/** A likely range: a line from [low] to [high] (both y, in px) at [x], capped at each end. */
+internal fun DrawScope.drawWhisker(x: Float, low: Float, high: Float, color: Color, alpha: Float = 1f) {
+    val cap = WhiskerCap.toPx() / 2
+    val width = WhiskerStroke.toPx()
+    drawLine(color, Offset(x, low), Offset(x, high), strokeWidth = width, alpha = alpha)
+    drawLine(color, Offset(x - cap, low), Offset(x + cap, low), strokeWidth = width, alpha = alpha)
+    drawLine(color, Offset(x - cap, high), Offset(x + cap, high), strokeWidth = width, alpha = alpha)
+}
+
+/** Dots, for a forecast line: on this screen dashes mean "budget". Draw with a round cap. */
+internal fun Density.forecastDots(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(0.01f, 4.dp.toPx()))
+
 /**
  * What every month chart has: y-axis labels that stay put, a plot that scrolls sideways with
  * [scroll], a highlighted column for the selected month, gridlines, a tab per month for TalkBack
@@ -101,8 +169,6 @@ internal fun MonthChartFrame(
     modifier: Modifier = Modifier,
     drawPlot: CacheDrawScope.(PlotGeometry) -> DrawResult,
 ) {
-    val textMeasurer = rememberTextMeasurer()
-    val axisStyle = axisLabelStyle()
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val zeroColor = MaterialTheme.colorScheme.outline
     val selectedColor = MaterialTheme.colorScheme.surfaceVariant
@@ -110,14 +176,7 @@ internal fun MonthChartFrame(
     val selectedIndex = months.indexOf(selectedMonth)
 
     Row(modifier) {
-        Canvas(Modifier.width(axisWidth).height(plotHeight).clearAndSetSemantics {}) {
-            val geometry = PlotGeometry(this, size, scale)
-            scale.ticks.forEachIndexed { i, tick ->
-                val layout = textMeasurer.measure(tickLabels[i], axisStyle)
-                val y = geometry.y(tick)
-                drawText(layout, topLeft = Offset(size.width - AxisLabelGap.toPx() - layout.size.width, y - layout.size.height / 2f))
-            }
-        }
+        YAxisLabels(scale, tickLabels, axisWidth, plotHeight)
         BoxWithConstraints(Modifier.weight(1f)) {
             val contentWidth = max(SlotWidth * months.size, maxWidth)
             Column(Modifier.horizontalScroll(scroll)) {
@@ -130,11 +189,7 @@ internal fun MonthChartFrame(
                             if (selectedIndex >= 0) {
                                 drawRoundRect(selectedColor, Offset(geometry.slot * selectedIndex, 0f), Size(geometry.slot, size.height), CornerRadius(8.dp.toPx()))
                             }
-                            // Hairlines; zero a step stronger, as the line the bars stand on.
-                            scale.ticks.forEach { tick ->
-                                val y = geometry.y(tick)
-                                drawLine(if (tick == 0L) zeroColor else gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = geometry.hairline)
-                            }
+                            drawGrid(geometry, gridColor, zeroColor)
                         }
                         .drawWithCache { drawPlot(PlotGeometry(this, size, scale)) },
                 ) {

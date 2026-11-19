@@ -32,6 +32,30 @@ class MonthSummariesTest : DbTest() {
     }
 
     @Test
+    fun `planned months follow without moving the start, with their budgets but no spending`() = runTest {
+        val food = categories.create("Food")
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 50_000), ym("2026-01"))
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 60_000), ym("2026-06"))
+        expenses.add(eur(10), food.id, LocalDate.of(2026, 3, 5))
+        // Dated after "now" (a clock change): it stays out of the planned months as before.
+        expenses.add(eur(99), food.id, LocalDate.of(2026, 5, 2))
+
+        val months = budgets.observeMonthSummaries(april, planThrough = ym("2026-07")).first()
+
+        assertEquals((3..7).map { ym("2026-0$it") }, months.map { it.month })
+        assertEquals(eur(500), months.first { it.month == ym("2026-05") }.overallBase)
+        assertEquals(eur(600), months.first { it.month == ym("2026-06") }.overallBase)
+        assertEquals(eur(0), months.first { it.month == ym("2026-05") }.totalSpent)
+    }
+
+    @Test
+    fun `with no data the range starts at the month under way, planned months after it`() = runTest {
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 50_000), ym("2026-01"))
+        val months = budgets.observeMonthSummaries(april, planThrough = ym("2026-06")).first()
+        assertEquals(listOf(april, ym("2026-05"), ym("2026-06")), months.map { it.month })
+    }
+
+    @Test
     fun `a closed month before the first expense starts the months`() = runTest {
         val food = categories.create("Food")
         budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 100_000), ym("2026-01"))

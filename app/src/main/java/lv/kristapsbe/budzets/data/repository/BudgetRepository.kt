@@ -95,8 +95,12 @@ class BudgetRepository(
      * months without spending included. [until] is always there, expenses or not. Each month is worked out as
      * [observeMonthSummary] does, so a closed month keeps the budgets it was closed with. Spending
      * dated after [until] (possible only after a clock change) is left out.
+     *
+     * Months after [until] through [planThrough] follow, with their planned budgets and the boosts
+     * already reserved for them but no spending, for the forecasts (Q54). They don't move where the
+     * range starts.
      */
-    fun observeMonthSummaries(until: YearMonth): Flow<List<MonthSummary>> =
+    fun observeMonthSummaries(until: YearMonth, planThrough: YearMonth = until): Flow<List<MonthSummary>> =
         combine(
             categoryDao.observeAll(),
             configDao.observeAll(),
@@ -109,12 +113,13 @@ class BudgetRepository(
             val closuresByMonth = closures.groupBy { it.month.toYearMonth() }
             // Always [until], and back to the first month with spending or a close (Q45).
             val first = (spendingByMonth.keys + closuresByMonth.keys + until).min()
-            generateSequence(first) { it.plusMonths(1) }.takeWhile { it <= until }.map { month ->
+            generateSequence(first) { it.plusMonths(1) }.takeWhile { it <= maxOf(until, planThrough) }.map { month ->
                 summarize(
                     month,
                     categories,
                     configs,
                     boostsByMonth[month].orEmpty(),
+                    // Empty after [until]: spending there was filtered out above.
                     spendingByMonth[month].orEmpty().map { CategorySpendRow(it.categoryId, it.totalMinor) },
                     closuresByMonth[month].orEmpty(),
                 )

@@ -53,12 +53,7 @@ object PaceCalculator {
         if (!summary.overallEffective.isPositive) {
             return Pace(days, elapsed, days - elapsed, null, PaceStatus.NO_BUDGET)
         }
-        val available = summary.overallAvailable
-        // Rounded half-up: (2·A·elapsed + N) / 2N. Nothing is expected to be spent once debt has taken it all.
-        val expected = if (!available.isPositive) Money.ZERO else Money(
-            Math.addExact(Math.multiplyExact(Math.multiplyExact(available.minor, elapsed.toLong()), 2), days.toLong()) /
-                (2L * days)
-        )
+        val expected = expectedSpend(summary.overallAvailable, elapsed, days)
         val spent = summary.totalSpent
         val status = when {
             summary.overallLeft.isNegative -> PaceStatus.OVER
@@ -67,6 +62,16 @@ object PaceCalculator {
         }
         return Pace(days, elapsed, days - elapsed, expected, status)
     }
+
+    /**
+     * The pace guide: [available] × [elapsed] ÷ [days], rounded half-up as (2·A·elapsed + N) / 2N.
+     * Nothing is expected to be spent once debt has taken it all ([available] zero or below).
+     */
+    fun expectedSpend(available: Money, elapsed: Int, days: Int): Money =
+        if (!available.isPositive) Money.ZERO else Money(
+            Math.addExact(Math.multiplyExact(Math.multiplyExact(available.minor, elapsed.toLong()), 2), days.toLong()) /
+                (2L * days)
+        )
 
     /**
      * What was left at the start of today ÷ the days from today to the month's end, today

@@ -131,7 +131,33 @@ surplus and never netted against it.
 
 ## Spending by month
 
-The chart icon in the Overview's top bar opens a chart of every month from the first expense (or
+The chart icon in the Overview's top bar opens the charts screen. At the top, the burn-down shows
+what is left of a month's budget day by day. It opens on the current month and follows any month
+you tap in the charts below.
+- The line starts at what the month could spend on its first day: the budget, less any debt
+  carried into the month under way.
+- It falls with each day's spending, and steps up (blue) on the day a boost was added.
+- It runs to today, or to the end of a past month, and turns red below zero. In the current month
+  it ends at the Overview's "left" figure.
+- The dashed pace guide is what would be left at an even pace. It rises with each boost, reaches
+  zero at the month's end, and on today it is the Overview's pace guide.
+- One-off boosts don't move the line, since they go to the surplus, not the budget.
+- A month with no budget shows "No budget set" in its place.
+
+Forecasts are hatched, with whiskers for their likely range, and dotted where they are lines. They
+start once 3 months are finished, and cover the 12 months after the current one.
+- The model is a typical month at first, then the trend, and from 12 months the time of year as
+  well. The line under the Spending heading says which.
+- **Spending chart:** each coming month is stacked by category like a real month. Highlighting a
+  category shows its own likely range.
+- **Current month:** a grey hatched extension up to where it will likely end.
+- **Surplus chart:** the coming months' likely results, and a tick on the current month where it
+  will likely end. The current bar itself stays "if closed now". A dotted total runs on from the
+  tick.
+- **Burn-down:** a dotted path to the month's end, and "Likely €X left at the month's end".
+- Tap a forecast month for its breakdown: each category's likely amount and range.
+
+Under it, a chart of every month from the first expense (or
 the first closed month, if earlier) to the current one, newest on the right. Each month is a bar stacked by category, largest on top, so
 the order can change from month to month; a ribbon joins each category to the same category in the
 next month. The dashed line is the month's budget including boosts (a closed month's is the budget
