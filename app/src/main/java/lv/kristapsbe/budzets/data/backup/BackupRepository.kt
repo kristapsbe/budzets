@@ -29,7 +29,8 @@ import java.time.Instant
  * [safetyCopy] (Q21); undoing the restore puts it back. The safety copy is private to the app
  * and lives in `noBackupFilesDir`, so Android never uploads it.
  *
- * The currency lives in DataStore, outside the transaction; it is set right after the data.
+ * The currency and the one-off note live in DataStore, outside the transaction; they are set
+ * right after the data.
  * Screens and the widget follow along through Room's invalidation and the settings flow.
  */
 class BackupRepository(
@@ -51,10 +52,11 @@ class BackupRepository(
     /** A consistent snapshot of all data, as a backup file. */
     suspend fun export(): ByteArray {
         val currency = settings.currency.first()
+        val oneOffNote = settings.oneOffNote.first()
         val data = db.withTransaction {
             val closureCategories = dao.monthClosureCategories().groupBy { it.month to it.revision }
             BackupData(
-                settings = BackupSettings(currency.code),
+                settings = BackupSettings(currency.code, oneOffNote),
                 categories = dao.categories().map { it.toBackup() },
                 budgetConfigs = dao.budgetConfigs().map { it.toBackup() },
                 expenses = dao.expenses().map { it.toBackup() },
@@ -112,6 +114,7 @@ class BackupRepository(
             dao.insertMonthClosureCategories(data.monthClosures.flatMap { m -> m.categories.map { it.toEntity(m) } })
         }
         settings.replaceCurrency(CurrencySpec.of(data.settings.currencyCode))
+        settings.setOneOffNote(data.settings.oneOffNote)
     }
 
     private suspend fun writeSafetyCopy(bytes: ByteArray) = withContext(Dispatchers.IO) {

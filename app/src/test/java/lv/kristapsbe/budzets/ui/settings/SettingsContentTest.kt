@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -44,7 +45,8 @@ class SettingsContentTest {
         busy: Busy? = null,
         pending: RestorePreview? = null,
         locked: Boolean = false,
-    ) = SettingsUiState.Ready(CurrencySpec.DEFAULT, locked, lastBackupAt, lastRestoreAt, busy, pending, "1.0")
+        oneOffNote: String? = null,
+    ) = SettingsUiState.Ready(CurrencySpec.DEFAULT, locked, lastBackupAt, lastRestoreAt, busy, pending, "1.0", oneOffNote)
 
     private fun show(state: SettingsUiState, actions: SettingsActions = SettingsActions()) =
         compose.setContent { BudzetsTheme { SettingsContent(state, actions, zone = riga) } }
@@ -128,12 +130,45 @@ class SettingsContentTest {
     }
 
     @Test
+    fun `the one-off note is edited in a dialog, and saving it empty clears it`() {
+        val saved = mutableListOf<String>()
+        show(ready(oneOffNote = "Gifts go to Fun"), SettingsActions(onOneOffNote = { saved += it }))
+        val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        list.performScrollToNode(hasText("Note on the one-off boost form"))
+        compose.onNodeWithText("Gifts go to Fun").assertIsDisplayed().performClick()
+
+        compose.onNodeWithText("One-off boost note").assertIsDisplayed()
+        compose.onNodeWithText("15 / 300").assertIsDisplayed()
+        compose.onNodeWithTag(ONE_OFF_NOTE_FIELD_TAG).performTextReplacement("Bonus goes to Savings")
+        compose.onNodeWithText("Save").performClick()
+        assertEquals(listOf("Bonus goes to Savings"), saved)
+
+        compose.onNodeWithText("Bonus goes to Savings").assertDoesNotExist() // the state is the caller's
+        compose.onNodeWithText("Gifts go to Fun").performClick()
+        compose.onNodeWithTag(ONE_OFF_NOTE_FIELD_TAG).performTextReplacement("")
+        compose.onNodeWithText("Save").performClick()
+        assertEquals(listOf("Bonus goes to Savings", ""), saved)
+    }
+
+    @Test
+    fun `without a note it says so, and a note too long can't be saved`() {
+        show(ready())
+        val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        list.performScrollToNode(hasText("Note on the one-off boost form"))
+        compose.onNodeWithText("None. Add text to show under the amount", substring = true).assertIsDisplayed().performClick()
+        compose.onNodeWithTag(ONE_OFF_NOTE_FIELD_TAG).performTextInput("x".repeat(301))
+        compose.onNodeWithText("301 / 300").assertIsDisplayed()
+        compose.onNodeWithText("Save").assertIsNotEnabled()
+    }
+
+    @Test
     fun `explains budgets, privacy and versions`() {
         show(ready())
         val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
         list.performScrollToNode(hasText("the highest monthly amount is used", substring = true))
         list.performScrollToNode(hasText("Your data stays on this phone", substring = true))
         list.performScrollToNode(hasText("Budzets 1.0"))
-        compose.onNodeWithText("Data version 3 · backup format 2").assertIsDisplayed()
+        list.performScrollToNode(hasText("Data version 3 · backup format 3"))
+        compose.onNodeWithText("Data version 3 · backup format 3").assertIsDisplayed()
     }
 }

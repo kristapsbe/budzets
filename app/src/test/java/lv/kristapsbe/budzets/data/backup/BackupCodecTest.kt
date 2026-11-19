@@ -72,6 +72,19 @@ class BackupCodecTest {
     }
 
     @Test
+    fun `a version 2 file still reads, without a one-off note`() {
+        val noted = valid.copy(settings = BackupSettings("EUR", oneOffNote = "Gifts go to Fun"))
+        assertEquals(noted, ok(decode(encode(noted))).data)
+
+        val v2 = edited({ root ->
+            JsonObject(root.withData { JsonObject(it + ("settings" to JsonObject(mapOf("currencyCode" to JsonPrimitive("EUR"))))) } + ("schemaVersion" to JsonPrimitive(2)))
+        })
+        val backup = ok(decode(v2))
+        assertEquals(2, backup.schemaVersion)
+        assertEquals(null, backup.data.settings.oneOffNote)
+    }
+
+    @Test
     fun `deletedAt round-trips, and a deleted category must have left plans`() {
         val deleted = valid.copy(categories = valid.categories + BackupCategory("gone", "Gone", null, 2, "2026-04", t, t, deletedAt = t))
         assertEquals(deleted, ok(decode(encode(deleted))).data)

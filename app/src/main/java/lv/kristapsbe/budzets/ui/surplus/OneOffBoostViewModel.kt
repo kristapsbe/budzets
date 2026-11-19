@@ -38,6 +38,8 @@ sealed interface OneOffBoostState {
         val amountError: AmountError?,
         val isSaving: Boolean = false,
         val failed: Boolean = false,
+        /** The user's own text from Settings, shown under the amount (Q49); null when not set. */
+        val infoNote: String? = null,
     ) : OneOffBoostState
 }
 
@@ -55,7 +57,7 @@ class OneOffBoostViewModel(
 
     private val current = YearMonth.now(clock)
 
-    private data class Reference(val currency: CurrencySpec, val closed: Set<YearMonth>)
+    private data class Reference(val currency: CurrencySpec, val closed: Set<YearMonth>, val infoNote: String?)
 
     private var reference by mutableStateOf<Reference?>(null)
     private var month by mutableStateOf(savedState.get<String>(KEY_MONTH)?.let(YearMonth::parse) ?: current)
@@ -81,12 +83,13 @@ class OneOffBoostViewModel(
                 amountError = error?.takeIf { attempted || it == AmountError.TOO_MANY_DECIMALS || it == AmountError.TOO_LARGE },
                 isSaving = saving,
                 failed = failed,
+                infoNote = ref.infoNote,
             )
         }
 
     init {
         viewModelScope.launch {
-            combine(settings.currency, surplus.closedMonths, ::Reference).collect { reference = it }
+            combine(settings.currency, surplus.closedMonths, settings.oneOffNote, ::Reference).collect { reference = it }
         }
     }
 

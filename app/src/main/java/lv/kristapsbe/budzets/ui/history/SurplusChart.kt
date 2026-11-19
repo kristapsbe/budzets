@@ -28,14 +28,15 @@ private const val NOT_CLOSED_ALPHA = 0.35f
 
 /** The surplus chart's scale: around zero, reaching every month's result and running total. */
 internal fun surplusScale(months: List<MonthSurplus>, unitMinor: Long): ChartScale {
-    val values = months.flatMap { listOfNotNull(it.result?.minor, it.runningTotal?.minor) }
+    val values = months.flatMap { listOfNotNull(it.result?.minor, it.runningTotal.minor) }
     return ChartScale.around(minOf(0L, values.minOrNull() ?: 0L), maxOf(0L, values.maxOrNull() ?: 0L), unitMinor)
 }
 
 /**
- * Each finished month's result for the saved surplus as a bar above zero (added) or below it
- * (taken), lighter while the month isn't closed, and the running total as a line (Q39–Q42). The
- * months line up with the spending chart's: same slots, same [scroll].
+ * Each month's result for the saved surplus as a bar above zero (added) or below it (taken),
+ * lighter while the month isn't closed, and the running total as a line (Q39–Q42). The month under
+ * way is shown as closing it now would leave it (Q45). The months line up with the spending
+ * chart's: same slots, same [scroll].
  */
 @Composable
 internal fun SurplusChart(
@@ -80,7 +81,7 @@ internal fun SurplusChart(
             }
             Bar(path, result.isPositive, month.isClosed)
         }
-        val points = state.surplus.mapIndexedNotNull { i, month -> month.runningTotal?.let { Offset(g.center(i), g.y(it.minor)) } }
+        val points = state.surplus.mapIndexed { i, month -> Offset(g.center(i), g.y(month.runningTotal.minor)) }
         val line = Path().apply { points.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) } }
         val outline = Stroke(width = g.hairline)
         val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -107,12 +108,11 @@ internal fun SurplusChart(
     }
 }
 
-/** The month's result in words: added, taken, would add or take, nothing, or not yet. */
+/** The month's result in words: added, taken, would add or take, or nothing. */
 @Composable
-internal fun surplusSentence(month: MonthSurplus, currentMonth: YearMonth, money: MoneyFormatter): String {
+internal fun surplusSentence(month: MonthSurplus, money: MoneyFormatter): String {
     val result = month.result
     return when {
-        month.runningTotal == null && month.month >= currentMonth -> stringResource(R.string.history_surplus_pending)
         result == null -> stringResource(R.string.history_surplus_nothing)
         !month.isClosed && result.isNegative -> stringResource(R.string.history_surplus_would_take, money.format(-result))
         !month.isClosed -> stringResource(R.string.history_surplus_would_add, money.format(result))
@@ -126,9 +126,9 @@ internal fun surplusSentence(month: MonthSurplus, currentMonth: YearMonth, money
 @Composable
 internal fun surplusDescription(month: MonthSurplus, currentMonth: YearMonth, money: MoneyFormatter, locale: Locale): String {
     val title = monthTitle(month.month, currentMonth, locale)
-    val sentence = surplusSentence(month, currentMonth, money)
-    val after = month.runningTotal?.let { ". " + stringResource(R.string.history_surplus_after, money.format(it)) }.orEmpty()
-    return "$title: $sentence$after"
+    val sentence = surplusSentence(month, money)
+    val after = stringResource(R.string.history_surplus_after, money.format(month.runningTotal))
+    return "$title: $sentence. $after"
 }
 
 /** Minor units in one whole unit of a currency with [fractionDigits] (100 for EUR). */

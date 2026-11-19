@@ -59,14 +59,17 @@ sealed interface SpendingHistoryUiState {
     data class Error(val message: String?) : SpendingHistoryUiState
     data class Ready(
         val currency: CurrencySpec,
-        /** Oldest first, from the first month with spending to [currentMonth]; empty without expenses. */
+        /**
+         * Oldest first, from the first month with spending or a close to [currentMonth]; never empty,
+         * since [currentMonth] is always there.
+         */
         val months: List<MonthStack>,
         /** The same months as [months], in the same order, as the surplus sees them (Q39–Q42). */
         val surplus: List<MonthSurplus>,
         /** In display order, the folded band last. */
         val series: List<ChartSeries>,
         val currentMonth: YearMonth,
-        /** The month whose breakdown is shown; null only when [months] is empty. */
+        /** The month whose breakdown is shown. */
         val selectedMonth: YearMonth?,
         /** The [ChartSeries.key] whose band stands out, or null. */
         val highlighted: String?,
@@ -122,7 +125,7 @@ class SpendingHistoryViewModel(
                     slot = slot,
                 )
             } + listOfNotNull(if (stacks.hasOthers) ChartSeries(null, "", isArchived = false, isDeleted = false, slot = -1) else null)
-            Result.success(Chart(currency, stacks.months, series, SurplusHistory.months(summaries, ledger, closed, currentMonth)))
+            Result.success(Chart(currency, stacks.months, series, SurplusHistory.months(summaries, ledger, closed)))
         }
             // The stacking runs off the main thread; only the finished state reaches it.
             .flowOn(Dispatchers.Default)

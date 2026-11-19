@@ -56,6 +56,7 @@ import java.util.Locale
 fun SurplusScreen(
     onMove: (SurplusPocket?) -> Unit,
     onPayOff: (SurplusPocket) -> Unit,
+    onAddSurplus: (SurplusPocket) -> Unit,
     onBoost: () -> Unit,
     onOneOff: () -> Unit,
     viewModel: SurplusViewModel = viewModel(factory = SurplusViewModel.Factory),
@@ -80,6 +81,7 @@ fun SurplusScreen(
         actions = SurplusActions(
             onMove = onMove,
             onPayOff = onPayOff,
+            onAddSurplus = onAddSurplus,
             onBoost = onBoost,
             onOneOff = onOneOff,
             onFilter = viewModel::setFilter,
@@ -94,6 +96,8 @@ data class SurplusActions(
     val onMove: (SurplusPocket?) -> Unit = {},
     /** Opens Move surplus aimed at a pocket in debt, with what it owes filled in. */
     val onPayOff: (SurplusPocket) -> Unit = {},
+    /** Opens Move surplus aimed at a category's pocket (Q46). */
+    val onAddSurplus: (SurplusPocket) -> Unit = {},
     val onBoost: () -> Unit = {},
     val onOneOff: () -> Unit = {},
     val onFilter: (SurplusPocket?) -> Unit = {},
@@ -190,8 +194,14 @@ private fun ReadyList(state: SurplusUiState.Ready, actions: SurplusActions, padd
 
         item(key = "pockets-header") { Header(stringResource(R.string.surplus_by_category)) }
         items(state.pockets, key = { "pocket-${it.label.pocket.key()}" }) { row ->
-            // Paying off moves surplus in, so it needs a pocket that has some.
-            PocketItem(row, money, onPayOff = if (state.hasAvailable) actions.onPayOff else null)
+            // Paying off or adding moves surplus in, so it needs another pocket that has some.
+            val canReceive = (state.saved - maxOf(row.breakdown.available, Money.ZERO)).isPositive
+            PocketItem(
+                row,
+                money,
+                onPayOff = actions.onPayOff.takeIf { canReceive },
+                onAddSurplus = actions.onAddSurplus.takeIf { canReceive && row.canAddTo },
+            )
         }
 
         if (state.boosts.isNotEmpty()) {
@@ -226,9 +236,18 @@ private fun Header(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 12.dp).semantics { heading() })
 }
 
-/** @param onPayOff offered on a pocket in debt; null when no pocket has surplus to pay with. */
+/**
+ * @param onPayOff offered on a pocket in debt; null when no other pocket has surplus to pay with.
+ * @param onAddSurplus offered on a category's pocket that isn't in debt (Q46); null when it can't
+ *   take any.
+ */
 @Composable
-private fun PocketItem(row: PocketRow, money: MoneyFormatter, onPayOff: ((SurplusPocket) -> Unit)?) {
+private fun PocketItem(
+    row: PocketRow,
+    money: MoneyFormatter,
+    onPayOff: ((SurplusPocket) -> Unit)?,
+    onAddSurplus: ((SurplusPocket) -> Unit)?,
+) {
     val b = row.breakdown
     val parts = listOfNotNull(
         b.fromClosing.takeIf { !it.isZero }?.let { stringResource(R.string.breakdown_closing, signed(it, money)) },
@@ -246,6 +265,8 @@ private fun PocketItem(row: PocketRow, money: MoneyFormatter, onPayOff: ((Surplu
                     if (onPayOff != null) {
                         TextButton(onClick = { onPayOff(row.label.pocket) }) { Text(stringResource(R.string.pay_off)) }
                     }
+                } else if (onAddSurplus != null) {
+                    TextButton(onClick = { onAddSurplus(row.label.pocket) }) { Text(stringResource(R.string.add_surplus)) }
                 }
             }
         },

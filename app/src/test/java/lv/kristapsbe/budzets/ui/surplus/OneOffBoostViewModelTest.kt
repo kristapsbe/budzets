@@ -39,6 +39,16 @@ class OneOffBoostViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `the note from Settings is shown, and follows changes to it`() = runTest {
+        val vm = vm()
+        assertNull(vm.awaitEditing().infoNote)
+        settings.setOneOffNote("Gifts go to Fun")
+        assertEquals("Gifts go to Fun", vm.awaitEditing { it.infoNote != null }.infoNote)
+        settings.setOneOffNote("")
+        assertNull(vm.awaitEditing { it.infoNote == null }.infoNote)
+    }
+
+    @Test
     fun `earlier and later months can be chosen`() = runTest {
         val vm = vm()
         vm.previousMonth()

@@ -1630,6 +1630,7 @@ from how a debug build runs its first frame, and a release build stays far below
     only turn spending into debits, which is why `ClosingSchedule` skips such months.
   - **Q41 Current month:** left out while it's under way: mid-month most of its budget is merely not
     spent yet. *Decided along the way:* if the user has closed it already, it's shown.
+    *Superseded on 2026-11-19 by Q45:* the current month is shown as it stands now.
   - **Q42 Placement:** under the spending chart. The months line up, one `ScrollState` drives both
     charts, and the selected month is shared. The breakdown gains the month's surplus lines.
 - **A month's result** (`SurplusHistory`, pure domain) has three parts:
@@ -1772,6 +1773,111 @@ from how a debug build runs its first frame, and a release build stays far below
     Overview, Surplus, Pay off, month review and the widget ("Other over by €10.00", "Debt €40.00"),
     no crash.
 - **Not verified:** a real phone, TalkBack, landscape and tablets.
+
+## Surplus chart up to now, paying from all surplus, one-off note (2026-11-19)
+
+- **Asked for:**
+  1. The surplus/debt chart always visible, with the open current month as it stands now, like the
+     spending chart.
+  2. A way to repay all of a category's debt from the current surplus (or all the surplus, if that
+     is less), with adding surplus to a category that isn't in debt just as easy.
+  3. A setting for a short text shown right under "Amount" when adding a one-off boost.
+- **Q45–Q49** (all the recommended options):
+  - **Q45 Current month in the surplus chart:** shown as if it were closed now, lighter like any
+    unclosed month. Replaces Q41. (Asked for directly, not offered as a choice.)
+  - **Q46 Add surplus without debt:** moves money into the category's pocket, like Pay off. Not a
+    boost: this month's figures don't change, the money is set aside for the category.
+  - **Q47 Where the money comes from:** "All saved surplus", a new source in Move surplus.
+    Unallocated gives first (it belongs to no category), then the category pockets, fullest first.
+  - **Q48 Where the action is:** on the Surplus tab's rows and on a category's spending (Overview →
+    category).
+  - **Q49 The note in backups:** yes. Backup format 3.
+- **The chart:**
+  - `SurplusHistory.months` no longer skips the open current month: its closing part is
+    `closingEffect(summary)`, plus its boosts and one-offs. Debt isn't taken off: it is a pocket below
+    zero, already in the running total, and `closingEffect` reads `remaining`, which ignores debt. The
+    `currentMonth` parameter went with the skip.
+  - `MonthSurplus.runningTotal` is never null now (`Money`, not `Money?`).
+  - `observeMonthSummaries` always includes the current month and starts at the first month with
+    spending *or a close*, so a closed month before the first expense has its own bar instead of
+    being folded into the starting total. With no expenses at all there is still the current month.
+  - The screen always draws the surplus chart. With no spending anywhere, the spending section shows
+    the old "No spending logged yet" text in place of its chart.
+  - Strings `history_surplus_pending` and `history_surplus_empty` are gone. The current month reads
+    "Not closed yet: closing it now would add …", under its "(so far)" title.
+  - Mid-month the current bar is mostly budget not spent yet. That is what was asked for; the lighter
+    fill and the words say it isn't final.
+- **Paying from all surplus:**
+  - `SurplusDraw` (domain): the sources (pockets above zero other than the destination, in order),
+    what they hold, and the plan for an amount. Ties go by category id, so the plan is stable.
+  - `SurplusOperations.transferFromAll` builds one linked out/in pair per pocket that gives, all with
+    the same time and note. `SurplusRepository.transferFromAll` writes them in one transaction. So the
+    history shows one "Moved from …" row per pocket.
+  - Move surplus: `MoveForm.fromAll`, saved in `SavedStateHandle`. The "All saved surplus · €X" chip
+    leads the source chips while at least two pockets have surplus; X leaves out the chosen
+    destination's own. While it is chosen and the amount can be moved, a line under the amount says
+    "Taken from: Unallocated €30.00 · Groceries €10.00" (no Latvian case endings needed).
+  - The route's `to` now preselects any valid destination, not only a pocket in debt. With `to`, the
+    source is all the saved surplus when two or more other pockets have some, otherwise the one that
+    has. A pocket in debt gets min(debt, what the source holds); otherwise the amount is left empty.
+    The general Move button is unchanged.
+  - Surplus tab: "Add surplus" on a category row not in debt, not archived and not Unallocated.
+    Pay off and Add surplus show only while some *other* pocket has surplus.
+  - Category screen: in a drill-down from the Overview, for the current month, a line under the
+    filters: "Debt to repay: €40.00 · Pay off" or "Saved for this category: €50.00 · Add surplus".
+    Hidden when there is nothing saved, nothing owed and nothing to add. An archived category can be
+    paid off but not added to, as in Move surplus. Not on the Spending tab.
+  - Reopening: moving money out of a pocket that a close credited makes reopening that month
+    refused, as for any move. Drawing from several pockets can do that to more months at once. The
+    open question on the reopen rule (below) is unchanged.
+- **The one-off note:**
+  - `SettingsRepository.oneOffNote` / `setOneOffNote`: trimmed, capped at 300 characters, blank
+    removes it. DataStore key `one_off_note`.
+  - Settings: a "One-off boosts" section with "Note on the one-off boost form"; a dialog edits it,
+    with a character count, and saving it empty clears it.
+  - The one-off boost screen shows it right under the amount field (4 dp, not the form's 16), in
+    `onSurfaceVariant`. The Boost and Move screens share `AmountWithAll` but don't show it.
+  - Backup format 3: `BackupSettings.oneOffNote`, default null. Version 1 and 2 files still read; a
+    restore of one clears the note, as a restore replaces everything. Undo restore brings it back
+    through the safety copy. An older app refuses a version 3 file (TOO_NEW), as before for 2.
+  - *Deviation from the plan:* the validator doesn't cap the note's length; `setOneOffNote` cuts a
+    longer one instead of refusing the whole backup.
+- **Baseline Profiles:** not regenerated. Rules edited by hand from `javap`: `TransactionsActions`
+  and `TransactionsScreen` (one more lambda), `SettingsRepository` (`getOneOffNote`, its key
+  accessor, and the map classes, since `lastRestoreAt`'s map is now `$map$4`). Lambda numbering
+  inside `ReadyList` may have shifted; those rules weren't redone. The other changed classes aren't
+  in the profiles.
+- **Test flake fixed along the way:** `OverviewViewModelTest` hit "Dispatchers.Main is used
+  concurrently with setting it" once. That is the race described under "Spending by month". Its
+  ViewModels now use `clearedAfterTest()`. Five runs of the class after that were clean.
+- **Verified:**
+  - 512 tests (31 new). Four full runs:
+    - Run 1: the Overview flake above, before the fix.
+    - Runs 2 and 3: clean.
+    - Run 4, after the fix: `WidgetStateFlowTest` €0.50 off once. This is the pre-existing flake
+      from "Spending by month"; it passed 8 of 8 runs on its own. Still not looked into.
+  - Lint: 0 errors.
+  - Emulator `Medium_Phone_API_37.0`, `-read-only`, debug build:
+    - **No expenses at all:** the surplus chart shows November with a total of €0.00.
+    - **Seed:** a backup in format 3, written by a throwaway Robolectric test with the clock at
+      2026-11-19 and restored through Settings and Downloads. Aug–Oct closed against an €800 budget;
+      Eating out owes €180; €285 saved over four pockets.
+    - **Chart:** Aug +€150, Sep −€45, Oct nothing. November is lighter at +€560 ("would add"), and
+      the total runs to €665 = the ledger's €105 + €560.
+    - **Pay off on the Surplus tab:** "All saved surplus · €285.00" was preselected with €180.00, and
+      the draw line read "Unallocated €150.00 · Fun €30.00". After moving, Eating out is at €0.00,
+      Fun at €80.00 and Unallocated at €0.00. The history has one pair per pocket, and the Overview
+      lost its debt line (€560.00 left).
+    - **Add surplus on Groceries:** the amount is empty; "All" fills €95.00 (its own €10 left out),
+      drawn from Fun and Transport.
+    - **Category screen:** "Saved for this category: €10.00 · Add surplus" on November only, not on
+      October. Pay off from Eating out's screen works and returns to the screen, now at €0.00.
+    - **The note:** restored from the backup, shown right under Amount, and cleared through the
+      dialog, after which nothing is shown.
+    - Latvian, dark mode and font scale 1.5 all hold up; the long "All" chip wraps.
+  - R8 release build with a throwaway key: the seed restored, and the chart, Pay off from all, the
+    category line and the note all work, with nothing in the crash log.
+- **Not verified:** a real phone, TalkBack spoken aloud, landscape and tablets.
 
 ## Open questions
 

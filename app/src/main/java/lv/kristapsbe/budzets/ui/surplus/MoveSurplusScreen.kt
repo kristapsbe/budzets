@@ -44,6 +44,7 @@ fun MoveSurplusScreen(
         state,
         MoveSurplusActions(
             onFrom = viewModel::selectFrom,
+            onFromAll = viewModel::selectAll,
             onTo = viewModel::selectTo,
             onAmountChange = viewModel::onAmountChange,
             onAll = viewModel::useAll,
@@ -56,6 +57,7 @@ fun MoveSurplusScreen(
 
 data class MoveSurplusActions(
     val onFrom: (SurplusPocket) -> Unit = {},
+    val onFromAll: () -> Unit = {},
     val onTo: (SurplusPocket) -> Unit = {},
     val onAmountChange: (String) -> Unit = {},
     val onAll: () -> Unit = {},
@@ -94,7 +96,17 @@ fun MoveSurplusContent(state: MoveSurplusState, actions: MoveSurplusActions) {
             Text(stringResource(R.string.move_explanation), style = MaterialTheme.typography.bodyMedium)
             FormSection(stringResource(R.string.move_from), stringResource(R.string.error_choose_pocket).takeIf { editing.missingFrom }) {
                 if (editing.sources.isEmpty()) Text(stringResource(R.string.no_surplus_to_use))
-                PocketChips(editing.sources, editing.form.from, money, showBalance = true, onSelect = actions.onFrom)
+                val all = editing.allSurplus
+                PocketChips(
+                    editing.sources,
+                    editing.form.from,
+                    money,
+                    showBalance = true,
+                    onSelect = actions.onFrom,
+                    leading = all?.let {
+                        { CheckChip(stringResource(R.string.move_from_all, money.format(it)), editing.form.fromAll, actions.onFromAll) }
+                    },
+                )
             }
             FormSection(stringResource(R.string.move_to), stringResource(R.string.error_choose_pocket).takeIf { editing.missingTo }) {
                 PocketChips(editing.destinations, editing.form.to, money, showBalance = false, onSelect = actions.onTo)
@@ -117,6 +129,17 @@ fun MoveSurplusContent(state: MoveSurplusState, actions: MoveSurplusActions) {
                 onAll = actions.onAll,
                 onDone = actions.onSave,
             )
+            if (editing.draw.isNotEmpty()) {
+                // Which pockets give how much, so taking from several isn't a surprise (Q47).
+                Text(
+                    stringResource(
+                        R.string.move_taken_from,
+                        editing.draw.map { it.label.text() + " " + money.format(it.balance) }.joinToString(" · "),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             NoteField(editing.form.note, actions.onNoteChange, actions.onSave)
             if (editing.failed) Text(stringResource(R.string.save_failed), color = MaterialTheme.colorScheme.error)
         }

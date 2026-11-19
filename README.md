@@ -107,7 +107,8 @@ Room, so the screens and the widget update from Room's invalidation without extr
   Archive is the reversible option.
 - **One-off boosts** add money from outside the budget to a month that isn't closed. The money goes
   straight into the Unallocated surplus, and changes no budget until you move it or use it for a
-  boost.
+  boost. Settings has a note of your own to show under the amount when you add one, such as where
+  that money usually goes.
 
 ## Debt
 
@@ -118,28 +119,31 @@ surplus and never netted against it.
 - **It comes out of the current month.** A category in debt has that much less to spend, and so
   does the month as a whole, until the debt is paid off. The daily amount, pace and widget follow.
 - **Paying it off.** Spend less than the reduced amount and closing the month clears it, or use
-  **Pay off** on the Surplus tab to move saved surplus in from another category at once.
+  **Pay off** to move saved surplus in at once: on the Surplus tab, or on the category's spending
+  from the Overview. It fills in the debt, or all that's saved if that is less, and takes it from
+  all the saved surplus: Unallocated first, then the categories with the most. **Add surplus** does
+  the same for a category that isn't in debt, with the amount left to you.
 - Closed, past and future months are shown without it, and so is a month with no budget.
 - **A category with no amount set counts as zero** in any month that has a budget, so everything
   spent in it is over.
 
 ## Spending by month
 
-The chart icon in the Overview's top bar opens a chart of every month from the first expense to
-the current one, newest on the right. Each month is a bar stacked by category, largest on top, so
+The chart icon in the Overview's top bar opens a chart of every month from the first expense (or
+the first closed month, if earlier) to the current one, newest on the right. Each month is a bar stacked by category, largest on top, so
 the order can change from month to month; a ribbon joins each category to the same category in the
 next month. The dashed line is the month's budget including boosts (a closed month's is the budget
 it was closed with). Tap a month to list its categories with amounts; tap a category there or in
 the legend to highlight it across all months. More than eight categories: the eight spent on most
 keep their own colour and the rest share one grey band.
 
-Under it, the surplus chart shows what each finished month added to the saved surplus (blue, above
-zero) or took from it (red, below), with a line for the running total. A month you haven't closed
-counts as if you closed it now, drawn lighter. A month with no budget that was never closed counts
-nothing. The current month waits until it ends. Boosts funded by the surplus and one-off boosts count
-in their month, so the breakdown splits a month's result into what closing gave and what boosts
-took. Once every finished month is closed, the line ends at the Overview's saved surplus less its
-debt.
+Under it, the surplus chart, always shown, has what each month added to the saved surplus (blue,
+above zero) or took from it (red, below), with a line for the running total. A month you haven't
+closed counts as if you closed it now, drawn lighter; that includes the current month, as it stands
+today. A month with no budget that was never closed counts nothing. Boosts funded by the surplus and
+one-off boosts count in their month, so the breakdown splits a month's result into what closing gave
+and what boosts took. Once every finished month is closed, the line ends at the Overview's saved
+surplus less its debt, plus what closing the current month now would add.
 
 ## Data, backup and privacy
 

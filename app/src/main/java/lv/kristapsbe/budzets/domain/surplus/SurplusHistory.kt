@@ -9,11 +9,12 @@ import java.time.YearMonth
  * One month in the surplus chart (Q39–Q42).
  *
  * @property result what the month added to (positive) or took from (negative) the saved surplus;
- *   null when it has nothing to give: the month still under way, or a month with no budget that
- *   was never closed and has no boost or one-off boost.
+ *   null when it has nothing to give: a month with no budget that was never closed and has no
+ *   boost or one-off boost.
  * @property isClosed false while the month isn't closed. [result] is then what closing it now
- *   would give, with its boosts and one-off boosts, which are already in the surplus.
- * @property runningTotal the surplus after this month; null for the month still under way.
+ *   would give, with its boosts and one-off boosts, which are already in the surplus. That
+ *   includes the month under way, as it stands now (Q45).
+ * @property runningTotal the surplus after this month.
  * @property boosts the part of [result] from boosts funded by the surplus (reserved, less released).
  * @property oneOffs the part of [result] from one-off boosts.
  */
@@ -21,7 +22,7 @@ data class MonthSurplus(
     val month: YearMonth,
     val result: Money?,
     val isClosed: Boolean,
-    val runningTotal: Money?,
+    val runningTotal: Money,
     val boosts: Money = Money.ZERO,
     val oneOffs: Money = Money.ZERO,
 ) {
@@ -39,20 +40,21 @@ object SurplusHistory {
      * Each month of [summaries] (oldest first, consecutive) as the surplus sees it.
      *
      * A month's result is its closing part plus its boosts and one-off boosts. The closing part of
-     * a closed month is what its closes posted; of an open past month with a budget, what closing
-     * it now would post ([closingEffect]). An open month without a budget is left out, as
+     * a closed month is what its closes posted; of an open month with a budget, what closing it now
+     * would post ([closingEffect]). That goes for the month under way too, as it stands today
+     * (Q45), the way the spending chart shows its spending so far. Debt isn't taken off it: debt is
+     * a pocket below zero, already in the total. An open month without a budget is left out, as
      * [ClosingSchedule] leaves it out of reminders: closing it would only turn spending into
-     * debits. The month under way is left out until it's closed. Transfers between pockets don't
-     * change the total and are ignored.
+     * debits. Transfers between pockets don't change the total and are ignored.
      *
      * The running total starts from what earlier months gave. With every finished month closed, it
-     * ends at the saved surplus, less any boosts and one-off boosts for the month under way or later.
+     * ends at the saved surplus plus what closing the month under way now would add, less any
+     * boosts and one-off boosts for later months.
      */
     fun months(
         summaries: List<MonthSummary>,
         ledger: List<LedgerEntry>,
         closedMonths: Set<YearMonth>,
-        currentMonth: YearMonth,
     ): List<MonthSurplus> {
         val first = summaries.firstOrNull()?.month ?: return emptyList()
         val posted = ledger.filter { it.type.isClosure }.netBy { it.sourceMonth }
@@ -65,7 +67,6 @@ object SurplusHistory {
         return summaries.map { summary ->
             val month = summary.month
             val isClosed = month in closedMonths
-            if (month >= currentMonth && !isClosed) return@map MonthSurplus(month, null, isClosed = false, runningTotal = null)
             val closing = when {
                 isClosed -> posted[month] ?: Money.ZERO
                 summary.overallBase?.isPositive == true -> closingEffect(summary).values.sumMoney()

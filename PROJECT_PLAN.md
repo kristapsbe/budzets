@@ -126,7 +126,9 @@ Keep the assumptions easy to change.
     bumps. (2026-11-15: a negative balance is shown as debt, apart from
     saved surplus, and comes out of the current month's figures until it
     is repaid. A category with no amount set counts as zero. See the
-    notes, Q43--Q44.)
+    notes, Q43--Q44. 2026-11-19: Pay off and Add surplus move money
+    in from all saved surplus at once, Unallocated first, then the
+    fullest pockets; Q46--Q48.)
 -   **Month finalization:** do not automatically lock a month merely
     because the date changes. Provide an explicit "Close month /
     finalize surplus" action, and explain that it snapshots the unused
@@ -715,7 +717,8 @@ Include:
 -   `schemaVersion`.
 -   `appVersion` (informational).
 -   `createdAt`.
--   `currencyCode` and relevant settings.
+-   `currencyCode` and relevant settings. (2026-11-19: format 3 adds
+    the user's one-off boost note; Q49.)
 -   Categories.
 -   Budget configurations and effective dates.
 -   Expenses.

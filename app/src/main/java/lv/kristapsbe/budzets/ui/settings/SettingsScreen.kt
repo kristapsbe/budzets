@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
@@ -44,16 +45,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.data.backup.BackupCodec
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
+import lv.kristapsbe.budzets.data.repository.SettingsRepository
 import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.canSwitchCurrency
 import lv.kristapsbe.budzets.ui.components.Banner
@@ -93,6 +101,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel(factory = SettingsVi
             onCancelRestore = viewModel::cancelRestore,
             onUndoRestore = viewModel::undoRestore,
             onCurrency = viewModel::setCurrency,
+            onOneOffNote = viewModel::setOneOffNote,
         ),
         snackbarHostState = snackbar,
     )
@@ -105,6 +114,8 @@ data class SettingsActions(
     val onCancelRestore: () -> Unit = {},
     val onUndoRestore: () -> Unit = {},
     val onCurrency: (CurrencySpec) -> Unit = {},
+    /** Blank clears the note. */
+    val onOneOffNote: (String) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -133,6 +144,7 @@ fun SettingsContent(
 private fun ReadyList(state: SettingsUiState.Ready, actions: SettingsActions, padding: PaddingValues, zone: ZoneId) {
     val locale = LocalConfiguration.current.locales[0]
     var pickCurrency by rememberSaveable { mutableStateOf(false) }
+    var editNote by rememberSaveable { mutableStateOf(false) }
     var confirmUndo by rememberSaveable { mutableStateOf(false) }
     val time = { at: Instant -> at.dateTimeText(zone, locale) }
 
@@ -187,6 +199,14 @@ private fun ReadyList(state: SettingsUiState.Ready, actions: SettingsActions, pa
                 modifier = Modifier.clickable(onClickLabel = stringResource(R.string.choose_currency)) { pickCurrency = true },
             )
         }
+        item(key = "one-off-note") {
+            Section(R.string.one_off_boosts)
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_one_off_note)) },
+                supportingContent = { Text(state.oneOffNote ?: stringResource(R.string.one_off_note_none)) },
+                modifier = Modifier.clickable(onClickLabel = stringResource(R.string.one_off_note_title)) { editNote = true },
+            )
+        }
         item(key = "budgets") {
             Section(R.string.settings_how_budgets_work)
             Paragraph(stringResource(R.string.how_budgets_work_text))
@@ -220,6 +240,13 @@ private fun ReadyList(state: SettingsUiState.Ready, actions: SettingsActions, pa
                 TextButton(onClick = { confirmUndo = false; actions.onUndoRestore() }) { Text(stringResource(R.string.undo_restore)) }
             },
             dismissButton = { TextButton(onClick = { confirmUndo = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    if (editNote) {
+        OneOffNoteDialog(
+            initial = state.oneOffNote.orEmpty(),
+            onConfirm = { editNote = false; actions.onOneOffNote(it) },
+            onDismiss = { editNote = false },
         )
     }
     if (pickCurrency) {
@@ -305,6 +332,43 @@ private fun CurrencyPicker(current: CurrencySpec, locked: Boolean, onPick: (Curr
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
+
+/** Edits the text shown under the amount when adding a one-off boost (Q49). Saving it empty clears it. */
+@Composable
+private fun OneOffNoteDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    // Selected on open, so typing replaces it.
+    var field by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(initial, selection = TextRange(0, initial.length)))
+    }
+    val max = SettingsRepository.MAX_ONE_OFF_NOTE_LENGTH
+    val tooLong = field.text.trim().length > max
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.one_off_note_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.one_off_note_hint), style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(
+                    value = field,
+                    onValueChange = { field = it },
+                    label = { Text(stringResource(R.string.one_off_note_label)) },
+                    minLines = 2,
+                    maxLines = 6,
+                    isError = tooLong,
+                    supportingText = { Text(stringResource(R.string.one_off_note_length, field.text.trim().length, max)) },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag(ONE_OFF_NOTE_FIELD_TAG),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(field.text) }, enabled = !tooLong) { Text(stringResource(R.string.save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+const val ONE_OFF_NOTE_FIELD_TAG = "one_off_note"
 
 @Composable
 private fun Section(title: Int) {

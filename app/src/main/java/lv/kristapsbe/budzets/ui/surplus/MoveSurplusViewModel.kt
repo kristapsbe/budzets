@@ -23,6 +23,7 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.domain.model.Outcome
 import lv.kristapsbe.budzets.domain.model.SurplusPocket
+import lv.kristapsbe.budzets.domain.surplus.SurplusDraw
 import lv.kristapsbe.budzets.domain.surplus.SurplusError
 import lv.kristapsbe.budzets.domain.surplus.SurplusLedger
 import lv.kristapsbe.budzets.util.amountInputChars
@@ -34,11 +35,13 @@ import java.time.YearMonth
 /** A pocket offered in a picker, with its current balance. */
 data class PocketChoice(val label: PocketLabel, val balance: Money)
 
+/** @property fromAll take from the saved surplus as a whole (Q47); [from] is then null. */
 data class MoveForm(
     val from: SurplusPocket? = null,
     val to: SurplusPocket? = null,
     val amountText: String = "",
     val note: String = "",
+    val fromAll: Boolean = false,
 )
 
 sealed interface MoveSurplusState {
@@ -58,8 +61,16 @@ sealed interface MoveSurplusState {
         val missingTo: Boolean,
         val isSaving: Boolean = false,
         val failed: Boolean = false,
+        /**
+         * What the saved surplus as a whole can give the chosen destination (Q47); null, and not
+         * offered, unless at least two pockets have surplus.
+         */
+        val allSurplus: Money? = null,
+        /** While [MoveForm.fromAll] and the amount can be moved: what each pocket gives, in order. */
+        val draw: List<PocketChoice> = emptyList(),
     ) : MoveSurplusState {
-        val available: Money? get() = sources.firstOrNull { it.label.pocket == form.from }?.balance
+        val available: Money?
+            get() = if (form.fromAll) allSurplus else sources.firstOrNull { it.label.pocket == form.from }?.balance
 
         /** The chosen destination when it is in debt, so the form can say what it owes (Q43). */
         val payingOff: PocketChoice? get() = destinations.firstOrNull { it.label.pocket == form.to }?.takeIf { it.balance.isNegative }
@@ -67,10 +78,11 @@ sealed interface MoveSurplusState {
 }
 
 /**
- * Moves all or part of one pocket's surplus to another (spec §6.6). The ledger records both legs
- * in one transaction. Compose state for the text fields, mirrored into [SavedStateHandle], as in
- * the other editors. Route arguments, both pocket keys: `from` preselects the source; `to` pays
- * off a pocket in debt, preselecting it and filling in what it owes (Q43).
+ * Moves all or part of one pocket's surplus to another (spec §6.6), or some of the saved surplus
+ * as a whole, drawn from several pockets (Q47). The ledger records every leg in one transaction.
+ * Compose state for the text fields, mirrored into [SavedStateHandle], as in the other editors.
+ * Route arguments, both pocket keys: `from` preselects the source; `to` pays off or adds to a
+ * pocket, preselecting it and, for a pocket in debt, filling in what it owes (Q43, Q46).
  */
 class MoveSurplusViewModel(
     private val savedState: SavedStateHandle,
@@ -96,6 +108,7 @@ class MoveSurplusViewModel(
             to = savedState.get<String>(KEY_TO)?.let(::pocketFromKey),
             amountText = savedState[KEY_AMOUNT] ?: "",
             note = savedState[KEY_NOTE] ?: "",
+            fromAll = savedState.get<Boolean>(KEY_FROM_ALL) == true,
         ),
     )
         private set
@@ -108,17 +121,14 @@ class MoveSurplusViewModel(
             val order = pocketOrder(ref.categories)
             val sources = ref.balances.filterValues { it.isPositive }.keys.sortedWith(order)
                 .map { PocketChoice(it.label(byId), ref.balances.getValue(it)) }
-            val month = YearMonth.now(clock)
-            // A pocket in debt can always be paid off, an archived category's included.
-            val active = ref.categories.filter { !it.isDeleted && it.toRef().isActiveIn(month) }.map { SurplusPocket.Category(it.id) }
-            val destinations = (active + SurplusPocket.Unallocated + SurplusLedger.debts(ref.balances).keys)
-                .distinct()
-                .filter { it != form.from }
+            val destinations = destinations(ref).filter { it != form.from }
                 .sortedWith(order)
                 .map { PocketChoice(it.label(byId), ref.balances[it] ?: Money.ZERO) }
             val parsed = AmountParser.parse(form.amountText, ref.currency)
             val amount = (parsed as? Outcome.Ok)?.value
-            val available = sources.firstOrNull { it.label.pocket == form.from }?.balance
+            val allSurplus = SurplusDraw.available(ref.balances, form.to).takeIf { sources.size >= 2 }
+            val available = if (form.fromAll) allSurplus else sources.firstOrNull { it.label.pocket == form.from }?.balance
+            val draw = if (form.fromAll && allSurplus != null && amount != null) SurplusDraw.plan(ref.balances, form.to, amount).orEmpty() else emptyList()
             val error = (parsed as? Outcome.Err)?.error
             return MoveSurplusState.Editing(
                 currency = ref.currency,
@@ -127,34 +137,29 @@ class MoveSurplusViewModel(
                 destinations = destinations,
                 amountError = error?.takeIf { attempted || it == AmountError.TOO_MANY_DECIMALS || it == AmountError.TOO_LARGE },
                 exceedsAvailable = available?.takeIf { amount != null && amount > it },
-                missingFrom = attempted && form.from == null,
+                // "All" can stop being offered if the balances change meanwhile.
+                missingFrom = attempted && form.from == null && !(form.fromAll && allSurplus != null),
                 missingTo = attempted && form.to == null,
                 isSaving = saving,
                 failed = failed,
+                allSurplus = allSurplus,
+                draw = draw.map { (pocket, part) -> PocketChoice(pocket.label(byId), part) },
             )
         }
+
+    /** Active categories, the unallocated pocket, and any pocket in debt, an archived category's included. */
+    private fun destinations(ref: Reference): List<SurplusPocket> {
+        val month = YearMonth.now(clock)
+        val active = ref.categories.filter { !it.isDeleted && it.toRef().isActiveIn(month) }.map { SurplusPocket.Category(it.id) }
+        return (active + SurplusPocket.Unallocated + SurplusLedger.debts(ref.balances).keys).distinct()
+    }
 
     init {
         viewModelScope.launch {
             combine(settings.currency, surplus.balances, categories.categories, ::Reference).collect { ref ->
                 reference = ref
                 if (!initialized) {
-                    // The pocket passed in, or the only pocket with surplus.
-                    val positive = ref.balances.filterValues { it.isPositive }.keys
-                    val from = savedState.get<String>(ARG_FROM)?.let(::pocketFromKey)?.takeIf { it in positive }
-                        ?: positive.singleOrNull()
-                    // Paying off: the pocket passed in, if it still owes, and what it owes, or as
-                    // much of that as the source has.
-                    val debts = SurplusLedger.debts(ref.balances)
-                    val to = savedState.get<String>(ARG_TO)?.let(::pocketFromKey)?.takeIf { it in debts }
-                    val amount = to?.let { debts.getValue(it) }?.let { owed -> from?.let { minOf(owed, ref.balances.getValue(it)) } ?: owed }
-                    updateForm(
-                        form.copy(
-                            from = from,
-                            to = to ?: form.to,
-                            amountText = amount?.let { formatForInput(it, ref.currency, decimalSeparator) } ?: form.amountText,
-                        ),
-                    )
+                    initialize(ref)
                     initialized = true
                     savedState[KEY_INITIALIZED] = true
                 }
@@ -162,7 +167,40 @@ class MoveSurplusViewModel(
         }
     }
 
-    fun selectFrom(pocket: SurplusPocket) = updateForm(form.copy(from = pocket, to = form.to?.takeIf { it != pocket }))
+    /**
+     * Fills in the form from the route. Paying off or adding to a pocket (`to`) takes from the saved
+     * surplus as a whole when more than one other pocket has some (Q47), and for a pocket in debt
+     * fills in what it owes, or as much of that as there is. Otherwise the pocket passed in as
+     * `from`, or the only pocket with surplus.
+     */
+    private fun initialize(ref: Reference) {
+        val positive = ref.balances.filterValues { it.isPositive }.keys
+        val to = savedState.get<String>(ARG_TO)?.let(::pocketFromKey)?.takeIf { it in destinations(ref) }
+        if (to != null) {
+            val givers = positive - to
+            val fromAll = givers.size >= 2
+            val from = givers.singleOrNull()
+            val available = if (fromAll) SurplusDraw.available(ref.balances, to) else from?.let(ref.balances::getValue)
+            val owed = SurplusLedger.debts(ref.balances)[to]
+            val amount = owed?.let { if (available != null) minOf(it, available) else it }
+            updateForm(
+                form.copy(
+                    from = from,
+                    to = to,
+                    fromAll = fromAll,
+                    amountText = amount?.let { formatForInput(it, ref.currency, decimalSeparator) } ?: form.amountText,
+                ),
+            )
+        } else {
+            val from = savedState.get<String>(ARG_FROM)?.let(::pocketFromKey)?.takeIf { it in positive } ?: positive.singleOrNull()
+            updateForm(form.copy(from = from))
+        }
+    }
+
+    fun selectFrom(pocket: SurplusPocket) = updateForm(form.copy(from = pocket, fromAll = false, to = form.to?.takeIf { it != pocket }))
+
+    /** Takes from the saved surplus as a whole (Q47). */
+    fun selectAll() = updateForm(form.copy(from = null, fromAll = true))
     fun selectTo(pocket: SurplusPocket) = updateForm(form.copy(to = pocket))
     fun onAmountChange(text: String) = updateForm(form.copy(amountText = text.amountInputChars()))
     fun onNoteChange(text: String) = updateForm(form.copy(note = text))
@@ -179,15 +217,19 @@ class MoveSurplusViewModel(
         if (saving) return
         attempted = true
         savedState[KEY_ATTEMPTED] = true
-        val from = form.from ?: return
+        val from = form.from
+        if (from == null && !form.fromAll) return
         val to = form.to ?: return
         val amount = (AmountParser.parse(form.amountText, editing.currency) as? Outcome.Ok)?.value ?: return
         val available = editing.available ?: return
         if (amount > available) return
         saving = true
         failed = false
+        val note = form.note.trim().takeIf { it.isNotEmpty() }
         viewModelScope.launch {
-            val result = runCatching { surplus.transfer(from, to, amount, form.note.trim().takeIf { it.isNotEmpty() }) }.getOrNull()
+            val result = runCatching {
+                if (from == null) surplus.transferFromAll(to, amount, note) else surplus.transfer(from, to, amount, note)
+            }.getOrNull()
             saving = false
             // InsufficientSurplus can only mean the balance changed meanwhile; the form shows the new one.
             if (result is Outcome.Ok) done = true else failed = (result as? Outcome.Err)?.error !is SurplusError.InsufficientSurplus
@@ -200,6 +242,7 @@ class MoveSurplusViewModel(
         savedState[KEY_TO] = value.to?.key()
         savedState[KEY_AMOUNT] = value.amountText
         savedState[KEY_NOTE] = value.note
+        savedState[KEY_FROM_ALL] = value.fromAll
     }
 
     companion object {
@@ -210,6 +253,7 @@ class MoveSurplusViewModel(
         private const val KEY_TO = "form_to"
         private const val KEY_AMOUNT = "form_amount"
         private const val KEY_NOTE = "form_note"
+        private const val KEY_FROM_ALL = "form_from_all"
         private const val KEY_INITIALIZED = "form_initialized"
         private const val KEY_ATTEMPTED = "form_attempted"
 

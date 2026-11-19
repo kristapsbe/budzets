@@ -233,6 +233,9 @@
     <string name="breakdown_one_off">One-off boosts %1$s</string>
     <string name="pocket_negative_hint">Overspent. It comes out of this month’s budget until it’s paid off.</string>
     <string name="pay_off">Pay off</string>
+    <string name="add_surplus">Add surplus</string>
+    <string name="category_pocket_saved">Saved for this category: %1$s</string>
+    <string name="category_pocket_debt">Debt to repay: %1$s</string>
     <string name="active_boosts">Active boosts</string>
     <string name="boost_row">+%1$s for %2$s, %3$s</string>
     <string name="boost_from">From %1$s</string>
@@ -257,13 +260,16 @@
 
     <!-- Move surplus / boost -->
     <string name="move">Move</string>
-    <string name="move_explanation">Move all or part of a category’s saved surplus to another category. Moving it into a category in debt pays that debt off.</string>
+    <string name="move_explanation">Move all or part of the saved surplus to a category, from one category or from all of them. Moving it into a category in debt pays that debt off.</string>
     <string name="move_from">From</string>
     <string name="move_to">To</string>
     <!-- %1$s is a category, %2$s an amount: "Eating out owes €40.00." -->
     <string name="move_to_owes">%1$s owes %2$s.</string>
     <string name="pocket_with_balance" translatable="false">%1$s · %2$s</string>
     <string name="use_all">All (%1$s)</string>
+    <string name="move_from_all">All saved surplus · %1$s</string>
+    <!-- %1$s lists pockets and amounts: "Unallocated €30.00 · Groceries €10.00" -->
+    <string name="move_taken_from">Taken from: %1$s</string>
     <string name="error_more_than_available">Only %1$s is available</string>
     <string name="error_choose_pocket">Choose one</string>
     <string name="no_surplus_to_use">No category has surplus to use yet.</string>
@@ -354,6 +360,12 @@
         <item quantity="one">%d decimal</item>
         <item quantity="other">%d decimals</item>
     </plurals>
+    <string name="settings_one_off_note">Note on the one-off boost form</string>
+    <string name="one_off_note_none">None. Add text to show under the amount when you add a one-off boost.</string>
+    <string name="one_off_note_title">One-off boost note</string>
+    <string name="one_off_note_hint">Shown under the amount when you add a one-off boost. Leave it empty to show nothing.</string>
+    <string name="one_off_note_label">Note</string>
+    <string name="one_off_note_length" translatable="false">%1$d / %2$d</string>
     <string name="settings_how_budgets_work">How budgets work</string>
     <string name="how_budgets_work_text">Set a daily, weekly or monthly target. Daily and weekly targets are turned into a monthly amount for each month’s length; if you set more than one, the highest monthly amount is used. When you close a month, unspent budget becomes surplus. Overspending the surplus can’t cover becomes debt, which comes out of your budget until it’s paid off.</string>
     <string name="settings_privacy">Privacy</string>
@@ -379,9 +391,7 @@
     <string name="history_surplus_would_take">Not closed yet: closing it now would take %1$s</string>
     <string name="history_surplus_zero">Nothing added or taken</string>
     <string name="history_surplus_nothing">No budget, so nothing added or taken</string>
-    <string name="history_surplus_pending">The result comes when the month ends</string>
     <string name="history_surplus_after">Surplus after this month: %1$s</string>
-    <string name="history_surplus_empty">Nothing here yet: a month’s result comes when it ends.</string>
     <string name="history_legend_added">Added</string>
     <string name="history_legend_taken">Taken</string>
     <string name="history_legend_not_closed">Not closed yet</string>

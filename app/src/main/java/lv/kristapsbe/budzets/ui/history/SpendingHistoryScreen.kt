@@ -112,16 +112,7 @@ fun SpendingHistoryContent(state: SpendingHistoryUiState, actions: SpendingHisto
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = actions.onRetry) { Text(stringResource(R.string.retry)) }
             }
-            is SpendingHistoryUiState.Ready -> if (state.months.isEmpty()) {
-                Text(
-                    stringResource(R.string.history_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(padding).padding(16.dp),
-                )
-            } else {
-                ReadyContent(state, actions, Modifier.padding(padding))
-            }
+            is SpendingHistoryUiState.Ready -> ReadyContent(state, actions, Modifier.padding(padding))
         }
     }
 }
@@ -139,7 +130,7 @@ private fun ReadyContent(state: SpendingHistoryUiState.Ready, actions: SpendingH
     val axisWidth = axisWidth(spendingTicks + surplusTicks)
     // Starts at the far end: the value is clamped to the end once the width is known.
     val scroll = rememberScrollState(Int.MAX_VALUE)
-    val hasSurplus = state.surplus.any { it.runningTotal != null }
+    val hasSpending = state.months.any { it.segments.isNotEmpty() }
     val inset = Modifier.padding(horizontal = 16.dp)
 
     Column(
@@ -147,20 +138,21 @@ private fun ReadyContent(state: SpendingHistoryUiState.Ready, actions: SpendingH
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ChartHeading(stringResource(R.string.history_spending_heading), inset)
-        SpendingChart(state, spendingScale, spendingTicks, axisWidth, scroll, money, locale, actions.onSelectMonth, Modifier.fillMaxWidth().then(inset))
-        Legend(state, actions.onToggleHighlight, inset)
-        ChartHeading(stringResource(R.string.history_surplus_heading), inset)
-        if (hasSurplus) {
-            SurplusChart(state, surplusScale, surplusTicks, axisWidth, scroll, money, locale, actions.onSelectMonth, Modifier.fillMaxWidth().then(inset))
-            SurplusLegend(state, inset)
+        if (hasSpending) {
+            SpendingChart(state, spendingScale, spendingTicks, axisWidth, scroll, money, locale, actions.onSelectMonth, Modifier.fillMaxWidth().then(inset))
+            Legend(state, actions.onToggleHighlight, inset)
         } else {
             Text(
-                stringResource(R.string.history_surplus_empty),
+                stringResource(R.string.history_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = inset,
             )
         }
+        // Always shown (Q45): there is at least the month under way.
+        ChartHeading(stringResource(R.string.history_surplus_heading), inset)
+        SurplusChart(state, surplusScale, surplusTicks, axisWidth, scroll, money, locale, actions.onSelectMonth, Modifier.fillMaxWidth().then(inset))
+        SurplusLegend(state, inset)
         state.selected?.let { MonthBreakdown(state, it, money, locale, actions.onToggleHighlight, inset) }
     }
 }
@@ -296,7 +288,7 @@ private fun MonthBreakdown(
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(
-                    surplusSentence(surplus, state.currentMonth, money),
+                    surplusSentence(surplus, money),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (taken) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
@@ -308,13 +300,11 @@ private fun MonthBreakdown(
                 if (!surplus.boosts.isZero) SurplusPart(stringResource(R.string.history_surplus_part_boosts, signed(surplus.boosts, money)))
                 if (!surplus.oneOffs.isZero) SurplusPart(stringResource(R.string.history_surplus_part_one_offs, signed(surplus.oneOffs, money)))
             }
-            surplus.runningTotal?.let {
-                Text(
-                    stringResource(R.string.history_surplus_after, money.format(it)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                stringResource(R.string.history_surplus_after, money.format(surplus.runningTotal)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         HorizontalDivider()
         if (stack.segments.isEmpty()) {

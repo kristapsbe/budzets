@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -100,19 +101,32 @@ fun OneOffBoostContent(state: OneOffBoostState, actions: OneOffBoostActions) {
             if (editing.monthClosed) {
                 Banner(Icons.Filled.Lock, stringResource(R.string.one_off_month_closed, editing.month.displayName(locale)), warning = true)
             }
-            AmountWithAll(
-                value = editing.form.amountText,
-                onChange = actions.onAmountChange,
-                error = editing.amountError,
-                exceedsAvailable = null,
-                available = null,
-                money = money,
-                fractionDigits = editing.currency.fractionDigits,
-                onAll = {},
-                onDone = actions.onSave,
-            )
+            // The user's note sits right under the field, closer than the form's other parts (Q49).
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                AmountWithAll(
+                    value = editing.form.amountText,
+                    onChange = actions.onAmountChange,
+                    error = editing.amountError,
+                    exceedsAvailable = null,
+                    available = null,
+                    money = money,
+                    fractionDigits = editing.currency.fractionDigits,
+                    onAll = {},
+                    onDone = actions.onSave,
+                )
+                editing.infoNote?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp).testTag(ONE_OFF_INFO_NOTE_TAG),
+                    )
+                }
+            }
             NoteField(editing.form.note, actions.onNoteChange, actions.onSave)
             if (editing.failed) Text(stringResource(R.string.save_failed), color = MaterialTheme.colorScheme.error)
         }
     }
 }
+
+const val ONE_OFF_INFO_NOTE_TAG = "one_off_info_note"

@@ -79,6 +79,17 @@ class SurplusRepository(
         result
     }
 
+    /** Moves [amount] into [to] from the saved surplus as a whole, Unallocated first (Q47). */
+    suspend fun transferFromAll(
+        to: SurplusPocket,
+        amount: Money,
+        note: String? = null,
+    ): Outcome<List<LedgerEntry>, SurplusError> = db.withTransaction {
+        val result = operations.transferFromAll(loadMergedLedger(), to, amount, note)
+        if (result is Outcome.Ok) dao.insertEntries(result.value.map { it.toEntity() })
+        result
+    }
+
     suspend fun allocateBoost(
         source: SurplusPocket,
         destination: CategoryId,

@@ -4,6 +4,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher.Companion.keyIsDefined
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
@@ -31,6 +32,7 @@ import lv.kristapsbe.budzets.ui.overview.OverviewContent
 import lv.kristapsbe.budzets.ui.overview.OverviewUiState
 import lv.kristapsbe.budzets.ui.theme.BudzetsTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -171,6 +173,58 @@ class SurplusContentTest {
     }
 
     @Test
+    fun `a category not in debt offers to add surplus, but not Unallocated or an archived one`() {
+        var added: SurplusPocket? = null
+        val old = PocketLabel(SurplusPocket.Category(CategoryId("old")), "Old", isArchived = true)
+        val state = ready().copy(
+            saved = eur(585),
+            debt = eur(0),
+            pockets = listOf(
+                PocketRow(food, PocketBreakdown(eur(125))),
+                PocketRow(old, PocketBreakdown(eur(10))),
+                PocketRow(unallocated, PocketBreakdown(eur(450))),
+            ),
+            boosts = emptyList(),
+        )
+        compose.setContent { BudzetsTheme { SurplusContent(state, SurplusActions(onAddSurplus = { added = it })) } }
+        val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        list.performScrollToNode(hasText("Add surplus"))
+        compose.onNodeWithText("Add surplus").performClick() // the only one: Food's
+        assertEquals(food.pocket, added)
+    }
+
+    @Test
+    fun `no add surplus when the category's own pocket is all there is`() {
+        val state = ready().copy(saved = eur(100), debt = eur(0), pockets = listOf(PocketRow(food, PocketBreakdown(eur(100)))), boosts = emptyList())
+        compose.setContent { BudzetsTheme { SurplusContent(state, SurplusActions()) } }
+        val list = compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        list.performScrollToNode(hasText("Closed months +€100.00"))
+        compose.onNodeWithText("Add surplus").assertDoesNotExist()
+    }
+
+    @Test
+    fun `move editor offers all the saved surplus and says which pockets give`() {
+        var all = 0
+        val editing = MoveSurplusState.Editing(
+            currency = CurrencySpec.DEFAULT,
+            form = MoveForm(null, fun_.pocket, "500", fromAll = true),
+            sources = listOf(PocketChoice(food, eur(100)), PocketChoice(unallocated, eur(450))),
+            destinations = listOf(PocketChoice(fun_, eur(-30)), PocketChoice(unallocated, eur(450))),
+            amountError = null,
+            exceedsAvailable = null,
+            missingFrom = false,
+            missingTo = false,
+            allSurplus = eur(550),
+            draw = listOf(PocketChoice(unallocated, eur(450)), PocketChoice(food, eur(50))),
+        )
+        compose.setContent { BudzetsTheme { MoveSurplusContent(editing, MoveSurplusActions(onFromAll = { all++ })) } }
+        compose.onNodeWithText("All saved surplus · €550.00").assertIsDisplayed().performClick()
+        assertEquals(1, all)
+        compose.onNodeWithText("Taken from: Unallocated €450.00 · Food €50.00").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("All (€550.00)").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun `move editor says what the chosen destination owes`() {
         val editing = MoveSurplusState.Editing(
             currency = CurrencySpec.DEFAULT,
@@ -272,5 +326,28 @@ class SurplusContentTest {
         compose.onNode(hasText("Add") and hasClickAction()).assertIsNotEnabled()
         compose.onNodeWithTag(SURPLUS_AMOUNT_TAG).performScrollTo().performTextInput("7")
         assertEquals("7", typed)
+        // No note set in Settings, so nothing under the amount.
+        compose.onNodeWithTag(ONE_OFF_INFO_NOTE_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `one-off boost editor shows the note from Settings right under the amount`() {
+        val editing = OneOffBoostState.Editing(
+            currency = CurrencySpec.DEFAULT,
+            form = OneOffForm(),
+            month = ym("2026-04"),
+            isCurrentMonth = true,
+            monthClosed = false,
+            amountError = null,
+            infoNote = "Gifts from grandma go to Fun",
+        )
+        compose.setContent { BudzetsTheme { OneOffBoostContent(editing, OneOffBoostActions()) } }
+        val note = compose.onNodeWithTag(ONE_OFF_INFO_NOTE_TAG).performScrollTo().assertIsDisplayed()
+        note.assertTextEquals("Gifts from grandma go to Fun")
+        val amount = compose.onNodeWithTag(SURPLUS_AMOUNT_TAG).fetchSemanticsNode().boundsInRoot
+        val below = note.fetchSemanticsNode().boundsInRoot
+        val noteField = compose.onNodeWithText("Note (optional)").fetchSemanticsNode().boundsInRoot
+        assertTrue("the note should be under the amount", below.top >= amount.bottom)
+        assertTrue("the note should be above the note field", below.bottom <= noteField.top)
     }
 }

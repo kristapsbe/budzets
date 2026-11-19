@@ -77,11 +77,13 @@ sealed interface SettingsUiState {
         /** A valid file was chosen and awaits confirmation. */
         val pendingRestore: RestorePreview?,
         val appVersion: String,
+        /** Shown under the amount when adding a one-off boost (Q49); null when not set. */
+        val oneOffNote: String? = null,
     ) : SettingsUiState
 }
 
 /**
- * Backup, restore and its undo, plus the currency. A chosen backup is checked completely before
+ * Backup, restore and its undo, plus the currency and the one-off boost note. A chosen backup is checked completely before
  * the confirmation is shown; nothing changes until the user confirms. The chosen file is held in
  * memory only: after process death the user picks it again, since the file permission is gone too.
  */
@@ -100,8 +102,13 @@ class SettingsViewModel(
     val message: StateFlow<SettingsMessage?> = _message.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(settings.currency, expenses.hasMonetaryData, settings.lastBackupAt, backups.lastRestoreAt, combine(busy, pending, ::Pair)) {
-                currency, hasData, lastBackup, lastRestore, (working, chosen) ->
+        combine(
+            settings.currency,
+            expenses.hasMonetaryData,
+            settings.lastBackupAt,
+            backups.lastRestoreAt,
+            combine(busy, pending, settings.oneOffNote, ::Triple),
+        ) { currency, hasData, lastBackup, lastRestore, (working, chosen, oneOffNote) ->
             SettingsUiState.Ready(
                 currency = currency,
                 currencyLocked = hasData,
@@ -110,6 +117,7 @@ class SettingsViewModel(
                 busy = working,
                 pendingRestore = chosen?.let(::preview),
                 appVersion = appVersion,
+                oneOffNote = oneOffNote,
             ) as SettingsUiState
         }
             .catch { emit(SettingsUiState.Error(it.message)) }
@@ -183,6 +191,11 @@ class SettingsViewModel(
         viewModelScope.launch {
             if (!settings.setCurrency(currency)) _message.value = SettingsMessage.CURRENCY_REFUSED
         }
+    }
+
+    /** Blank clears it. */
+    fun setOneOffNote(text: String) {
+        viewModelScope.launch { settings.setOneOffNote(text) }
     }
 
     fun messageShown(shown: SettingsMessage) {

@@ -30,7 +30,11 @@ import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.ui.components.amountErrorText
 import lv.kristapsbe.budzets.util.MoneyFormatter
 
-/** Pockets as chips, each with its balance when [showBalance]. */
+/**
+ * Pockets as chips, each with its balance when [showBalance].
+ *
+ * @param leading a chip of the caller's, before the pockets (Move surplus's "All saved surplus").
+ */
 @Composable
 internal fun PocketChips(
     choices: List<PocketChoice>,
@@ -38,21 +42,32 @@ internal fun PocketChips(
     money: MoneyFormatter,
     showBalance: Boolean,
     onSelect: (SurplusPocket) -> Unit,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        leading?.invoke()
         choices.forEach { choice ->
-            val isSelected = choice.label.pocket == selected
             val name = choice.label.text()
-            FilterChip(
-                selected = isSelected,
+            CheckChip(
+                text = if (showBalance) stringResource(R.string.pocket_with_balance, name, money.format(choice.balance)) else name,
+                selected = choice.label.pocket == selected,
                 onClick = { onSelect(choice.label.pocket) },
-                label = { Text(if (showBalance) stringResource(R.string.pocket_with_balance, name, money.format(choice.balance)) else name) },
-                leadingIcon = if (isSelected) {
-                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                } else null,
             )
         }
     }
+}
+
+/** A filter chip that shows a tick while selected. */
+@Composable
+internal fun CheckChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(text) },
+        leadingIcon = if (selected) {
+            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+        } else null,
+    )
 }
 
 /** Amount field with an "All" shortcut that fills in the source's whole balance. */

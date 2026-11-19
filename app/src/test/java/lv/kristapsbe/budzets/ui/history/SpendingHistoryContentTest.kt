@@ -62,18 +62,18 @@ class SpendingHistoryContentTest {
             stack(march, eur(500), fun_ to eur(40), food to eur(300)),
             stack(april, null, food to eur(20), fun_ to eur(90)),
         ),
-        selected: YearMonth? = months.lastOrNull()?.month,
+        selected: YearMonth? = months.last().month,
         highlighted: String? = null,
         series: List<ChartSeries> = this.series,
         // No surplus results unless a test gives some.
-        surplus: List<MonthSurplus> = months.map { MonthSurplus(it.month, null, isClosed = false, runningTotal = null) },
+        surplus: List<MonthSurplus> = months.map { MonthSurplus(it.month, null, isClosed = false, runningTotal = Money.ZERO) },
     ) = SpendingHistoryUiState.Ready(CurrencySpec.DEFAULT, months, surplus, series, april, selected, highlighted)
 
-    /** March closed with +€160, February open at -€30, April under way. */
+    /** March closed with +€160, February open at -€30, April under way with €400 still unspent. */
     private val withSurplus = listOf(
         MonthSurplus(ym("2026-02"), eur(-30), isClosed = false, runningTotal = eur(-30)),
         MonthSurplus(march, eur(160), isClosed = true, runningTotal = eur(130)),
-        MonthSurplus(april, null, isClosed = false, runningTotal = null),
+        MonthSurplus(april, eur(400), isClosed = false, runningTotal = eur(530)),
     )
     private val threeMonths = listOf(
         stack(ym("2026-02"), eur(500), food to eur(530)),
@@ -86,9 +86,14 @@ class SpendingHistoryContentTest {
     }
 
     @Test
-    fun `without spending it says so`() {
-        show(ready(months = emptyList(), series = emptyList()))
+    fun `without spending it says so, and the surplus chart is still there`() {
+        val surplus = listOf(MonthSurplus(april, eur(500), isClosed = false, runningTotal = eur(500)))
+        show(ready(months = listOf(stack(april, eur(500))), series = emptyList(), surplus = surplus))
         compose.onNodeWithText("No spending logged yet", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Surplus total").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription(
+            "April 2026 (so far): Not closed yet: closing it now would add €500.00. Surplus after this month: €500.00",
+        ).assertIsSelected()
     }
 
     @Test
@@ -191,10 +196,10 @@ class SpendingHistoryContentTest {
 
     @Test
     fun `a closed month that took from the surplus says so`() {
-        val surplus = listOf(MonthSurplus(march, eur(-45), isClosed = true, runningTotal = eur(-45)), MonthSurplus(april, null, false, null))
+        val surplus = listOf(MonthSurplus(march, eur(-45), isClosed = true, runningTotal = eur(-45)), MonthSurplus(april, null, false, eur(-45)))
         show(ready(surplus = surplus, selected = march))
         compose.onNodeWithText("Took €45.00 from the surplus").performScrollTo().assertIsDisplayed()
-        // Every month here is closed, so there is no lighter bar to explain.
+        // April gives nothing and March is closed, so there is no lighter bar to explain.
         compose.onNodeWithText("Not closed yet").assertDoesNotExist()
     }
 
@@ -202,7 +207,7 @@ class SpendingHistoryContentTest {
     fun `a month with a boost shows what closing gave and what the boost took`() {
         val surplus = listOf(
             MonthSurplus(march, eur(190), isClosed = true, runningTotal = eur(190), boosts = eur(-50)),
-            MonthSurplus(april, null, false, null),
+            MonthSurplus(april, null, false, eur(190)),
         )
         show(ready(surplus = surplus, selected = march))
         compose.onNodeWithText("Added €190.00 to the surplus").performScrollTo().assertIsDisplayed()
@@ -218,10 +223,13 @@ class SpendingHistoryContentTest {
     }
 
     @Test
-    fun `the month under way waits for its result`() {
+    fun `the month under way says what closing it now would do`() {
         show(ready(months = threeMonths, surplus = withSurplus))
-        compose.onNodeWithText("The result comes when the month ends").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("April 2026 (so far): The result comes when the month ends").assertIsSelected()
+        compose.onNodeWithText("Not closed yet: closing it now would add €400.00").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Surplus after this month: €530.00").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription(
+            "April 2026 (so far): Not closed yet: closing it now would add €400.00. Surplus after this month: €530.00",
+        ).assertIsSelected()
     }
 
     @Test
@@ -237,10 +245,11 @@ class SpendingHistoryContentTest {
     }
 
     @Test
-    fun `without any finished month the surplus chart says why it's empty`() {
+    fun `the surplus chart is shown even when no month gives anything`() {
         show(ready())
         compose.onNodeWithText("Surplus").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Nothing here yet", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Surplus total").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Nothing here yet", substring = true).assertDoesNotExist()
     }
 
     @Test

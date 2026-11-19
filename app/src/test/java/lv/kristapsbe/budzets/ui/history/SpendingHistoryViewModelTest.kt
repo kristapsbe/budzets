@@ -24,12 +24,16 @@ class SpendingHistoryViewModelTest : ViewModelTest() {
         uiState.awaitFirst { it is SpendingHistoryUiState.Ready && predicate(it) } as SpendingHistoryUiState.Ready
 
     @Test
-    fun `without expenses there are no months and nothing selected`() = runTest {
+    fun `without expenses there is the month under way, selected`() = runTest {
         categories.create("Food")
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 50_000), ym("2026-01"))
         val state = viewModel().awaitReady()
-        assertTrue(state.months.isEmpty())
-        assertNull(state.selectedMonth)
+        assertEquals(listOf(ym("2026-04")), state.months.map { it.month })
+        assertTrue(state.months.single().segments.isEmpty())
+        assertEquals(ym("2026-04"), state.selectedMonth)
         assertEquals(ym("2026-04"), state.currentMonth)
+        // The surplus chart has it too: nothing spent of €500.
+        assertEquals(eur(500), state.surplus.single().result)
     }
 
     @Test
@@ -97,7 +101,7 @@ class SpendingHistoryViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `closed months give what was posted, open ones a projection, and the current month waits`() = runTest {
+    fun `closed months give what was posted, open ones a projection, the current month included`() = runTest {
         val food = categories.create("Food")
         budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 50_000), ym("2026-01"))
         budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(monthlyMinor = 50_000), ym("2026-01"))
@@ -114,8 +118,10 @@ class SpendingHistoryViewModelTest : ViewModelTest() {
         assertEquals(false, march.isClosed)
         assertEquals(eur(-30), march.result)
         assertEquals(eur(50), march.runningTotal)
-        assertNull(april.result)
-        assertNull(april.runningTotal)
+        // Q45: as it stands now, €10 of €500 spent.
+        assertEquals(false, april.isClosed)
+        assertEquals(eur(490), april.result)
+        assertEquals(eur(540), april.runningTotal)
         assertEquals(april, state.selectedSurplus)
     }
 

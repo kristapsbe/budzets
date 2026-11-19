@@ -57,6 +57,7 @@ class TransactionsContentTest {
         selected: CategoryId? = null,
         query: String = "",
         hasCategories: Boolean = true,
+        pocket: CategoryPocket? = null,
     ) = TransactionsUiState.Ready(
         month = ym("2026-04"),
         isCurrentMonth = true,
@@ -69,6 +70,7 @@ class TransactionsContentTest {
         total = eur(days.sumOf { d -> d.rows.sumOf { it.amount.minor } } / 100),
         count = days.sumOf { it.rows.size },
         hasCategories = hasCategories,
+        pocket = pocket,
     )
 
     private val sample = listOf(
@@ -94,6 +96,37 @@ class TransactionsContentTest {
         compose.onNode(hasScrollToIndexAction() and keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .performScrollToNode(hasText("Thursday, April 2"))
         compose.onNodeWithText("Thursday, April 2").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a drill-down into a category in debt offers to pay it off`() {
+        var added: CategoryId? = null
+        show(ready(sample, selected = fun_, pocket = CategoryPocket(eur(-40), eur(120))), TransactionsActions(onAddSurplus = { added = it }))
+        compose.onNodeWithText("Debt to repay: €40.00").assertIsDisplayed()
+        compose.onNodeWithText("Pay off").performClick()
+        assertEquals(fun_, added)
+    }
+
+    @Test
+    fun `a drill-down into a category with surplus offers to add more, while there is more`() {
+        var added: CategoryId? = null
+        show(ready(sample, selected = food, pocket = CategoryPocket(eur(25), eur(10))), TransactionsActions(onAddSurplus = { added = it }))
+        compose.onNodeWithText("Saved for this category: €25.00").assertIsDisplayed()
+        compose.onNodeWithText("Add surplus").performClick()
+        assertEquals(food, added)
+    }
+
+    @Test
+    fun `nothing to add and nothing saved, no pocket line`() {
+        show(ready(sample, selected = food, pocket = CategoryPocket(eur(0), eur(0))), TransactionsActions(onAddSurplus = {}))
+        compose.onNodeWithText("Saved for this category", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Add surplus").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the Spending tab shows no pocket line`() {
+        show(ready(sample, selected = fun_, pocket = CategoryPocket(eur(-40), eur(120))))
+        compose.onNodeWithText("Debt to repay", substring = true).assertDoesNotExist()
     }
 
     @Test

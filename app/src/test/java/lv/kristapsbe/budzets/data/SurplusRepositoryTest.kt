@@ -111,6 +111,37 @@ class SurplusRepositoryTest : DbTest() {
     }
 
     @Test
+    fun `a transfer from all surplus persists every leg, Unallocated first`() = runTest {
+        seedMarch()
+        surplus.closeMonth(march).ok()
+        surplus.addOneOff(april, eur(25)).ok()
+        val legs = surplus.transferFromAll(SurplusPocket.Category(travel.id), eur(110), "trip").ok()
+
+        assertEquals(4, legs.size)
+        assertEquals(eur(0), balance(SurplusPocket.Unallocated))
+        assertEquals(eur(15), balance(SurplusPocket.Category(food.id)))
+        assertEquals(eur(110), balance(SurplusPocket.Category(travel.id)))
+        assertEquals(6, surplus.ledger.first().size)
+        assertEquals(
+            SurplusError.InsufficientSurplus(eur(15)),
+            surplus.transferFromAll(SurplusPocket.Category(travel.id), eur(16)).err(),
+        )
+    }
+
+    @Test
+    fun `a transfer from all surplus that fails half-way leaves no partial rows`() = runTest {
+        seedMarch()
+        surplus.closeMonth(march).ok()
+        surplus.addOneOff(april, eur(25)).ok()
+        val broken = SurplusRepository(db, budgets, clock) { "duplicate-id" }
+        assertThrows(SQLiteConstraintException::class.java) {
+            runBlocking { broken.transferFromAll(SurplusPocket.Category(travel.id), eur(110)) }
+        }
+        assertEquals(2, surplus.ledger.first().size)
+        assertEquals(eur(25), balance(SurplusPocket.Unallocated))
+    }
+
+    @Test
     fun `boost allocation, double allocation refused, release restores`() = runTest {
         seedMarch()
         surplus.closeMonth(march).ok()

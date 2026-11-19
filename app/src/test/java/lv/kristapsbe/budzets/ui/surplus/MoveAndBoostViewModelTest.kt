@@ -107,18 +107,107 @@ class MoveAndBoostViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a pocket that owes nothing isn't preselected, and an archived one in debt can still be paid off`() = runTest {
+    fun `adding to a pocket that owes nothing fills in no amount, and an archived one in debt can still be paid off`() = runTest {
         setUp()
-        val plain = move("to" to funPocket.key()).awaitEditing()
-        assertNull(plain.form.to)
-        assertEquals("", plain.form.amountText)
+        // Q46: Add surplus on a category that isn't in debt.
+        val plain = move("to" to funPocket.key()).awaitEditing { it.form.to != null }
+        assertEquals(MoveForm(foodPocket, funPocket, "", ""), plain.form)
         assertNull(plain.payingOff)
+        assertNull(plain.allSurplus)
 
         funOwes(30)
         categories.archive(fun_.id, ym("2026-04"))
         val archived = move("to" to funPocket.key()).awaitEditing { it.form.to != null }
         assertEquals(listOf(funPocket, SurplusPocket.Unallocated), archived.destinations.map { it.label.pocket })
         assertEquals("30.00", archived.form.amountText)
+    }
+
+    /** Besides Food's €100: [unallocated] as a one-off in April, and Fun owing [funDebt] if set. */
+    private suspend fun spreadOut(unallocated: Long = 50, funDebt: Long? = null) {
+        setUp()
+        funDebt?.let { funOwes(it) }
+        surplus.addOneOff(ym("2026-04"), eur(unallocated)).ok()
+    }
+
+    @Test
+    fun `paying off from several pockets takes from all the saved surplus`() = runTest {
+        spreadOut(funDebt = 130)
+        val vm = move("to" to funPocket.key())
+        val state = vm.awaitEditing { it.form.to != null }
+        // Q47: whichever is lower, the debt or everything saved.
+        assertEquals(MoveForm(null, funPocket, "130.00", "", fromAll = true), state.form)
+        assertEquals(eur(150), state.allSurplus)
+        assertEquals(eur(150), state.available)
+        assertNull(state.exceedsAvailable)
+        assertEquals(
+            listOf(SurplusPocket.Unallocated to eur(50), foodPocket to eur(80)),
+            state.draw.map { it.label.pocket to it.balance },
+        )
+
+        vm.save()
+        awaitValue({ vm.state }) { it == MoveSurplusState.Done }
+        val balances = surplus.balances.first()
+        assertEquals(eur(0), balances[funPocket])
+        assertEquals(eur(0), balances[SurplusPocket.Unallocated])
+        assertEquals(eur(20), balances[foodPocket])
+    }
+
+    @Test
+    fun `paying off a debt larger than all the saved surplus fills in everything saved`() = runTest {
+        spreadOut(funDebt = 200)
+        assertEquals("150.00", move("to" to funPocket.key()).awaitEditing { it.form.to != null }.form.amountText)
+    }
+
+    @Test
+    fun `adding to a category takes from all the other pockets, with the amount left to the user`() = runTest {
+        spreadOut()
+        val vm = move("to" to funPocket.key())
+        val state = vm.awaitEditing { it.form.to != null }
+        assertEquals(MoveForm(null, funPocket, "", "", fromAll = true), state.form)
+        assertTrue(state.draw.isEmpty())
+
+        vm.useAll()
+        assertEquals("150.00", vm.awaitEditing { it.form.amountText.isNotEmpty() }.form.amountText)
+        vm.onAmountChange("150.01")
+        assertEquals(eur(150), vm.awaitEditing { it.form.amountText == "150.01" }.exceedsAvailable)
+    }
+
+    @Test
+    fun `all the saved surplus leaves out the destination's own`() = runTest {
+        spreadOut()
+        // Adding to Food: only Unallocated has surplus besides it, so that is the source.
+        val toFood = move("to" to foodPocket.key()).awaitEditing { it.form.to != null }
+        assertEquals(MoveForm(SurplusPocket.Unallocated, foodPocket, "", ""), toFood.form)
+        assertEquals(eur(50), toFood.allSurplus) // still offered: two pockets have surplus
+
+        val vm = move()
+        vm.awaitEditing()
+        vm.selectAll()
+        vm.selectTo(SurplusPocket.Unallocated)
+        assertEquals(eur(100), vm.awaitEditing { it.form.to != null }.available)
+        vm.selectFrom(foodPocket)
+        assertFalse(vm.awaitEditing { !it.form.fromAll }.form.fromAll)
+    }
+
+    @Test
+    fun `all the saved surplus is offered only when more than one pocket has some`() = runTest {
+        setUp()
+        val vm = move()
+        assertNull(vm.awaitEditing().allSurplus)
+        vm.selectTo(funPocket)
+        vm.onAmountChange("10")
+        vm.save()
+        awaitValue({ vm.state }) { it == MoveSurplusState.Done }
+        assertEquals(eur(10), surplus.balances.first()[funPocket])
+    }
+
+    @Test
+    fun `taking from all the saved surplus survives process death`() = runTest {
+        spreadOut(funDebt = 30)
+        val handle = SavedStateHandle(mapOf("to" to funPocket.key()))
+        move(handle = handle).awaitEditing { it.form.to != null }
+        val restored = move(handle = SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }))
+        assertEquals(MoveForm(null, funPocket, "30.00", "", fromAll = true), restored.awaitEditing().form)
     }
 
     @Test

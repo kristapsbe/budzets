@@ -41,7 +41,10 @@ import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
 
-data class PocketRow(val label: PocketLabel, val breakdown: PocketBreakdown)
+data class PocketRow(val label: PocketLabel, val breakdown: PocketBreakdown) {
+    /** A category that can be given surplus (Q46): not Unallocated, archived or deleted. */
+    val canAddTo: Boolean get() = label.name != null && !label.isArchived && !label.isDeleted
+}
 
 data class BoostRow(
     val id: BoostId,

@@ -3,7 +3,7 @@ package lv.kristapsbe.budzets.data.backup
 import kotlinx.serialization.Serializable
 
 /*
- * Backup file format, version 2. A JSON object:
+ * Backup file format, version 3. A JSON object:
  *
  *   format         "budzets-backup", so other JSON files are recognised as "not a backup"
  *   schemaVersion  this format's version (not the database's); a reader refuses newer ones
@@ -19,6 +19,9 @@ import kotlinx.serialization.Serializable
  *
  * Version 2 added `deletedAt` on categories and the ONE_OFF_* ledger types. A version 1 file is
  * still valid: it has neither, and `deletedAt` defaults to null.
+ *
+ * Version 3 added `oneOffNote` to the settings (Q49). Older files are still valid: it defaults to
+ * null, so restoring one clears the note, as a restore replaces everything else.
  */
 
 @Serializable
@@ -32,8 +35,9 @@ data class BackupData(
     val monthClosures: List<BackupMonthClosure>,
 )
 
+/** @property oneOffNote the text shown under the amount when adding a one-off boost; null if none. */
 @Serializable
-data class BackupSettings(val currencyCode: String)
+data class BackupSettings(val currencyCode: String, val oneOffNote: String? = null)
 
 @Serializable
 data class BackupCategory(

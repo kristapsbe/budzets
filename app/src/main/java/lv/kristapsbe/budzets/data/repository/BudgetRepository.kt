@@ -91,8 +91,8 @@ class BudgetRepository(
     }
 
     /**
-     * Live summaries of every month from the first one with spending through [until], months
-     * without spending included; empty while there are no expenses. Each month is worked out as
+     * Live summaries of every month from the first one with spending or a close through [until],
+     * months without spending included. [until] is always there, expenses or not. Each month is worked out as
      * [observeMonthSummary] does, so a closed month keeps the budgets it was closed with. Spending
      * dated after [until] (possible only after a clock change) is left out.
      */
@@ -105,9 +105,10 @@ class BudgetRepository(
             surplusDao.observeClosureSnapshots(),
         ) { categories, configs, boosts, spending, closures ->
             val spendingByMonth = spending.groupBy { it.month.toYearMonth() }.filterKeys { it <= until }
-            val first = spendingByMonth.keys.minOrNull() ?: return@combine emptyList()
             val boostsByMonth = boosts.groupBy { it.targetMonth.toYearMonth() }
             val closuresByMonth = closures.groupBy { it.month.toYearMonth() }
+            // Always [until], and back to the first month with spending or a close (Q45).
+            val first = (spendingByMonth.keys + closuresByMonth.keys + until).min()
             generateSequence(first) { it.plusMonths(1) }.takeWhile { it <= until }.map { month ->
                 summarize(
                     month,

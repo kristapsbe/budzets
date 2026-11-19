@@ -39,6 +39,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
 import lv.kristapsbe.budzets.R
+import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.ui.budgets.BudgetEditorScreen
 import lv.kristapsbe.budzets.ui.budgets.BudgetsScreen
 import lv.kristapsbe.budzets.ui.close.MonthCloseScreen
@@ -78,7 +79,8 @@ import kotlin.reflect.KClass
 
 /**
  * Moves surplus, optionally starting from the pocket keyed [from] (see `SurplusPocket.key`).
- * With [to], it pays off that pocket's debt: the destination and the amount owed are filled in.
+ * With [to], it pays off or adds to that pocket: the destination is filled in, the saved surplus
+ * as a whole is the source when several pockets have some (Q47), and a debt's amount is filled in.
  */
 @Serializable data class MoveSurplusRoute(val from: String? = null, val to: String? = null)
 
@@ -191,6 +193,7 @@ fun BudzetsApp(
                     onOpenExpense = { navController.navigate(ExpenseEditorRoute(expenseId = it.value)) },
                     // Pops only this route, so a repeated tap can't pop the screen below it too.
                     onBack = { navController.popBackStack<CategorySpendingRoute>(inclusive = true) },
+                    onAddSurplus = { navController.navigate(MoveSurplusRoute(to = SurplusPocket.Category(it).key())) },
                 )
             }
             composable<BudgetsRoute> {
@@ -203,6 +206,7 @@ fun BudzetsApp(
                 SurplusScreen(
                     onMove = { navController.navigate(MoveSurplusRoute(it?.key())) },
                     onPayOff = { navController.navigate(MoveSurplusRoute(to = it.key())) },
+                    onAddSurplus = { navController.navigate(MoveSurplusRoute(to = it.key())) },
                     onBoost = { navController.navigate(BoostRoute()) },
                     onOneOff = { navController.navigate(OneOffBoostRoute) },
                 )

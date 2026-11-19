@@ -85,6 +85,67 @@ class SurplusOperationsTest {
     }
 
     @Test
+    fun `from all surplus takes Unallocated first, then the fullest pockets`() {
+        // Unallocated 30, Food 100, Travel 60; Fun owes 150.
+        val ledger = seeded + credit(TRAVEL_POCKET, eur(60)) + LedgerEntry(
+            LedgerEntryId("d"), LedgerEntryType.FINALIZE_DEBIT, FUN_POCKET, eur(150), FIXED_NOW, sourceMonth = ym("2026-03"),
+        )
+        val legs = ops.transferFromAll(ledger, FUN_POCKET, eur(150), note = "debt").ok()
+
+        assertEquals(6, legs.size)
+        val outs = legs.filter { it.type == LedgerEntryType.TRANSFER_OUT }
+        assertEquals(listOf(SurplusPocket.Unallocated, FOOD_POCKET, TRAVEL_POCKET), outs.map { it.pocket })
+        assertEquals(listOf(eur(30), eur(100), eur(20)), outs.map { it.amount })
+        // Each pair is linked, lands in Fun, and carries the note.
+        legs.chunked(2).forEach { (out, `in`) ->
+            assertEquals(`in`.id, out.relatedEntryId)
+            assertEquals(out.id, `in`.relatedEntryId)
+            assertEquals(FUN_POCKET, `in`.pocket)
+            assertEquals(out.amount, `in`.amount)
+        }
+        assertEquals(setOf("debt"), legs.map { it.note }.toSet())
+
+        val after = SurplusLedger.balances(ledger + legs)
+        assertEquals(Money.ZERO, after[FUN_POCKET])
+        assertEquals(eur(40), after[TRAVEL_POCKET])
+        assertEquals(SurplusLedger.balances(ledger).values.sumOf { it.minor }, after.values.sumOf { it.minor })
+    }
+
+    @Test
+    fun `from all surplus leaves the destination's own surplus alone`() {
+        val legs = ops.transferFromAll(seeded, FOOD_POCKET, eur(30)).ok()
+        assertEquals(listOf(SurplusPocket.Unallocated, FOOD_POCKET), legs.map { it.pocket })
+        assertEquals(
+            SurplusError.InsufficientSurplus(eur(30)),
+            ops.transferFromAll(seeded, FOOD_POCKET, eur(31)).err(),
+        )
+    }
+
+    @Test
+    fun `from all surplus validation`() {
+        assertEquals(SurplusError.NotPositive, ops.transferFromAll(seeded, FUN_POCKET, Money.ZERO).err())
+        assertEquals(SurplusError.InsufficientSurplus(eur(130)), ops.transferFromAll(seeded, FUN_POCKET, Money(13_001)).err())
+        // Exactly everything is fine.
+        assertEquals(4, ops.transferFromAll(seeded, FUN_POCKET, eur(130)).ok().size)
+    }
+
+    @Test
+    fun `the draw order breaks ties by category, and a pocket in debt never gives`() {
+        val balances = mapOf(
+            FUN_POCKET to eur(20),
+            FOOD_POCKET to eur(20),
+            TRAVEL_POCKET to eur(-5),
+            SurplusPocket.Unallocated to eur(1),
+        )
+        val order = SurplusDraw.sources(balances, to = null).map { it.first }
+        assertEquals(SurplusPocket.Unallocated, order.first())
+        assertEquals(listOf(FOOD_POCKET, FUN_POCKET).sortedBy { it.id.value }, order.drop(1))
+        assertEquals(eur(41), SurplusDraw.available(balances, to = null))
+        assertEquals(null, SurplusDraw.plan(balances, to = null, amount = eur(42)))
+        assertEquals(listOf(SurplusPocket.Unallocated to eur(1)), SurplusDraw.plan(balances, TRAVEL_POCKET, eur(1)))
+    }
+
+    @Test
     fun `boost reserves surplus so it cannot be allocated twice`() {
         val first = ops.allocateBoost(seeded, FOOD_POCKET, TRAVEL, current, eur(70), current, emptySet()).ok()
         assertEquals(BoostStatus.ACTIVE, first.boost.status)

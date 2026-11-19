@@ -33,7 +33,9 @@ import lv.kristapsbe.budzets.domain.model.CurrencySpec
 import lv.kristapsbe.budzets.domain.model.Expense
 import lv.kristapsbe.budzets.domain.model.ExpenseId
 import lv.kristapsbe.budzets.domain.model.Money
+import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.model.sumMoney
+import lv.kristapsbe.budzets.domain.surplus.SurplusDraw
 import lv.kristapsbe.budzets.ui.components.MonthStates
 import java.time.Clock
 import java.time.LocalDate
@@ -52,6 +54,18 @@ data class DayGroup(val date: LocalDate, val total: Money, val rows: List<Expens
 
 data class CategoryChip(val id: CategoryId, val name: String)
 
+/**
+ * The selected category's surplus pocket, for paying off or adding to it from the category's
+ * spending (Q48).
+ *
+ * @property balance below zero when the category is in debt.
+ * @property othersAvailable what the other pockets hold, which is what can be moved in.
+ * @property isActive false for an archived category, which can be paid off but not added to.
+ */
+data class CategoryPocket(val balance: Money, val othersAvailable: Money, val isActive: Boolean = true) {
+    val canReceive: Boolean get() = othersAvailable.isPositive && (balance.isNegative || isActive)
+}
+
 sealed interface TransactionsUiState {
     data object Loading : TransactionsUiState
     data class Error(val message: String?) : TransactionsUiState
@@ -69,6 +83,8 @@ sealed interface TransactionsUiState {
         val total: Money,
         val count: Int,
         val hasCategories: Boolean,
+        /** Only for the month under way with a category selected that isn't deleted. */
+        val pocket: CategoryPocket? = null,
     ) : TransactionsUiState {
         val selectedCategoryName: String? get() = chips.firstOrNull { it.id == selectedCategory }?.name
     }
@@ -125,15 +141,19 @@ class TransactionsViewModel(
     private fun observeMonth(month: YearMonth) =
         combine(
             expenses.observeMonth(month),
-            combine(categories.categories, surplus.closedMonths, ::Pair),
+            combine(categories.categories, surplus.closedMonths, surplus.balances, ::Triple),
             settings.currency,
             selectedCategory,
             query,
-        ) { monthExpenses, (allCategories, closed), currency, categoryId, text ->
+        ) { monthExpenses, (allCategories, closed, balances), currency, categoryId, text ->
             val isClosed = month in closed
             val today = LocalDate.now(clock)
             val selected = categoryId?.let(::CategoryId)
             val byId = allCategories.associateBy { it.id }
+            val pocket = selected?.let { byId[it] }?.takeIf { month == YearMonth.from(today) && !it.isDeleted }?.let { category ->
+                val own = SurplusPocket.Category(category.id)
+                CategoryPocket(balances[own] ?: Money.ZERO, SurplusDraw.available(balances, own), category.toRef().isActiveIn(month))
+            }
             val needle = text.trim()
             val shown = monthExpenses.filter { e ->
                 (selected == null || e.categoryId == selected) &&
@@ -153,6 +173,7 @@ class TransactionsViewModel(
                 total = shown.map { it.amount }.sumMoney(),
                 count = shown.size,
                 hasCategories = allCategories.any { !it.isDeleted },
+                pocket = pocket,
             ) as TransactionsUiState
         }.catch { emit(TransactionsUiState.Error(it.message)) }
 

@@ -15,7 +15,6 @@ import lv.kristapsbe.budzets.domain.model.SurplusPocket
 import lv.kristapsbe.budzets.domain.ok
 import lv.kristapsbe.budzets.domain.ym
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -25,10 +24,23 @@ class MonthSummariesTest : DbTest() {
     private val april = ym("2026-04")
 
     @Test
-    fun `no expenses, no months`() = runTest {
+    fun `no expenses, just the month under way`() = runTest {
         val food = categories.create("Food")
         budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(monthlyMinor = 40_000), ym("2026-01"))
-        assertTrue(budgets.observeMonthSummaries(april).first().isEmpty())
+        val months = budgets.observeMonthSummaries(april).first()
+        assertEquals(listOf(april), months.map { it.month })
+    }
+
+    @Test
+    fun `a closed month before the first expense starts the months`() = runTest {
+        val food = categories.create("Food")
+        budgets.setTarget(BudgetScope.Overall, BudgetTarget(monthlyMinor = 100_000), ym("2026-01"))
+        surplus.closeMonth(ym("2026-01")).ok()
+        expenses.add(eur(10), food.id, LocalDate.of(2026, 3, 5))
+
+        val months = budgets.observeMonthSummaries(april).first()
+
+        assertEquals(listOf(ym("2026-01"), ym("2026-02"), ym("2026-03"), april), months.map { it.month })
     }
 
     @Test

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +37,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -83,12 +85,17 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.Locale
 
-/** @param onBack shown as an up arrow when this is a drill-down rather than the Spending tab. */
+/**
+ * @param onBack shown as an up arrow when this is a drill-down rather than the Spending tab.
+ * @param onAddSurplus pays off or adds to the selected category's surplus pocket; only in a
+ *   drill-down (Q48).
+ */
 @Composable
 fun TransactionsScreen(
     onAddExpense: (CategoryId?) -> Unit,
     onOpenExpense: (ExpenseId) -> Unit,
     onBack: (() -> Unit)? = null,
+    onAddSurplus: ((CategoryId) -> Unit)? = null,
     viewModel: TransactionsViewModel = viewModel(factory = TransactionsViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -131,6 +138,7 @@ fun TransactionsScreen(
             onAddExpense = onAddExpense,
             onOpenExpense = onOpenExpense,
             onDelete = viewModel::delete,
+            onAddSurplus = onAddSurplus,
         ),
     )
 }
@@ -146,6 +154,8 @@ data class TransactionsActions(
     val onAddExpense: (CategoryId?) -> Unit = {},
     val onOpenExpense: (ExpenseId) -> Unit = {},
     val onDelete: (ExpenseId) -> Unit = {},
+    /** Null outside a category drill-down, where the selected category's pocket isn't shown. */
+    val onAddSurplus: ((CategoryId) -> Unit)? = null,
 )
 
 /**
@@ -309,6 +319,15 @@ private fun ReadyList(
             }
         }
 
+        val pocket = state.pocket
+        val category = state.selectedCategory
+        val onAddSurplus = actions.onAddSurplus
+        if (pocket != null && category != null && onAddSurplus != null && (!pocket.balance.isZero || pocket.canReceive)) {
+            item(key = "pocket") {
+                PocketLine(pocket, money, onClick = if (pocket.canReceive) { { onAddSurplus(category) } } else null)
+            }
+        }
+
         if (state.count > 0) {
             item(key = "total") {
                 Text(
@@ -337,6 +356,28 @@ private fun ReadyList(
             items(day.rows, key = { it.id.value }, contentType = { "expense" }) { row ->
                 SwipeToDeleteRow(row, money, onOpen = { actions.onOpenExpense(row.id) }, onDelete = { actions.onDelete(row.id) })
             }
+        }
+    }
+}
+
+/** The category's saved surplus or debt, with Pay off or Add surplus when there is surplus to move in. */
+@Composable
+private fun PocketLine(pocket: CategoryPocket, money: MoneyFormatter, onClick: (() -> Unit)?) {
+    val inDebt = pocket.balance.isNegative
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(start = 16.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (inDebt) stringResource(R.string.category_pocket_debt, money.format(-pocket.balance))
+            else stringResource(R.string.category_pocket_saved, money.format(pocket.balance)),
+            style = MaterialTheme.typography.bodyMedium,
+            // The words say "debt", so colour isn't the only signal.
+            color = if (inDebt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        if (onClick != null) {
+            TextButton(onClick = onClick) { Text(stringResource(if (inDebt) R.string.pay_off else R.string.add_surplus)) }
         }
     }
 }

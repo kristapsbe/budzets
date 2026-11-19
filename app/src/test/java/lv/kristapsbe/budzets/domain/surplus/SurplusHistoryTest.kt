@@ -52,7 +52,7 @@ class SurplusHistoryTest {
             entry(LedgerEntryType.FINALIZE_DEBIT, eur(30), FOOD_POCKET, source = this.march),
             entry(LedgerEntryType.ADJUSTMENT_DEBIT, eur(10), FOOD_POCKET, source = this.march),
         )
-        val month = SurplusHistory.months(listOf(march), ledger, setOf(this.march), may).single()
+        val month = SurplusHistory.months(listOf(march), ledger, setOf(this.march)).single()
         assertTrue(month.isClosed)
         assertEquals(eur(60), month.result)
         assertEquals(eur(60), month.runningTotal)
@@ -62,7 +62,7 @@ class SurplusHistoryTest {
     fun `an open month with a budget gives what closing it now would post`() {
         // Food €50 over, Fun has no budget (€20 counts against it), €200 of the overall unassigned.
         val march = summary(march, eur(500), Category(FOOD, eur(300), eur(350)), Category(FUN, null, eur(20)))
-        val month = SurplusHistory.months(listOf(march), emptyList(), emptySet(), may).single()
+        val month = SurplusHistory.months(listOf(march), emptyList(), emptySet()).single()
         assertFalse(month.isClosed)
         assertEquals(closingEffect(march).values.sumMoney(), month.result)
         assertEquals(eur(130), month.result)
@@ -75,7 +75,7 @@ class SurplusHistoryTest {
             entry(LedgerEntryType.FINALIZE_CREDIT, eur(150), source = this.march),
             entry(LedgerEntryType.ADJUSTMENT_DEBIT, eur(150), source = this.march),
         )
-        val month = SurplusHistory.months(listOf(march), ledger, emptySet(), may).single()
+        val month = SurplusHistory.months(listOf(march), ledger, emptySet()).single()
         assertFalse(month.isClosed)
         assertEquals(eur(150), month.result) // 500 - 350
     }
@@ -85,7 +85,7 @@ class SurplusHistoryTest {
         // €500 overall, Food €300 + €50 boost from its own pocket, €320 spent.
         val april = summary(april, eur(500), Category(FOOD, eur(300), eur(320), boost = eur(50)))
         val ledger = listOf(entry(LedgerEntryType.BOOST_RESERVE, eur(50), FOOD_POCKET, target = this.april))
-        val month = SurplusHistory.months(listOf(april), ledger, emptySet(), may).single()
+        val month = SurplusHistory.months(listOf(april), ledger, emptySet()).single()
         assertEquals(eur(180), month.result) // 500 - 320
         // Split for the breakdown: closing would post €230, the boost took €50.
         assertEquals(eur(230), month.closing)
@@ -96,7 +96,7 @@ class SurplusHistoryTest {
     fun `a one-off boost adds to its month`() {
         val april = summary(april, eur(500), Category(FOOD, eur(500), eur(450)))
         val ledger = listOf(entry(LedgerEntryType.ONE_OFF_CREDIT, eur(40), target = this.april))
-        val month = SurplusHistory.months(listOf(april), ledger, emptySet(), may).single()
+        val month = SurplusHistory.months(listOf(april), ledger, emptySet()).single()
         assertEquals(eur(90), month.result)
         assertEquals(eur(40), month.oneOffs)
         assertEquals(eur(50), month.closing)
@@ -111,21 +111,64 @@ class SurplusHistoryTest {
             ),
             emptyList(),
             emptySet(),
-            may,
         )
         assertNull(months[1].result)
         assertEquals(eur(100), months[1].runningTotal)
     }
 
     @Test
-    fun `the month under way is left out until it's closed`() {
-        val open = SurplusHistory.months(listOf(summary(may, eur(500), Category(FOOD, eur(500), eur(10)))), emptyList(), emptySet(), may).single()
-        assertNull(open.result)
-        assertNull(open.runningTotal)
+    fun `the month under way gives what closing it now would give, and the total includes it`() {
+        // Q45: as it stands today, the way the spending chart shows spending so far.
+        val months = SurplusHistory.months(
+            listOf(
+                summary(april, eur(500), Category(FOOD, eur(500), eur(450))),
+                summary(may, eur(500), Category(FOOD, eur(500), eur(10))),
+            ),
+            listOf(
+                entry(LedgerEntryType.FINALIZE_CREDIT, eur(50), FOOD_POCKET, source = april),
+                entry(LedgerEntryType.ONE_OFF_CREDIT, eur(20), target = may),
+            ),
+            setOf(april),
+        )
+        val open = months.last()
+        assertFalse(open.isClosed)
+        assertEquals(eur(510), open.result) // 500 - 10, plus the €20 one-off
+        assertEquals(eur(490), open.closing)
+        assertEquals(eur(560), open.runningTotal)
 
         val ledger = listOf(entry(LedgerEntryType.FINALIZE_CREDIT, eur(490), FOOD_POCKET, source = may))
-        val closed = SurplusHistory.months(listOf(summary(may, eur(500), Category(FOOD, eur(500), eur(10)))), ledger, setOf(may), may).single()
+        val closed = SurplusHistory.months(listOf(summary(may, eur(500), Category(FOOD, eur(500), eur(10)))), ledger, setOf(may)).single()
+        assertTrue(closed.isClosed)
         assertEquals(eur(490), closed.result)
+    }
+
+    @Test
+    fun `debt isn't taken off the month under way, since the total has it already`() {
+        // Food closed March €80 over; May has €40 of Food's budget left.
+        val months = SurplusHistory.months(
+            listOf(
+                summary(march, eur(300), Category(FOOD, eur(300), eur(380))),
+                summary(april, null),
+                summary(may, eur(300), Category(FOOD, eur(300), eur(260))),
+            ),
+            listOf(entry(LedgerEntryType.FINALIZE_DEBIT, eur(80), FOOD_POCKET, source = march)),
+            setOf(march),
+        )
+        assertEquals(eur(-80), months[1].runningTotal)
+        assertEquals(eur(40), months[2].result)
+        assertEquals(eur(-40), months[2].runningTotal)
+    }
+
+    @Test
+    fun `a month under way with no budget gives nothing, but still has a total`() {
+        val ledger = listOf(entry(LedgerEntryType.FINALIZE_CREDIT, eur(70), source = april))
+        val open = SurplusHistory.months(
+            listOf(summary(april, eur(70)), summary(may, null, Category(FOOD, null, eur(30)))),
+            ledger,
+            setOf(april),
+        ).last()
+        assertNull(open.result)
+        assertEquals(eur(70), open.runningTotal)
     }
 
     @Test
@@ -134,7 +177,7 @@ class SurplusHistoryTest {
             entry(LedgerEntryType.FINALIZE_CREDIT, eur(70), source = ym("2026-01")),
             entry(LedgerEntryType.ONE_OFF_CREDIT, eur(30), target = ym("2026-02")),
         )
-        val month = SurplusHistory.months(listOf(summary(march, null)), ledger, setOf(ym("2026-01")), may).single()
+        val month = SurplusHistory.months(listOf(summary(march, null)), ledger, setOf(ym("2026-01"))).single()
         assertNull(month.result)
         assertEquals(eur(100), month.runningTotal)
     }
@@ -155,7 +198,7 @@ class SurplusHistoryTest {
         ledger += entry(LedgerEntryType.ONE_OFF_CREDIT, eur(15), target = april)
         ledger += finalizer.close(ledger, null, summaries[1], may).ok().entries
 
-        val months = SurplusHistory.months(summaries, ledger, setOf(march, april), may)
+        val months = SurplusHistory.months(summaries, ledger, setOf(march, april))
 
         assertEquals(SurplusLedger.balances(ledger).values.sumMoney(), months.last().runningTotal)
         assertEquals(eur(60), months[0].result) // 500 - 440
@@ -165,6 +208,6 @@ class SurplusHistoryTest {
 
     @Test
     fun `no months, nothing to show`() {
-        assertTrue(SurplusHistory.months(emptyList(), emptyList(), emptySet(), may).isEmpty())
+        assertTrue(SurplusHistory.months(emptyList(), emptyList(), emptySet()).isEmpty())
     }
 }

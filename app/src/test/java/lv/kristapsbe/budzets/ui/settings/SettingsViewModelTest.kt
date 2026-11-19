@@ -173,6 +173,17 @@ class SettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `the one-off note is shown, saved and cleared`() = runTest {
+        val vm = settingsVm()
+        assertNull(vm.awaitReady().oneOffNote)
+        vm.setOneOffNote(" Gifts go to Fun ")
+        assertEquals("Gifts go to Fun", vm.awaitReady { it.oneOffNote != null }.oneOffNote)
+        assertEquals("Gifts go to Fun", settings.oneOffNote.first())
+        vm.setOneOffNote("")
+        assertNull(vm.awaitReady { it.oneOffNote == null }.oneOffNote)
+    }
+
+    @Test
     fun `currency - free while empty, then only the same number of decimals`() = runTest {
         val vm = settingsVm()
         assertFalse(vm.awaitReady().currencyLocked)

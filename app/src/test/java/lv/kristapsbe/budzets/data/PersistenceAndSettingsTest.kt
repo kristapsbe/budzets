@@ -97,6 +97,15 @@ class PersistenceAndSettingsTest {
             val at = Instant.parse("2026-04-15T10:00:00Z")
             settings.recordBackupSuccess(at)
             assertEquals(at, settings.lastBackupAt.first())
+
+            // Q49: trimmed, capped, and cleared by blank text.
+            assertNull(settings.oneOffNote.first())
+            settings.setOneOffNote("  Gifts go to Fun \n")
+            assertEquals("Gifts go to Fun", settings.oneOffNote.first())
+            settings.setOneOffNote("x".repeat(SettingsRepository.MAX_ONE_OFF_NOTE_LENGTH + 5))
+            assertEquals(SettingsRepository.MAX_ONE_OFF_NOTE_LENGTH, settings.oneOffNote.first()!!.length)
+            settings.setOneOffNote("   ")
+            assertNull(settings.oneOffNote.first())
         } finally {
             scope.cancel()
         }

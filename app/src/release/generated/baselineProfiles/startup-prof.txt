@@ -22068,6 +22068,8 @@ PLlv/kristapsbe/budzets/data/repository/SettingsRepository;->access$getLAST_REST
 SPLlv/kristapsbe/budzets/data/repository/SettingsRepository;->getCurrency()Lkotlinx/coroutines/flow/Flow;
 SPLlv/kristapsbe/budzets/data/repository/SettingsRepository;->getLastBackupAt()Lkotlinx/coroutines/flow/Flow;
 PLlv/kristapsbe/budzets/data/repository/SettingsRepository;->getLastRestoreAt()Lkotlinx/coroutines/flow/Flow;
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository;->getOneOffNote()Lkotlinx/coroutines/flow/Flow;
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository;->access$getONE_OFF_NOTE$cp()Landroidx/datastore/preferences/core/Preferences$Key;
 Llv/kristapsbe/budzets/data/repository/SettingsRepository$Companion;
 SPLlv/kristapsbe/budzets/data/repository/SettingsRepository$Companion;-><init>()V
 SPLlv/kristapsbe/budzets/data/repository/SettingsRepository$Companion;-><init>(Lkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -22104,6 +22106,15 @@ PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$
 PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$3$2;->emit(Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$3$2$1;-><init>(Llv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$3$2;Lkotlin/coroutines/Continuation;)V
 PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$3$2$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+Llv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4;
+SPLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4;-><init>(Lkotlinx/coroutines/flow/Flow;)V
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4;->collect(Lkotlinx/coroutines/flow/FlowCollector;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$1;-><init>(Llv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4;Lkotlin/coroutines/Continuation;)V
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$2;-><init>(Lkotlinx/coroutines/flow/FlowCollector;)V
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$2;->emit(Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$2$1;-><init>(Llv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$2;Lkotlin/coroutines/Continuation;)V
+PLlv/kristapsbe/budzets/data/repository/SettingsRepository$special$$inlined$map$4$2$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
 Llv/kristapsbe/budzets/data/repository/SurplusRepository;
 SPLlv/kristapsbe/budzets/data/repository/SurplusRepository;-><clinit>()V
 SPLlv/kristapsbe/budzets/data/repository/SurplusRepository;-><init>(Llv/kristapsbe/budzets/data/local/BudzetsDatabase;Llv/kristapsbe/budzets/data/repository/BudgetRepository;Ljava/time/Clock;Lkotlin/jvm/functions/Function0;)V
@@ -22739,7 +22750,7 @@ PLlv/kristapsbe/budzets/ui/expenses/ComposableSingletons$TransactionsScreenKt$$E
 PLlv/kristapsbe/budzets/ui/expenses/DeleteEvent$RestoreFailed;-><clinit>()V
 PLlv/kristapsbe/budzets/ui/expenses/DeleteEvent$RestoreFailed;-><init>()V
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsActions;-><clinit>()V
-PLlv/kristapsbe/budzets/ui/expenses/TransactionsActions;-><init>(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
+PLlv/kristapsbe/budzets/ui/expenses/TransactionsActions;-><init>(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsActions;->equals(Ljava/lang/Object;)Z
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsActions;->getOnCurrentMonth()Lkotlin/jvm/functions/Function0;
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsActions;->getOnNextMonth()Lkotlin/jvm/functions/Function0;
@@ -22782,7 +22793,7 @@ PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->TransactionsScreen$la
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->TransactionsScreen$lambda$1(Landroidx/compose/runtime/State;)Ljava/time/YearMonth;
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->TransactionsScreen$lambda$14(Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Llv/kristapsbe/budzets/ui/expenses/TransactionsViewModel;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->TransactionsScreen$lambda$2(Landroidx/compose/runtime/State;)Llv/kristapsbe/budzets/ui/expenses/DeleteEvent;
-PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->TransactionsScreen(Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Llv/kristapsbe/budzets/ui/expenses/TransactionsViewModel;Landroidx/compose/runtime/Composer;II)V
+PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->TransactionsScreen(Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Llv/kristapsbe/budzets/ui/expenses/TransactionsViewModel;Landroidx/compose/runtime/Composer;II)V
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->access$TransactionsScreen$lambda$2(Landroidx/compose/runtime/State;)Llv/kristapsbe/budzets/ui/expenses/DeleteEvent;
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt;->emptyText(Llv/kristapsbe/budzets/ui/expenses/TransactionsUiState$Ready;Ljava/util/Locale;Landroidx/compose/runtime/Composer;I)Ljava/lang/String;
 PLlv/kristapsbe/budzets/ui/expenses/TransactionsScreenKt$$ExternalSyntheticLambda0;-><init>(Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Llv/kristapsbe/budzets/ui/expenses/TransactionsViewModel;II)V

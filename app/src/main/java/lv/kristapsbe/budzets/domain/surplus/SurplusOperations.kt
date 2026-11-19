@@ -43,14 +43,35 @@ class SurplusOperations(
         if (from == to) return Outcome.Err(SurplusError.SamePocket)
         checkAvailable(ledger, from, amount)?.let { return Outcome.Err(it) }
 
+        return Outcome.Ok(legs(from, to, amount, now(), note))
+    }
+
+    /**
+     * Moves [amount] into [to] from the saved surplus as a whole (Q47), per [SurplusDraw.plan]:
+     * Unallocated first, then the fullest pockets. Returns two linked legs per pocket that gives,
+     * all at the same time and with the same note.
+     */
+    fun transferFromAll(
+        ledger: List<LedgerEntry>,
+        to: SurplusPocket,
+        amount: Money,
+        note: String? = null,
+    ): Outcome<List<LedgerEntry>, SurplusError> {
+        if (!amount.isPositive) return Outcome.Err(SurplusError.NotPositive)
+        val balances = SurplusLedger.balances(ledger)
+        val plan = SurplusDraw.plan(balances, to, amount)
+            ?: return Outcome.Err(SurplusError.InsufficientSurplus(SurplusDraw.available(balances, to)))
+        val at = now()
+        return Outcome.Ok(plan.flatMap { (from, part) -> legs(from, to, part, at, note) })
+    }
+
+    /** One transfer's two linked legs (out, in). */
+    private fun legs(from: SurplusPocket, to: SurplusPocket, amount: Money, at: Instant, note: String?): List<LedgerEntry> {
         val outId = LedgerEntryId(newId())
         val inId = LedgerEntryId(newId())
-        val at = now()
-        return Outcome.Ok(
-            listOf(
-                LedgerEntry(outId, LedgerEntryType.TRANSFER_OUT, from, amount, at, relatedEntryId = inId, note = note),
-                LedgerEntry(inId, LedgerEntryType.TRANSFER_IN, to, amount, at, relatedEntryId = outId, note = note),
-            )
+        return listOf(
+            LedgerEntry(outId, LedgerEntryType.TRANSFER_OUT, from, amount, at, relatedEntryId = inId, note = note),
+            LedgerEntry(inId, LedgerEntryType.TRANSFER_IN, to, amount, at, relatedEntryId = outId, note = note),
         )
     }
 

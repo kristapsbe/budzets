@@ -27,7 +27,7 @@ class OverviewViewModelTest : ViewModelTest() {
 
     @Before
     fun createViewModel() {
-        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, expenses, clock)
+        vm = OverviewViewModel(SavedStateHandle(), budgets, surplus, categories, settings, expenses, clock).clearedAfterTest()
     }
 
     private suspend fun awaitReady(predicate: (OverviewUiState.Ready) -> Boolean = { true }): OverviewUiState.Ready =
@@ -36,7 +36,7 @@ class OverviewViewModelTest : ViewModelTest() {
     @Test
     fun `a page shows its own month, and selecting one moves the rest`() = runTest {
         val handle = SavedStateHandle()
-        val paged = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses, clock)
+        val paged = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses, clock).clearedAfterTest()
         val may = ym("2026-05")
 
         val page = paged.stateFor(may).awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
@@ -255,11 +255,11 @@ class OverviewViewModelTest : ViewModelTest() {
     @Test
     fun `selected month survives process death via SavedStateHandle`() = runTest {
         val handle = SavedStateHandle()
-        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses, clock)
+        val first = OverviewViewModel(handle, budgets, surplus, categories, settings, expenses, clock).clearedAfterTest()
         first.previousMonth()
         first.previousMonth()
         // A recreated process hands the ViewModel the saved handle contents.
-        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, expenses, clock)
+        val restored = OverviewViewModel(SavedStateHandle(mapOf("month" to handle.get<String>("month"))), budgets, surplus, categories, settings, expenses, clock).clearedAfterTest()
         val state = restored.uiState.awaitFirst { it is OverviewUiState.Ready } as OverviewUiState.Ready
         assertEquals(ym("2026-02"), state.month)
         restored.goToCurrentMonth()

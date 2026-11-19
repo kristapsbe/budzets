@@ -243,6 +243,9 @@
     <string name="breakdown_one_off">Vienreizēji papildinājumi %1$s</string>
     <string name="pocket_negative_hint">Pārtērēts. Tas tiek atskaitīts no šī mēneša budžeta, līdz ir nomaksāts.</string>
     <string name="pay_off">Nomaksāt</string>
+    <string name="add_surplus">Pievienot pārpalikumu</string>
+    <string name="category_pocket_saved">Uzkrāts šai kategorijai: %1$s</string>
+    <string name="category_pocket_debt">Nomaksājamais parāds: %1$s</string>
     <string name="active_boosts">Aktīvie papildinājumi</string>
     <string name="boost_row">+%1$s: %2$s, %3$s</string>
     <string name="boost_from">No: %1$s</string>
@@ -267,11 +270,13 @@
 
     <!-- Move surplus / boost -->
     <string name="move">Pārvietot</string>
-    <string name="move_explanation">Pārvietojiet visu kategorijas saglabāto pārpalikumu vai tā daļu uz citu kategoriju. Pārvietojot to uz kategoriju ar parādu, parāds tiek nomaksāts.</string>
+    <string name="move_explanation">Pārvietojiet visu uzkrāto pārpalikumu vai tā daļu uz kategoriju — no vienas kategorijas vai no visām. Pārvietojot to uz kategoriju ar parādu, parāds tiek nomaksāts.</string>
     <string name="move_from">No</string>
     <string name="move_to">Uz</string>
     <string name="move_to_owes">%1$s ir parādā %2$s.</string>
     <string name="use_all">Viss (%1$s)</string>
+    <string name="move_from_all">Viss uzkrātais pārpalikums · %1$s</string>
+    <string name="move_taken_from">Tiks ņemts no: %1$s</string>
     <string name="error_more_than_available">Pieejams tikai %1$s</string>
     <string name="error_choose_pocket">Izvēlieties vienu</string>
     <string name="no_surplus_to_use">Nevienai kategorijai vēl nav izmantojama pārpalikuma.</string>
@@ -366,6 +371,11 @@
         <item quantity="one">%d decimālzīme</item>
         <item quantity="other">%d decimālzīmes</item>
     </plurals>
+    <string name="settings_one_off_note">Piezīme vienreizējā papildinājuma formā</string>
+    <string name="one_off_note_none">Nav. Pievienojiet tekstu, ko rādīt zem summas, pievienojot vienreizēju papildinājumu.</string>
+    <string name="one_off_note_title">Vienreizējā papildinājuma piezīme</string>
+    <string name="one_off_note_hint">Tiek rādīta zem summas, pievienojot vienreizēju papildinājumu. Atstājiet tukšu, lai nerādītu neko.</string>
+    <string name="one_off_note_label">Piezīme</string>
     <string name="settings_how_budgets_work">Kā darbojas budžeti</string>
     <string name="how_budgets_work_text">Iestatiet dienas, nedēļas vai mēneša mērķi. Dienas un nedēļas mērķi tiek pārrēķināti mēneša summā atbilstoši mēneša garumam; ja iestatīti vairāki, tiek izmantota lielākā mēneša summa. Noslēdzot mēnesi, neiztērētais budžets kļūst par pārpalikumu. Pārtēriņš, ko pārpalikums nesedz, kļūst par parādu, kas tiek atskaitīts no budžeta, līdz ir nomaksāts.</string>
     <string name="settings_privacy">Privātums</string>
@@ -389,9 +399,7 @@
     <string name="history_surplus_would_take">Vēl nav noslēgts: noslēdzot tagad, tiktu paņemti %1$s</string>
     <string name="history_surplus_zero">Nekas nav pievienots vai paņemts</string>
     <string name="history_surplus_nothing">Budžeta nav, tāpēc nekas nav pievienots vai paņemts</string>
-    <string name="history_surplus_pending">Rezultāts būs zināms mēneša beigās</string>
     <string name="history_surplus_after">Pārpalikums pēc šī mēneša: %1$s</string>
-    <string name="history_surplus_empty">Šeit vēl nekā nav: mēneša rezultāts būs zināms tā beigās.</string>
     <string name="history_legend_added">Pievienots</string>
     <string name="history_legend_taken">Paņemts</string>
     <string name="history_legend_not_closed">Vēl nav noslēgts</string>

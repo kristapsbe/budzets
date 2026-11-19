@@ -211,6 +211,23 @@ class BackupRepositoryTest : ViewModelTest() {
     }
 
     @Test
+    fun `the one-off note travels with a backup, and an older backup clears it`() = runTest {
+        settings.setOneOffNote("Gifts go to Fun")
+        val noted = decoded(backups.export())
+        assertEquals("Gifts go to Fun", noted.data.settings.oneOffNote)
+
+        settings.setOneOffNote(null)
+        backups.restore(noted)
+        assertEquals("Gifts go to Fun", settings.oneOffNote.first())
+
+        // A file from before notes existed has none, and a restore replaces everything.
+        backups.restore(Backup(2, "1.0", noted.createdAt, noted.data.copy(settings = BackupSettings("EUR"))))
+        assertNull(settings.oneOffNote.first())
+        assertTrue(backups.undoRestore())
+        assertEquals("Gifts go to Fun", settings.oneOffNote.first())
+    }
+
+    @Test
     fun `an empty install backs up and restores too`() = runTest {
         val backup = decoded(backups.export())
         assertTrue(backup.data.categories.isEmpty())

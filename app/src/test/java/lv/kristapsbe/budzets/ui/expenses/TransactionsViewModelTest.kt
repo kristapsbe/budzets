@@ -114,6 +114,40 @@ class TransactionsViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `the month under way shows the selected category's surplus pocket`() = runTest {
+        val food = categories.create("Food")
+        val fun_ = categories.create("Fun")
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(monthlyMinor = 10_000), ym("2026-03"))
+        expenses.add(eur(30), fun_.id, LocalDate.of(2026, 3, 9))
+        surplus.closeMonth(ym("2026-03")).ok() // Food saves €100, Fun owes €30
+        surplus.addOneOff(ym("2026-04"), eur(20)).ok()
+
+        val funNow = transactions("categoryId" to fun_.id.value).awaitReady { it.pocket != null }.pocket!!
+        assertEquals(CategoryPocket(eur(-30), eur(120), isActive = true), funNow)
+        assertTrue(funNow.canReceive)
+        val foodNow = transactions("categoryId" to food.id.value).awaitReady { it.pocket != null }.pocket!!
+        assertEquals(CategoryPocket(eur(100), eur(20), isActive = true), foodNow)
+
+        // Not for an earlier month, and not without a category.
+        assertNull(transactions("categoryId" to fun_.id.value, "month" to "2026-03").awaitReady().pocket)
+        assertNull(transactions().awaitReady().pocket)
+    }
+
+    @Test
+    fun `an archived category can be paid off but not added to`() = runTest {
+        val food = categories.create("Food")
+        budgets.setTarget(BudgetScope.Category(food.id), BudgetTarget(monthlyMinor = 10_000), ym("2026-03"))
+        categories.archive(food.id, ym("2026-04"))
+        surplus.closeMonth(ym("2026-03")).ok()
+        surplus.addOneOff(ym("2026-04"), eur(20)).ok()
+        val pocket = transactions("categoryId" to food.id.value).awaitReady { it.pocket != null }.pocket!!
+        assertFalse(pocket.isActive)
+        assertFalse(pocket.canReceive)
+        assertTrue(CategoryPocket(eur(-5), eur(20), isActive = false).canReceive)
+        assertFalse(CategoryPocket(eur(-5), eur(0)).canReceive)
+    }
+
+    @Test
     fun `month navigation keeps the filter`() = runTest {
         val food = categories.create("Food")
         expenses.add(eur(1), food.id, LocalDate.of(2026, 3, 9))
