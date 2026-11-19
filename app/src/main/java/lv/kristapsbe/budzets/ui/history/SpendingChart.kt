@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import lv.kristapsbe.budzets.R
 import lv.kristapsbe.budzets.domain.calculation.MonthStack
+import lv.kristapsbe.budzets.domain.forecast.Estimate
+import lv.kristapsbe.budzets.domain.forecast.ForecastStack
 import lv.kristapsbe.budzets.ui.theme.chartColors
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import lv.kristapsbe.budzets.util.displayName
@@ -32,14 +34,21 @@ private const val RIBBON_HIGHLIGHT_ALPHA = 0.55f
 private const val RIBBON_FADED_ALPHA = 0.08f
 private const val BAR_FADED_ALPHA = 0.3f
 
-/** The spending chart's scale: zero to the highest month total or budget. */
-internal fun spendingScale(months: List<MonthStack>, unitMinor: Long): ChartScale =
-    ChartScale.of(months.maxOf { maxOf(it.total.minor, it.budget?.minor ?: 0) }, unitMinor)
+/** The spending chart's scale: zero to the highest month total, budget or likely high of a forecast. */
+internal fun spendingScale(months: List<MonthStack>, unitMinor: Long, forecast: ChartForecast? = null): ChartScale {
+    val real = months.maxOf { maxOf(it.total.minor, it.budget?.minor ?: 0) }
+    val ahead = forecast?.stacks.orEmpty().maxOfOrNull { maxOf(it.total.high.minor, it.budget?.minor ?: 0) } ?: 0
+    return ChartScale.of(maxOf(real, ahead, forecast?.currentEnd?.high?.minor ?: 0), unitMinor)
+}
 
 /**
  * Each month's spending as a bar stacked by category, the largest on top, with the same category
  * joined from month to month by a ribbon. A dashed line marks the month's budget. Each month is a
  * tab for TalkBack, described in words.
+ *
+ * The forecast months follow (Q54–Q56): hatched bars stacked by band the same way, with a whisker
+ * for the likely range of the total, or of the highlighted band. The month under way gets a hatched
+ * extension up to where it will likely end.
  */
 @Composable
 internal fun SpendingChart(
@@ -55,9 +64,12 @@ internal fun SpendingChart(
 ) {
     val colors = chartColors
     val budgetColor = MaterialTheme.colorScheme.onSurface
-    val descriptions = state.months.map { monthDescription(it, state, money, locale) }
+    val whiskerColor = MaterialTheme.colorScheme.onSurface
+    val forecast = state.forecast
+    val descriptions = state.months.map { monthDescription(it, state, money, locale) } +
+        forecast?.stacks.orEmpty().map { forecastDescription(it, state.currentMonth, money, locale) }
     MonthChartFrame(
-        months = state.months.map { it.month },
+        months = state.chartMonths,
         selectedMonth = state.selectedMonth,
         scale = scale,
         tickLabels = tickLabels,
@@ -128,6 +140,47 @@ internal fun SpendingChart(
         }
         val dashes = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
 
+        // The forecast months, after the real ones.
+        class Mark(val path: Path, val color: Color, val isHighlighted: Boolean)
+        class Whisker(val x: Float, val low: Float, val high: Float)
+        val marks = mutableListOf<Mark>()
+        val whiskers = mutableListOf<Whisker>()
+        val budgets = mutableListOf<Pair<Int, Long>>()
+        val offset = state.months.size
+        forecast?.stacks?.forEachIndexed { j, stack ->
+            val i = offset + j
+            val left = g.center(i) - g.bar / 2
+            stack.segments.forEachIndexed { index, segment ->
+                val bottom = g.y(segment.below.minor) - if (index > 0) gap / 2 else 0f
+                val top = minOf(g.y(segment.top.minor) + if (index < stack.segments.lastIndex) gap / 2 else 0f, bottom - g.hairline)
+                val radius = if (index == stack.segments.lastIndex) CornerRadius(g.corner) else CornerRadius.Zero
+                val path = Path().apply { addRoundRect(RoundRect(Rect(left, top, left + g.bar, bottom), topLeft = radius, topRight = radius)) }
+                val key = seriesKey(segment.series)
+                marks += Mark(path, colorOf[key] ?: colors.other, key == highlighted)
+            }
+            // The highlighted band's own range, or the whole month's.
+            val band = highlighted?.let { key -> stack.segments.firstOrNull { seriesKey(it.series) == key } }
+            when {
+                band != null -> whiskers += Whisker(g.center(i), g.y((band.below + band.estimate.low).minor), g.y((band.below + band.estimate.high).minor))
+                highlighted == null && stack.segments.isNotEmpty() -> whiskers += Whisker(g.center(i), g.y(stack.total.low.minor), g.y(stack.total.high.minor))
+            }
+            stack.budget?.let { budgets += i to it.minor }
+        }
+        // The month under way: what it will likely add before it ends, on top of what is spent.
+        val currentIndex = state.months.indexOfFirst { it.month == state.currentMonth }
+        val end = forecast?.currentEnd
+        val extension = if (end != null && currentIndex >= 0) {
+            val spent = state.months[currentIndex].total
+            val left = g.center(currentIndex) - g.bar / 2
+            val bottom = g.y(spent.minor) - if (spent.isPositive) gap / 2 else 0f
+            // The whole month's range, so like the forecast months' it gives way to a highlight.
+            if (highlighted == null) whiskers += Whisker(g.center(currentIndex), g.y(end.low.minor), g.y(end.high.minor))
+            if (end.expected > spent) {
+                val top = minOf(g.y(end.expected.minor), bottom - g.hairline)
+                Path().apply { addRoundRect(RoundRect(Rect(left, top, left + g.bar, bottom), topLeft = CornerRadius(g.corner), topRight = CornerRadius(g.corner))) }
+            } else null
+        } else null
+
         onDrawBehind {
             ribbons.forEach { ribbon ->
                 val alpha = when {
@@ -140,9 +193,13 @@ internal fun SpendingChart(
             segments.forEach { segment ->
                 drawPath(segment.path, segment.color, alpha = if (highlighted == null || segment.isHighlighted) 1f else BAR_FADED_ALPHA)
             }
-            state.months.forEachIndexed { i, stack ->
-                val budget = stack.budget ?: return@forEachIndexed
-                val y = g.y(budget.minor)
+            extension?.let { drawHatched(it, colors.other, alpha = if (highlighted == null) 1f else BAR_FADED_ALPHA) }
+            marks.forEach { mark ->
+                drawHatched(mark.path, mark.color, alpha = if (highlighted == null || mark.isHighlighted) 1f else BAR_FADED_ALPHA)
+            }
+            val budgetLines = state.months.mapIndexedNotNull { i, stack -> stack.budget?.let { i to it.minor } } + budgets
+            budgetLines.forEach { (i, budget) ->
+                val y = g.y(budget)
                 drawLine(
                     budgetColor,
                     Offset(g.center(i) - g.bar / 2 - overhang, y),
@@ -151,23 +208,50 @@ internal fun SpendingChart(
                     pathEffect = dashes,
                 )
             }
+            whiskers.forEach { drawWhisker(it.x, it.low, it.high, whiskerColor) }
         }
     }
 }
 
-/** "November 2026: €412.00 of €600.00 spent", or with "no budget set". */
+/**
+ * "November 2026: €412.00 of €600.00 spent", or with "no budget set". The month under way adds
+ * where it will likely end, when there is a forecast.
+ */
 @Composable
 internal fun monthDescription(stack: MonthStack, state: SpendingHistoryUiState.Ready, money: MoneyFormatter, locale: Locale): String {
     val name = monthTitle(stack.month, state.currentMonth, locale)
     val spent = stack.budget
         ?.let { stringResource(R.string.spent_of_budget, money.format(stack.total), money.format(it)) }
         ?: (stringResource(R.string.spent_amount, money.format(stack.total)) + " · " + stringResource(R.string.status_no_budget))
-    return "$name: $spent"
+    val end = state.forecast?.currentEnd?.takeIf { stack.month == state.currentMonth }
+        ?.let { ". " + stringResource(R.string.forecast_month_end_spent, money.format(it.expected)) }
+    return "$name: $spent" + end.orEmpty()
 }
 
-/** "November 2026", or "November 2026 (so far)" for the month still under way. */
+/** "December 2026 (forecast): Likely €850.00 of €900.00 spent. Likely range €700.00 to €1,000.00" */
+@Composable
+internal fun forecastDescription(stack: ForecastStack, currentMonth: YearMonth, money: MoneyFormatter, locale: Locale): String =
+    monthTitle(stack.month, currentMonth, locale) + ": " + forecastSpent(stack, money) + forecastRange(stack.total, money)?.let { ". $it" }.orEmpty()
+
+/** "Likely €850.00 of €900.00 spent", or "Likely €850.00 spent · No budget set". */
+@Composable
+internal fun forecastSpent(stack: ForecastStack, money: MoneyFormatter): String =
+    stack.budget?.let { stringResource(R.string.forecast_spent_of_budget, money.format(stack.total.expected), money.format(it)) }
+        ?: (stringResource(R.string.forecast_spent, money.format(stack.total.expected)) + " · " + stringResource(R.string.status_no_budget))
+
+/** "Likely range €700.00 to €1,000.00"; null when there is no spread to tell (a flat rent, say). */
+@Composable
+internal fun forecastRange(estimate: Estimate, money: MoneyFormatter): String? =
+    if (estimate.low == estimate.high) null
+    else stringResource(R.string.forecast_range, money.format(estimate.low), money.format(estimate.high))
+
+/** "November 2026", "November 2026 (so far)" for the month under way, "December 2026 (forecast)" after it. */
 @Composable
 internal fun monthTitle(month: YearMonth, currentMonth: YearMonth, locale: Locale): String {
     val name = month.displayName(locale)
-    return if (month == currentMonth) stringResource(R.string.history_so_far, name) else name
+    return when {
+        month == currentMonth -> stringResource(R.string.history_so_far, name)
+        month > currentMonth -> stringResource(R.string.forecast_month, name)
+        else -> name
+    }
 }

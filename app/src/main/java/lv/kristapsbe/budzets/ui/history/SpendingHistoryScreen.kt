@@ -1,6 +1,7 @@
 package lv.kristapsbe.budzets.ui.history
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,24 +36,43 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lv.kristapsbe.budzets.R
+import lv.kristapsbe.budzets.domain.calculation.BurnDown
 import lv.kristapsbe.budzets.domain.calculation.MonthStack
+import lv.kristapsbe.budzets.domain.forecast.ForecastBasis
+import lv.kristapsbe.budzets.domain.forecast.ForecastRules
+import lv.kristapsbe.budzets.domain.forecast.ForecastStack
 import lv.kristapsbe.budzets.domain.model.Money
 import lv.kristapsbe.budzets.ui.components.LoadingIndicator
 import lv.kristapsbe.budzets.ui.components.categoryName
@@ -60,6 +81,7 @@ import lv.kristapsbe.budzets.ui.theme.chartColors
 import lv.kristapsbe.budzets.util.MoneyFormatter
 import java.time.YearMonth
 import java.util.Locale
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun SpendingHistoryScreen(
@@ -122,14 +144,16 @@ private fun ReadyContent(state: SpendingHistoryUiState.Ready, actions: SpendingH
     val locale = LocalConfiguration.current.locales[0]
     val money = remember(state.currency, locale) { MoneyFormatter(state.currency, locale) }
     val unit = unitMinor(state.currency.fractionDigits)
-    val spendingScale = remember(state.months, unit) { spendingScale(state.months, unit) }
-    val surplusScale = remember(state.surplus, unit) { surplusScale(state.surplus, unit) }
+    val spendingScale = remember(state.months, state.forecast, unit) { spendingScale(state.months, unit, state.forecast) }
+    val surplusScale = remember(state.surplus, state.forecast, unit) { surplusScale(state.surplus, unit, state.forecast) }
+    val burnDownScale = remember(state.burnDown, unit) { state.burnDown?.let { burnDownScale(it, unit) } }
     val spendingTicks = spendingScale.ticks.map { money.formatWhole(Money(it)) }
     val surplusTicks = surplusScale.ticks.map { money.formatWhole(Money(it)) }
-    // Shared, so the two charts' months line up and scroll together.
-    val axisWidth = axisWidth(spendingTicks + surplusTicks)
-    // Starts at the far end: the value is clamped to the end once the width is known.
-    val scroll = rememberScrollState(Int.MAX_VALUE)
+    val burnDownTicks = burnDownScale?.ticks.orEmpty().map { money.formatWhole(Money(it)) }
+    // Shared, so the month charts' months line up and scroll together, and every plot starts at the same x.
+    val axisWidth = axisWidth(spendingTicks + surplusTicks + burnDownTicks)
+    val scroll = rememberScrollState()
+    OpenOnCurrentMonth(scroll, ahead = state.forecast?.months?.size ?: 0)
     val hasSpending = state.months.any { it.segments.isNotEmpty() }
     val inset = Modifier.padding(horizontal = 16.dp)
 
@@ -137,7 +161,22 @@ private fun ReadyContent(state: SpendingHistoryUiState.Ready, actions: SpendingH
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ChartHeading(stringResource(R.string.history_spending_heading), inset)
+        // The selected month day by day (Q50); it follows the month tapped in the charts below.
+        state.selectedMonth?.let { month ->
+            BurnDownSection(state, month, burnDownScale, burnDownTicks, axisWidth, money, locale, inset)
+        }
+        Column(inset, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ChartHeading(stringResource(R.string.history_spending_heading), Modifier)
+            // What the hatched months are based on, or when they will start (Q54).
+            if (hasSpending) {
+                Text(
+                    state.forecast?.let { basisText(it.basis) }
+                        ?: pluralStringResource(R.plurals.forecast_not_yet, ForecastRules.MIN_MONTHS, ForecastRules.MIN_MONTHS, state.finishedMonths),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (hasSpending) {
             SpendingChart(state, spendingScale, spendingTicks, axisWidth, scroll, money, locale, actions.onSelectMonth, Modifier.fillMaxWidth().then(inset))
             Legend(state, actions.onToggleHighlight, inset)
@@ -154,6 +193,165 @@ private fun ReadyContent(state: SpendingHistoryUiState.Ready, actions: SpendingH
         SurplusChart(state, surplusScale, surplusTicks, axisWidth, scroll, money, locale, actions.onSelectMonth, Modifier.fillMaxWidth().then(inset))
         SurplusLegend(state, inset)
         state.selected?.let { MonthBreakdown(state, it, money, locale, actions.onToggleHighlight, inset) }
+        state.selectedForecast?.let { ForecastBreakdown(state, it, money, locale, actions.onToggleHighlight, inset) }
+    }
+}
+
+/** How many forecast months show to the right of the month under way when the screen opens. */
+private const val FORECAST_MONTHS_IN_VIEW = 3
+
+/**
+ * Scrolls the month charts once, when the screen first opens, so the month under way shows with
+ * the next few forecast months beside it. Without a forecast that is the far end, as before. A
+ * restored screen keeps where it was.
+ */
+@Composable
+private fun OpenOnCurrentMonth(scroll: ScrollState, ahead: Int) {
+    val slot = with(LocalDensity.current) { SlotWidth.roundToPx() }
+    var placed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (placed) return@LaunchedEffect
+        val max = snapshotFlow { scroll.maxValue }.first { it != Int.MAX_VALUE }
+        scroll.scrollTo((max - (ahead - FORECAST_MONTHS_IN_VIEW).coerceAtLeast(0) * slot).coerceAtLeast(0))
+        placed = true
+    }
+}
+
+@Composable
+private fun basisText(basis: ForecastBasis): String = stringResource(
+    when (basis) {
+        ForecastBasis.TYPICAL_MONTH -> R.string.forecast_basis_typical
+        ForecastBasis.TREND -> R.string.forecast_basis_trend
+        ForecastBasis.TREND_AND_SEASON -> R.string.forecast_basis_season
+    },
+)
+
+/**
+ * The burn-down's heading, chart, key and figures, or "No budget set" for a month without one.
+ * It never shrinks once shown, so selecting a month in the charts below doesn't pull them up
+ * under the finger.
+ */
+@Composable
+private fun BurnDownSection(
+    state: SpendingHistoryUiState.Ready,
+    month: YearMonth,
+    scale: ChartScale?,
+    tickLabels: List<String>,
+    axisWidth: Dp,
+    money: MoneyFormatter,
+    locale: Locale,
+    modifier: Modifier,
+) {
+    val burnDown = state.burnDown?.takeIf { it.month == month }
+    var tallest by remember { mutableIntStateOf(0) }
+    val minHeight = with(LocalDensity.current) { tallest.toDp() }
+    Column(
+        Modifier.heightIn(min = minHeight).onSizeChanged { if (it.height > tallest) tallest = it.height },
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ChartHeading(stringResource(R.string.burn_down_heading), Modifier)
+            Text(
+                monthTitle(month, state.currentMonth, locale),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (burnDown == null || scale == null) {
+            val why = if (month > state.currentMonth) R.string.burn_down_not_started else R.string.status_no_budget
+            NoBurnDown(stringResource(why), Modifier.fillMaxWidth().then(modifier))
+            return@Column
+        }
+        BurnDownChart(
+            burnDown,
+            scale,
+            tickLabels,
+            axisWidth,
+            burnDownDescription(burnDown, state.currentMonth, money, locale),
+            Modifier.fillMaxWidth().then(modifier),
+        )
+        BurnDownLegend(burnDown, modifier)
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(burnDownStart(burnDown, money), style = MaterialTheme.typography.bodyMedium)
+            burnDownBoosts(burnDown, money)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            val left = burnDownLeft(burnDown, money)
+            if (burnDown.left.isNegative) {
+                // In words as well as red, so colour isn't the only signal.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(left, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                Text(left, style = MaterialTheme.typography.bodyLarge)
+            }
+            burnDownGuide(burnDown, money)?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            burnDownLikely(burnDown, money)?.let {
+                val over = burnDown.likelyLeft?.expected?.isNegative == true
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = if (over) MaterialTheme.colorScheme.error else Color.Unspecified)
+            }
+            burnDownLikelyRange(burnDown, money)?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** What the burn-down's marks mean; the boost key only when the month has a boost to explain. */
+@Composable
+private fun BurnDownLegend(burnDown: BurnDown, modifier: Modifier) {
+    val colors = chartColors
+    val lineColor = MaterialTheme.colorScheme.onSurface
+    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LegendKey(stringResource(R.string.burn_down_legend_left)) {
+            Canvas(Modifier.width(20.dp).height(12.dp)) {
+                val y = size.height / 2
+                drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.dp.toPx())
+                drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(size.width, y))
+            }
+        }
+        LegendKey(stringResource(R.string.burn_down_legend_guide)) {
+            Canvas(Modifier.width(20.dp).height(12.dp)) {
+                val y = size.height / 2
+                drawLine(
+                    guideColor,
+                    Offset(0f, y),
+                    Offset(size.width, y),
+                    strokeWidth = 1.5.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
+                )
+            }
+        }
+        if (burnDown.boostsAdded.isPositive) {
+            LegendKey(stringResource(R.string.burn_down_legend_boost)) {
+                Canvas(Modifier.width(12.dp).height(16.dp)) {
+                    val x = size.width / 2
+                    val dot = 4.dp.toPx()
+                    drawLine(colors.positive, Offset(x, size.height), Offset(x, dot), strokeWidth = 3.dp.toPx())
+                    drawCircle(colors.positive, radius = dot, center = Offset(x, dot))
+                }
+            }
+        }
+        if (burnDown.projection != null) {
+            LegendKey(stringResource(R.string.forecast_legend)) {
+                Canvas(Modifier.width(20.dp).height(12.dp)) {
+                    val y = size.height / 2
+                    drawRect(lineColor, Offset(0f, 0f), size, alpha = 0.12f)
+                    drawLine(lineColor, Offset(2.dp.toPx(), y), Offset(size.width - 2.dp.toPx(), y), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = forecastDots())
+                }
+            }
+        }
+        if (burnDown.days.any { it.left.isNegative }) {
+            LegendKey(stringResource(R.string.status_over)) {
+                Canvas(Modifier.width(20.dp).height(12.dp)) {
+                    val y = size.height / 2
+                    drawLine(colors.negative, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.dp.toPx())
+                }
+            }
+        }
     }
 }
 
@@ -187,7 +385,43 @@ private fun SurplusLegend(state: SpendingHistoryUiState.Ready, modifier: Modifie
                 drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(size.width / 2, y))
             }
         }
+        val forecast = state.forecast ?: return@FlowRow
+        LegendKey(stringResource(R.string.forecast_legend)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HatchedSwatch(colors.positive)
+                Spacer(Modifier.width(4.dp))
+                Canvas(Modifier.width(20.dp).height(12.dp)) {
+                    val y = size.height / 2
+                    drawLine(lineColor, Offset(2.dp.toPx(), y), Offset(size.width - 2.dp.toPx(), y), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = forecastDots())
+                }
+            }
+        }
+        LegendKey(stringResource(R.string.forecast_legend_range)) { WhiskerKey() }
+        if (forecast.monthEnd != null) {
+            LegendKey(stringResource(R.string.forecast_legend_month_end)) {
+                Canvas(Modifier.width(20.dp).height(12.dp)) {
+                    val y = size.height / 2
+                    drawLine(lineColor, Offset(2.dp.toPx(), y), Offset(size.width - 2.dp.toPx(), y), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                }
+            }
+        }
     }
+}
+
+/** A forecast's swatch: hatched like the forecast marks. */
+@Composable
+private fun HatchedSwatch(color: Color) {
+    Canvas(Modifier.size(12.dp)) {
+        val path = Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(3.dp.toPx()))) }
+        drawHatched(path, color)
+    }
+}
+
+/** The likely range's key: a whisker. */
+@Composable
+private fun WhiskerKey() {
+    val color = MaterialTheme.colorScheme.onSurface
+    Canvas(Modifier.width(12.dp).height(16.dp)) { drawWhisker(size.width / 2, size.height - 1.dp.toPx(), 1.dp.toPx(), color) }
 }
 
 @Composable
@@ -239,6 +473,15 @@ private fun Legend(state: SpendingHistoryUiState.Ready, onToggle: (String) -> Un
                 )
             }
         }
+        // As tall as a chip, like the budget key.
+        if (state.forecast != null) {
+            Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
+                LegendKey(stringResource(R.string.forecast_legend)) { HatchedSwatch(colors.other) }
+            }
+            Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
+                LegendKey(stringResource(R.string.forecast_legend_range)) { WhiskerKey() }
+            }
+        }
     }
 }
 
@@ -279,6 +522,11 @@ private fun MonthBreakdown(
                 Text(stringResource(R.string.remaining_amount, money.format(left)), style = MaterialTheme.typography.bodyMedium)
             }
         }
+        // Where the month under way will likely end (Q54).
+        state.forecast?.currentEnd?.takeIf { stack.month == state.currentMonth }?.let { end ->
+            Text(stringResource(R.string.forecast_month_end_spent, money.format(end.expected)), style = MaterialTheme.typography.bodyMedium)
+            forecastRange(end, money)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
         state.selectedSurplus?.let { surplus ->
             val taken = surplus.result?.isNegative == true
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,6 +553,10 @@ private fun MonthBreakdown(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Q55: the bar stays "if closed now"; this is where the month will likely end.
+            state.forecast?.monthEnd?.takeIf { surplus.month == state.currentMonth }?.let { end ->
+                Text(monthEndSentence(end.result.expected, money), style = MaterialTheme.typography.bodyMedium)
+            }
         }
         HorizontalDivider()
         if (stack.segments.isEmpty()) {
@@ -337,6 +589,87 @@ private fun MonthBreakdown(
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(money.format(segment.amount), style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+}
+
+/** A forecast month in words: its likely total and range, what it would do to the surplus, then each band, largest first. */
+@Composable
+private fun ForecastBreakdown(
+    state: SpendingHistoryUiState.Ready,
+    stack: ForecastStack,
+    money: MoneyFormatter,
+    locale: Locale,
+    onToggle: (String) -> Unit,
+    modifier: Modifier,
+) {
+    val colors = chartColors
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            monthTitle(stack.month, state.currentMonth, locale),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(forecastSpent(stack, money), style = MaterialTheme.typography.bodyLarge)
+        forecastRange(stack.total, money)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        state.selectedProjection?.let { projection ->
+            val taking = projection.result?.expected?.isNegative == true
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Taking from the surplus is said in words as well as red.
+                if (taking) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    projectionSentence(projection, money),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (taking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                stringResource(R.string.forecast_surplus_after, money.format(projection.runningTotal)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        state.forecast?.let {
+            Text(basisText(it.basis), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        HorizontalDivider()
+        stack.segments.asReversed().forEach { segment ->
+            val series = state.seriesFor(segment.series) ?: return@forEach
+            val selected = series.key == state.highlighted
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = selected, role = Role.Checkbox) { onToggle(series.key) }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HatchedSwatch(colors[series.slot])
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    seriesName(series),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else null,
+                    modifier = Modifier.weight(1f),
+                )
+                if (selected) {
+                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(money.format(segment.estimate.expected), style = MaterialTheme.typography.bodyLarge)
+                    // Left out when there is no spread, as for a rent that never changes.
+                    if (segment.estimate.low != segment.estimate.high) {
+                        Text(
+                            stringResource(R.string.forecast_range_short, money.format(segment.estimate.low), money.format(segment.estimate.high)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }

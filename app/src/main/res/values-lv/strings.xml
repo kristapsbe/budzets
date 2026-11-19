@@ -407,6 +407,41 @@
     <string name="history_surplus_part_closing">Mēneša noslēgšana: %1$s</string>
     <string name="history_surplus_part_boosts">Papildinājumi no pārpalikuma: %1$s</string>
     <string name="history_surplus_part_one_offs">Vienreizēji papildinājumi: %1$s</string>
+    <string name="burn_down_heading">Atlikušais budžets</string>
+    <string name="burn_down_started">Sākumā: %1$s</string>
+    <string name="burn_down_started_after_debt">Sākumā: %1$s (pēc parāda %2$s)</string>
+    <string name="burn_down_boosts">Papildinājumi: %1$s</string>
+    <string name="burn_down_guide">Tērējot vienmērīgi, līdz šodienai paliktu %1$s</string>
+    <string name="burn_down_legend_left">Atlikums</string>
+    <string name="burn_down_legend_guide">Tempa orientieris</string>
+    <string name="burn_down_legend_boost">Papildinājums</string>
+    <string name="burn_down_likely_left">Mēneša beigās, visticamāk, atliks %1$s</string>
+    <string name="burn_down_likely_over">Mēneša beigās, visticamāk, būs pārsniegts par %1$s</string>
+    <string name="burn_down_likely_range">Iespējamais atlikums: no %1$s līdz %2$s</string>
+    <string name="burn_down_likely_range_over">Iespējamais pārsniegums: no %1$s līdz %2$s</string>
+    <string name="burn_down_not_started">Vēl nav sācies</string>
+    <string name="forecast_month">%1$s (prognoze)</string>
+    <string name="forecast_spent_of_budget">Paredzams: iztērēti %1$s no %2$s</string>
+    <string name="forecast_spent">Paredzams: iztērēti %1$s</string>
+    <string name="forecast_range">Iespējamais diapazons: no %1$s līdz %2$s</string>
+    <string name="forecast_range_short">%1$s–%2$s</string>
+    <string name="forecast_month_end_spent">Līdz mēneša beigām paredzams iztērēt %1$s</string>
+    <string name="forecast_surplus_would_add">Pārpalikumam, visticamāk, tiktu pievienoti %1$s</string>
+    <string name="forecast_surplus_would_take">No pārpalikuma, visticamāk, tiktu paņemti %1$s</string>
+    <string name="forecast_surplus_after">Paredzamais pārpalikums pēc šī mēneša: %1$s</string>
+    <string name="forecast_month_end_add">Mēneša beigās, visticamāk, tiktu pievienoti %1$s</string>
+    <string name="forecast_month_end_take">Mēneša beigās, visticamāk, tiktu paņemti %1$s</string>
+    <string name="forecast_basis_typical">Prognoze pēc līdzšinējā tipiskā mēneša</string>
+    <string name="forecast_basis_trend">Prognoze pēc līdzšinējās tendences</string>
+    <string name="forecast_basis_season">Prognoze pēc tendences un gadalaika</string>
+    <plurals name="forecast_not_yet">
+        <item quantity="zero">Prognozes būs pieejamas, kad būs pagājuši %1$d pilni mēneši (līdz šim %2$d)</item>
+        <item quantity="one">Prognozes būs pieejamas, kad būs pagājis %1$d pilns mēnesis (līdz šim %2$d)</item>
+        <item quantity="other">Prognozes būs pieejamas, kad būs pagājuši %1$d pilni mēneši (līdz šim %2$d)</item>
+    </plurals>
+    <string name="forecast_legend">Prognoze</string>
+    <string name="forecast_legend_range">Iespējamais diapazons</string>
+    <string name="forecast_legend_month_end">Paredzamās mēneša beigas</string>
 
     <string-array name="starter_categories">
         <item>Pārtika</item>
