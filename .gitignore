@@ -17,3 +17,6 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+# Android Studio's "Generate Signed App Bundle" output: the bundle, R8's mapping and native symbols.
+# Keep each shipped version's mapping.txt (locally or on a GitHub release) to read its crash traces.
+/app/release/
