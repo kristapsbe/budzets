@@ -65,7 +65,7 @@ echo "tests $(grep -ho '<testsuite [^>]*' $f/*.xml | grep -o ' tests="[0-9]*"' |
      "failed $(grep -ho '<testsuite [^>]*' $f/*.xml | grep -o ' failures="[0-9]*"\| errors="[0-9]*"' | tr -dc '0-9\n' | paste -sd+ - | bc)"
 ```
 
-Run the full suite **three times** before reporting a change as done; the last change ended at 553
+Run the full suite **three times** before reporting a change as done; the last change ended at 554
 tests.
 
 Known flakes:
@@ -141,6 +141,8 @@ Dependency wiring:
 - Navigation fades are app-wide on the `NavHost` (`navFade`, 500 ms, in `BudzetsApp.kt`).
 - Widget:
   - `SizeMode.Exact`, with text measured by `WidgetText` (`TextPaint`).
+  - The app's own refreshes draw in the process with `GlanceAppWidget.compose`
+    (`WidgetRefresher.refreshAll`). `updateAll` would start a Glance session, a 45 s WorkManager job.
   - Language changes need the `LOCALE_CHANGED` receiver.
   - Midnight rollover uses an inexact alarm (`WidgetSchedule`); there are no wakeup alarms.
   - After a Force stop the widget is inert until the app opens.

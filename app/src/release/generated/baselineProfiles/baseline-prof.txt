@@ -26582,6 +26582,7 @@ Llv/kristapsbe/budzets/widget/WidgetRefresher$Companion;
 SPLlv/kristapsbe/budzets/widget/WidgetRefresher$Companion;-><init>()V
 SPLlv/kristapsbe/budzets/widget/WidgetRefresher$Companion;-><init>(Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 SPLlv/kristapsbe/budzets/widget/WidgetRefresher$Companion;->hasWidgets(Landroid/content/Context;)Z
+SPLlv/kristapsbe/budzets/widget/WidgetRefresher$Companion;->widgetIds(Landroid/content/Context;)[I
 PLsh/calvin/reorderable/AbsolutePixelPadding;-><clinit>()V
 PLsh/calvin/reorderable/AbsolutePixelPadding;-><init>(FFFF)V
 PLsh/calvin/reorderable/AbsolutePixelPadding$Companion;-><init>()V

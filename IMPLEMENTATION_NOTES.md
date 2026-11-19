@@ -2320,6 +2320,116 @@ from how a debug build runs its first frame, and a release build stays far below
     screens, and nothing in the crash log.
   - The widget wasn't re-added: none of its code changed.
 
+## Widget drawn without a session (2026-11-19)
+
+- **Asked for:** look for code that drains the battery or uses more compute than it should.
+- **Already fine (re-checked, no change):**
+  - Nothing polls, and there are no infinite animations. The only timer is the non-waking midnight
+    alarm.
+  - Screens stop their queries 5 s after they're left, and their state is built on
+    `Dispatchers.Default`.
+  - The charts cache their paths in `drawWithCache`, and the scroll moves a layer, so scrolling
+    doesn't rebuild them.
+  - The forecast and burn-down maths are tiny: Theil–Sen fits at most 276 pairs per category.
+  - Glance already keeps WorkManager's `RescheduleReceiver` enabled with a 10-year placeholder job
+    (`sessionWorkerKeepEnabled`, b/119920965), so there is no endless widget update loop.
+- **Findings, in order of cost:**
+  1. **Every refresh the app started ran a Glance session.** That covered each save, midnight, a
+     language or time zone change, and the start-up refresh after a lost alarm. A session is a
+     WorkManager job held open 45 s, with JobScheduler's wake lock. "Widget pace and power" judged
+     this unavoidable because the timeout is `@RestrictTo`. However, Glance 1.2.0's public
+     `GlanceAppWidget.compose(context, id, options)` (`AppWidgetComposer.kt`) composes once in the
+     process and returns `RemoteViews`, with no worker. This supersedes "Not changed: Session
+     length" in that section.
+  2. **A live session drew twice per write.** The refresher's `updateAll` sends `UpdateGlanceState`.
+     `AppWidgetSession.glanceState` uses `neverEqualPolicy()`, so the event recomposed and pushed
+     an identical widget again, and added up to 5 s to the session. The session's own flows had
+     already drawn the change.
+  3. **Each composition ran every widget query twice.** `states.first()` was followed by
+     `collectAsState(initial)`, which subscribed again: about 10 queries, including a read of the
+     whole ledger.
+  4. **The widget reads Glance state it doesn't keep.** Glance's default
+     `PreferencesGlanceStateDefinition` read a DataStore file for each widget on every
+     composition.
+- **Changes:**
+  - **`WidgetRefresher.refreshAll`** keeps its signature and callers. It arms the alarm, then draws
+    each widget under a `Mutex`, since `compose` must not run twice at once for one ID:
+    - `BudzetsWidget().compose(context, glanceId, options = getAppWidgetOptions(id))`, then
+      `updateAppWidget`.
+    - It runs on `Dispatchers.Main`, as Glance's `SessionWorker` does.
+    - The options are passed because `compose` otherwise uses an empty `Bundle`, and
+      `AppWidgetSession` loads the real options only when they are null. Without them, only the
+      smallest layout is drawn.
+    - It gives up after 5 s (`DRAW_TIMEOUT_MILLIS`), because `compose` has no timeout of its own and
+      would wait forever if translation failed. On a timeout or an error it falls back to
+      `update(context, glanceId)`, which is the old session.
+    - An ID that is no longer bound is skipped.
+  - **`BudzetsWidget.provideGlance`** does one `stateIn` in a `coroutineScope`. The first state
+    still loads before the first frame.
+  - **`stateDefinition = null`.** Glance's own sessions and `languageChanges` are unchanged.
+  - **Sessions now start only for Glance's own events.** On API 37 those were:
+    - a widget added
+    - a resize
+    - an app update
+    - opening an app that was force-stopped (Android sends `APPWIDGET_UPDATE` when the package
+      starts again)
+    - a dark mode or font scale change (`APPWIDGET_UPDATE` and `APPWIDGET_UPDATE_OPTIONS`)
+  - **Baseline Profiles:** both files gained `WidgetRefresher$Companion;->widgetIds`, which
+    `hasWidgets` now calls at start-up. Nothing that was profiled changed signature.
+- **Measured:**
+  - **Setup:** `benchmarkRelease` (R8), AVD `Medium_Phone_API_37.0`, `-read-only`, a 3×2 widget.
+    `main` was installed first and this branch over it, with the same data. Jobs are from
+    `dumpsys jobscheduler` history, the rest from `dumpsys batterystats` after a reset. Each figure
+    is the same scripted save: open the app, add an expense, go home, wait 50 s.
+
+    | One save | `main` | This branch |
+    |---|---|---|
+    | Widget jobs | 1, 45.4 s | **0** |
+    | `*job*` wake lock | recorded | **none** |
+    | App kept in the background after leaving | 43.8 s | **0 s** (top, then cached) |
+    | App CPU for the whole run | 1.52 s | 1.15 s |
+
+  - **CPU:** one run each, so that row is indicative only. The other three rows are counts.
+  - **No job, and the widget correct, in every other refresh:**
+    - midnight with the process killed: the alarm started it, the widget went from 11 to 10 days
+      left, and the alarm was re-armed for the next night
+    - three saves in quick succession: €20.00 to €26.00
+    - the app's language switched to Latvian and back
+    - a time zone change to Tokyo: re-armed for 00:01 JST, then back to Riga
+- **Also checked on the emulator:**
+  - **Size after a resize:** after a resize to the small layout (a session, as before), a later save
+    drew the small layout through `compose`. So the options follow the widget's real size.
+  - **Dark mode at font scale 1.5:** the `compose` draw matched the session's.
+  - **Buttons:** tapping the widget opens the app, and + opens Add expense.
+  - No crashes in logcat.
+- **Tests:**
+  - **New:** `WidgetDrawTest` (Robolectric) binds a 250×150 dp widget, seeds an expense and calls
+    `refreshAll`. It then checks that the launcher's view shows "€12.34 spent" and the month name,
+    and that no JobScheduler job is pending. Glance and Room resume on the main thread, so the
+    refresh runs on another thread while the test keeps Robolectric's main looper running.
+  - **The test fails when the code is broken on purpose:** always falling back to the session
+    leaves no view, and leaving out the options draws only the small layout.
+  - **Full suite:** 554 tests ×3, no failures. Lint 0 errors; the 2 warnings are the old version
+    notices.
+- **Not checked:**
+  - Rotation: this launcher's home screen doesn't rotate by default.
+  - The number of pushes per save.
+  - A session alive at the moment the midnight alarm fires. `compose` ignores live sessions, so
+    the README's "keeps yesterday's days left until the next change" should now apply only to the
+    alarm's own delay. That wasn't seen on a device, so the README is unchanged.
+  - A real phone.
+- **Found, not changed:**
+  - **WorkManager starts the process on every `TIME_SET`.** Its `RescheduleReceiver` did so when
+    the emulator's clock was set. Glance's placeholder job keeps that receiver enabled on `main`
+    too. It is the broadcast "Widget pace and power" kept out of our own receiver, because network
+    time sync can send it repeatedly.
+  - **Glance's own events still cost a 45 s session.** Drawing `onUpdate` in the process as well
+    would remove most of them. It would bypass `GlanceAppWidgetReceiver.onUpdate`'s bookkeeping,
+    so it is left for the owner to decide.
+- **Emulator note:** after `dumpsys battery unplug`, the non-waking midnight alarm was 2.5 min
+  overdue and undelivered, with a `battery_saver` policy listed. It fired the moment
+  `dumpsys battery reset` ran. Reset the battery before testing alarms.
+
 ## Open questions
 
 - Reopening a month that paid off a debt (see "Debt, and amounts that aren't set"): change the
