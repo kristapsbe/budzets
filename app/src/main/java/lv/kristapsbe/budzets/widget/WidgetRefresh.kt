@@ -7,9 +7,12 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.updateAll
+import androidx.glance.appwidget.compose
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -20,6 +23,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.data.local.BudzetsDatabase
 import lv.kristapsbe.budzets.data.repository.SettingsRepository
@@ -34,7 +41,9 @@ import java.time.ZonedDateTime
  * Currency changes come from DataStore. Bursts of writes are debounced into one update.
  *
  * Runs only while the process is alive, which is whenever the app writes anything. Each update
- * outside a live session runs a Glance session for about 45 s, so none is started without a reason.
+ * draws the widget once in the process ([refreshAll]), with no Glance session, so it costs a
+ * fraction of a second rather than a 45 s WorkManager job. None is started without a reason all
+ * the same.
  */
 @OptIn(FlowPreview::class)
 class WidgetRefresher(
@@ -75,17 +84,54 @@ class WidgetRefresher(
         const val DEBOUNCE_MILLIS = 500L
         const val STARTUP_REFRESH_DELAY_MILLIS = 3_000L
 
-        /** Whether any widget is on the home screen; without one there is nothing to refresh. */
-        fun hasWidgets(context: Context): Boolean =
-            AppWidgetManager.getInstance(context)
-                .getAppWidgetIds(ComponentName(context, BudzetsWidgetReceiver::class.java))
-                .isNotEmpty()
+        /**
+         * How long one widget may take to draw before it is left to a Glance session instead.
+         * Glance's `compose` has no timeout of its own. This also stays inside a receiver's `goAsync`.
+         */
+        const val DRAW_TIMEOUT_MILLIS = 5_000L
 
-        /** Arms the alarm first, so an update that fails can't lose it. */
+        /** Glance's `compose` must not run twice at once for one widget. */
+        private val drawing = Mutex()
+
+        /** Whether any widget is on the home screen; without one there is nothing to refresh. */
+        fun hasWidgets(context: Context): Boolean = widgetIds(context).isNotEmpty()
+
+        private fun widgetIds(context: Context): IntArray =
+            AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, BudzetsWidgetReceiver::class.java))
+
+        /**
+         * Arms the alarm first, so an update that fails can't lose it, then draws each widget here
+         * in the process and hands it to the launcher.
+         *
+         * `updateAll` would start a Glance session, a WorkManager job that stays open 45 s after
+         * drawing, holding a wake lock. Sending it to a live session would also force a second
+         * identical draw, as Glance recomposes on every update. A widget that can't be drawn here
+         * in time is updated that way instead, so it never stays stale.
+         */
         suspend fun refreshAll(context: Context, clock: Clock) {
-            if (!hasWidgets(context)) return
+            val ids = widgetIds(context)
+            if (ids.isEmpty()) return
             WidgetSchedule.schedule(context, clock)
-            BudzetsWidget().updateAll(context)
+            drawing.withLock { ids.forEach { draw(context, it) } }
+        }
+
+        private suspend fun draw(context: Context, appWidgetId: Int) {
+            val manager = AppWidgetManager.getInstance(context)
+            // Throws for a widget removed since the IDs were read; there is nothing left to draw.
+            val glanceId = runCatching { GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId) }.getOrNull() ?: return
+            val widget = BudzetsWidget()
+            val views = try {
+                withTimeoutOrNull(DRAW_TIMEOUT_MILLIS) {
+                    // On the main thread, as Glance's own sessions compose. The options are passed
+                    // because without them `compose` lays out only the smallest size.
+                    withContext(Dispatchers.Main) { widget.compose(context, glanceId, options = manager.getAppWidgetOptions(appWidgetId)) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (views != null) manager.updateAppWidget(appWidgetId, views) else widget.update(context, glanceId)
         }
     }
 }

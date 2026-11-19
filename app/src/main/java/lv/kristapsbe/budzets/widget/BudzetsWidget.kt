@@ -41,12 +41,14 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
+import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import lv.kristapsbe.budzets.BudzetsApplication
 import lv.kristapsbe.budzets.MainActivity
 import lv.kristapsbe.budzets.R
@@ -57,13 +59,16 @@ import lv.kristapsbe.budzets.util.displayName
 import java.time.LocalDate
 
 /**
- * The home-screen widget, reading the same repositories as the app. While a Glance session is
- * alive its content follows the data directly: an update to a live session only recomposes it,
- * so a snapshot taken before [provideContent] would go stale. [WidgetRefresher] and
- * [WidgetSchedule] start new sessions when none is running.
+ * The home-screen widget, reading the same repositories as the app. It is drawn two ways:
+ * - The app's own refreshes ([WidgetRefresher.refreshAll]: writes, the midnight alarm, language
+ *   and time zone changes) compose it once in the process and hand the result to the launcher,
+ *   with no Glance session.
+ * - Glance starts a session for its own events: a widget added, a resize, a reboot, an app
+ *   update, and system changes such as dark mode or font scale. While one is alive its content
+ *   follows the data directly, so a snapshot taken before [provideContent] would go stale.
  *
- * "Today" is fixed for the session. Sessions last seconds, so one alive at midnight is rare and
- * the next change corrects it.
+ * "Today" is fixed for a session. Sessions now start only for Glance's own events and last about
+ * 45 s, so one alive at midnight is rare and the next change corrects it.
  *
  * Laid out for each size the launcher reports, so text can be fitted to the real width; a fixed
  * set of sizes would have to fit the narrowest widget each one stands for. A resize starts a
@@ -73,22 +78,26 @@ class BudzetsWidget : GlanceAppWidget() {
 
     override val sizeMode = SizeMode.Exact
 
+    /** None: the widget reads Room. Glance's default would read a DataStore file on every draw. */
+    override val stateDefinition: GlanceStateDefinition<*>? = null
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as BudzetsApplication).container
-        val states = WidgetStates.observe(
-            budgets = container.budgets,
-            categories = container.categories,
-            surplus = container.surplus,
-            settings = container.settings,
-            expenses = container.expenses,
-            today = LocalDate.now(container.clock),
-        )
-        // Loaded up front so the first frame already has data.
-        val initial = states.first()
-        provideContent {
-            val state by states.collectAsState(initial)
-            val language by languageChanges.collectAsState()
-            key(language) { GlanceTheme { WidgetContent(state) } }
+        coroutineScope {
+            // One subscription: the first state is loaded before the first frame, then followed.
+            val states = WidgetStates.observe(
+                budgets = container.budgets,
+                categories = container.categories,
+                surplus = container.surplus,
+                settings = container.settings,
+                expenses = container.expenses,
+                today = LocalDate.now(container.clock),
+            ).stateIn(this)
+            provideContent {
+                val state by states.collectAsState()
+                val language by languageChanges.collectAsState()
+                key(language) { GlanceTheme { WidgetContent(state) } }
+            }
         }
     }
 
